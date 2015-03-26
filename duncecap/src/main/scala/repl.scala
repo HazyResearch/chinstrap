@@ -1,14 +1,15 @@
 package DunceCap
 
-object repl extends App {
+import DunceCap.Parser.parseLine
+
+object Repl extends App {
   def commandLoop(): Unit = {
     try {
       print("> ")
       val line = readLine()
-      println(line)
+      parseLine(line)
       c.send()
       commandLoop()
-      //(commandLoop _).tupled(eval(env, parse(line).head))
     } catch {
       case e: Exception => commandLoop()
     }

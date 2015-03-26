@@ -1,12 +1,9 @@
+package DunceCap
 
 import scala.io.Source
+import scala.util.matching.Regex
 
 object Parser {
-  /*
-  def main(args: Array[String]) {
-    readFile("/dfs/scratch0/caberger/systems/DunceCap/file.txt")
-  }*/
-
   def readFile(filename:String){
     println("Parsing file: " + filename)
     try {
@@ -20,5 +17,9 @@ object Parser {
 
   def parseLine(line:String){
     println(line)
+    
+    val expr = new Expression(line)
+
+    throw new IllegalStateException("Exception thrown");
   }
 }
