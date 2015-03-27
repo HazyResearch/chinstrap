@@ -7,7 +7,6 @@
 #include <cstring>
 
 namespace par{
-  static size_t NUM_THREADS = 1;
   static std::thread* threads = NULL;
   static void init_threads() {
     threads = new std::thread[NUM_THREADS];

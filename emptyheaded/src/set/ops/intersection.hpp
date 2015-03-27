@@ -135,7 +135,7 @@ namespace ops{
         C_in->cardinality = 0;
         C_in->number_of_bytes = (0)*sizeof(uint32_t);
         C_in->density = density;
-        C_in->type= common::UINTEGER;
+        C_in->type= type::UINTEGER;
         return C_in;
       }
 
@@ -226,7 +226,7 @@ namespace ops{
     C_in->cardinality = count + tail;
     C_in->number_of_bytes = (count+tail)*sizeof(uint32_t);
     C_in->density = density;
-    C_in->type= common::UINTEGER;
+    C_in->type= type::UINTEGER;
 
     return C_in;  
   }
@@ -257,7 +257,7 @@ namespace ops{
         C_in->cardinality = 0;
         C_in->number_of_bytes = (0)*sizeof(uint32_t);
         C_in->density = density;
-        C_in->type= common::UINTEGER;
+        C_in->type= type::UINTEGER;
         return C_in;
       }
       assert(lenRare <= lenFreq);
@@ -276,7 +276,7 @@ namespace ops{
         C_in->cardinality = final_count;
         C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
         C_in->density = density;
-        C_in->type= common::UINTEGER;
+        C_in->type= type::UINTEGER;
         return C_in;
       }
       while (freq[veclen * 31 + vecmax] < *rare) {
@@ -370,7 +370,7 @@ namespace ops{
     C_in->cardinality = final_count;
     C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
     C_in->density = density;
-    C_in->type= common::UINTEGER;
+    C_in->type= type::UINTEGER;
     return C_in;
   }
 
@@ -402,7 +402,7 @@ namespace ops{
         C_in->cardinality = 0;
         C_in->number_of_bytes = (0)*sizeof(uint32_t);
         C_in->density = density;
-        C_in->type= common::UINTEGER;
+        C_in->type= type::UINTEGER;
         return C_in;
       }
       assert(lenRare <= lenFreq);
@@ -421,7 +421,7 @@ namespace ops{
         C_in->cardinality = final_count;
         C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
         C_in->density = density;
-        C_in->type= common::UINTEGER;
+        C_in->type= type::UINTEGER;
         return C_in;
       }
       for (; rare < stopRare; ++rare) {
@@ -579,7 +579,7 @@ namespace ops{
     C_in->cardinality = final_count;
     C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
     C_in->density = density;
-    C_in->type= common::UINTEGER;
+    C_in->type= type::UINTEGER;
     return C_in;
   }
 
@@ -603,8 +603,8 @@ namespace ops{
 
       /*std::cout << std::endl;
       std::cout << "ORIGINAL DATA" << std::endl;
-      common::_mm128i_print(v_a_1_32);
-      common::_mm128i_print(v_a_2_32);*/
+      type::_mm128i_print(v_a_1_32);
+      type::_mm128i_print(v_a_2_32);*/
 
 
       //shuffle to std::get lower 16 bits only in one register
@@ -615,8 +615,8 @@ namespace ops{
       const __m128i v_b_1_32 = _mm_loadu_si128((__m128i*)&B[i_b]);
       const __m128i v_b_2_32 = _mm_loadu_si128((__m128i*)&B[i_b+(SHORTS_PER_REG/2)]);
 
-      //common::_mm128i_print(v_b_1_32);
-      //common::_mm128i_print(v_b_2_32);
+      //type::_mm128i_print(v_b_1_32);
+      //type::_mm128i_print(v_b_2_32);
 
       const __m128i v_b_l1 = _mm_shuffle_epi8(v_b_1_32,_mm_set_epi8(uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x0D),uint8_t(0x0C),uint8_t(0x09),uint8_t(0x08),uint8_t(0x05),uint8_t(0x04),uint8_t(0x01),uint8_t(0x0)));
       const __m128i v_b_l2 = _mm_shuffle_epi8(v_b_2_32,_mm_set_epi8(uint8_t(0x0D),uint8_t(0x0C),uint8_t(0x09),uint8_t(0x08),uint8_t(0x05),uint8_t(0x04),uint8_t(0x01),uint8_t(0x0),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80)));
@@ -688,7 +688,7 @@ namespace ops{
     C_in->cardinality = count;
     C_in->number_of_bytes = count*sizeof(uint32_t);
     C_in->density = density;
-    C_in->type= common::UINTEGER;
+    C_in->type= type::UINTEGER;
 
     return C_in;
   }
@@ -765,7 +765,7 @@ namespace ops{
     C_in->cardinality = count;
     C_in->number_of_bytes = count*sizeof(uint32_t);
     C_in->density = density;
-    C_in->type= common::UINTEGER;
+    C_in->type= type::UINTEGER;
 
     return C_in;  
   }

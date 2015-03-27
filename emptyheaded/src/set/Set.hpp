@@ -18,14 +18,14 @@ class Set{
     size_t cardinality;
     size_t number_of_bytes;
     double density;
-    common::type type;
+    type::layout type;
 
     //All values passed in
     Set(uint8_t *data_in, 
       size_t cardinality_in, 
       size_t number_of_bytes_in,
       double density_in,
-      common::type type_in):
+      type::layout type_in):
       data(data_in),
       cardinality(cardinality_in),
       number_of_bytes(number_of_bytes_in),
@@ -36,7 +36,7 @@ class Set{
     Set(uint8_t *data_in, 
       size_t cardinality_in, 
       size_t number_of_bytes_in,
-      common::type type_in):
+      type::layout type_in):
       data(data_in),
       cardinality(cardinality_in),
       number_of_bytes(number_of_bytes_in),
@@ -151,7 +151,7 @@ inline Set<uinteger> Set<T>::decode(uint32_t *buffer){
   T::foreach( ([&i,&buffer] (uint32_t data){
     buffer[i++] = data;
   }),data,cardinality,number_of_bytes,type);
-  return Set<uinteger>((uint8_t*)buffer,cardinality,cardinality*sizeof(int),density,common::UINTEGER);
+  return Set<uinteger>((uint8_t*)buffer,cardinality,cardinality*sizeof(int),density,type::UINTEGER);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
