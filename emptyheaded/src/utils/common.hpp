@@ -62,16 +62,17 @@
 static size_t NUM_THREADS = 1;
 
 namespace type{
-  enum file{
+  enum file : uint8_t{
     csv = 0,
     tsv = 1,
     binary = 2
   };
 
-  enum primitives{
-    uint32_t = 0,
-    uint64_t = 1,
-    string = 2
+  enum primitive: uint8_t{
+    BOOL = 0,
+    UINT32 = 1,
+    UINT64 = 2,
+    STRING = 3
   };
 
   enum layout: uint8_t {

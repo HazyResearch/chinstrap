@@ -1,5 +1,5 @@
-#ifndef parallel_H
-#define parallel_H
+#ifndef PARALLEL_H
+#define PARALLEL_H
 
 #include "common.hpp"
 #include <thread>

@@ -2,8 +2,9 @@
 #INTEL_PCM_HOME=/afs/cs.stanford.edu/u/noetzli/IntelPerformanceCounterMonitorV2.7
 
 #CXX ?= g++-4.7
-#CXX = /dfs/scratch0/noetzli/downloads/tmp/cilkplus-install/bin/g++
-override CXXFLAGS += -mavx -std=c++0x -pedantic -O3 -Wall -Wno-unused-function -Wextra -Wcast-align -march=native -mtune=native
+#CXX = /dfs/scratch0/noetzli/downloads/tmp/cilkplus-install/bin/g++ -Wcast-align
+override CXX = clang++
+override CXXFLAGS += -mavx -std=c++11 -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
 
 INCLUDE_DIRS=-Isrc
 OBJDIR=build
