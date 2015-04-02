@@ -18,8 +18,9 @@ int main ()
 
   //  Do 10 requests, waiting each time for a response
   for (int request_nbr = 0; request_nbr != 10; request_nbr++) {
-    zmq::message_t request (6);
-    memcpy ((void *) request.data (), "Hello", 5);
+    const char* data = "run.cpp";
+    zmq::message_t request(strlen(data) + 1);
+    memcpy ((void *)request.data(), data, strlen(data));
     std::cout << "Sending Hello " << request_nbr << "…" << std::endl;
     socket.send (request);
 

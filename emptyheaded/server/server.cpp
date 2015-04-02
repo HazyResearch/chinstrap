@@ -1,18 +1,11 @@
-//
-//  Hello World server in C++
-//  Binds REP socket to tcp://*:5555
-//  Expects "Hello" from client, replies with "World"
-//
-#include "zmq.hpp"
-#include <string>
+#include <cstdlib>
+#include <dlfcn.h>
 #include <iostream>
-#ifndef _WIN32
 #include <unistd.h>
-#else
-#include <windows.h>
+#include <unordered_map>
+#include <string>
 
-#define sleep(n)	Sleep(n)
-#endif
+#include "zmq.hpp"
 
 int main () {
   //  Prepare our context and socket
@@ -20,12 +13,42 @@ int main () {
   zmq::socket_t socket (context, ZMQ_REP);
   socket.bind ("tcp://*:5555");
 
+  std::unordered_map<std::string, void*> relations;
+
+  assert(std::system(NULL));
+
+  std::system("clang++ -dynamiclib run.cpp -o run.o");
+
+  void* handle = dlopen("/Users/adamperelman/Code/chinstrap/emptyheaded/run.o", RTLD_NOW);
+  if (!handle) {
+    std::cerr << dlerror() << std::endl;
+    return 1;
+  }
+
+
+
+  typedef void (*run_t)(std::unordered_map<std::string, void*>& relations);
+
+  run_t run = (run_t)dlsym(handle, "run");
+
+  char* error = dlerror();
+  if (error)  {
+    std::cerr << error << std::endl;
+    return 1;
+  }
+
+  run(relations);
+
+  dlclose(handle);
+
   while (true) {
     zmq::message_t request;
 
     //  Wait for next request from client
     socket.recv (&request);
-    std::cout << "Received Hello" << std::endl;
+    char* msg = (char*)request.data();
+
+    std::cout << "Received " << msg << std::endl;
 
     //  Do some 'work'
 	 sleep(1);
