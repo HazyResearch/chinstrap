@@ -1,21 +1,23 @@
 #ifndef _COLUMN_H_
 #define _COLUMN_H_
 
-#include "set/ops.hpp"
+#include "utils/utils.hpp"
 
 template <class T>
 class Column{
-  std::vector<T>* col;
-
 public:
+  std::vector<T>* col;
   Column<T>(){
     col = new std::vector<T>();
   }
-  inline T at(size_t i){
+  inline T at(size_t i) const{
     return col->at(i);
-  };
+  }
   inline void append(T elem){
     col->push_back(elem);
+  }
+  inline size_t size() const{
+    return col->size();
   }
   inline void reserve(size_t size){
     col->reserve(size);
