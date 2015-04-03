@@ -28,13 +28,15 @@ class undirected_triangle_counting: public application<T,R> {
     //encode A
     std::vector<Column<uint64_t>*> *a_attributes = new std::vector<Column<uint64_t>*>();
     a_attributes->push_back(R_ab.get<0>());
+    a_attributes->push_back(R_ab.get<1>());
     Encoding<uint64_t> a_encoding(a_attributes);
 
     //encode B
+    /*
     std::vector<Column<uint64_t>*> *b_attributes = new std::vector<Column<uint64_t>*>();
     b_attributes->push_back(R_ab.get<1>());
     Encoding<uint64_t> b_encoding(b_attributes);
-
+    */
 //////////////////////////////////////////////////////////////////////
     //Trie building
 
@@ -44,7 +46,7 @@ class undirected_triangle_counting: public application<T,R> {
     //encoding each level in the Trie should map to.
     std::vector<Column<uint32_t>*> *ER_ab = new std::vector<Column<uint32_t>*>();
     ER_ab->push_back(a_encoding.encoded->at(0)); //perform filter, selection
-    ER_ab->push_back(b_encoding.encoded->at(0));
+    ER_ab->push_back(a_encoding.encoded->at(1));
 
     //add some sort of lambda to do selections 
     Trie TR_ab(ER_ab);
@@ -52,11 +54,18 @@ class undirected_triangle_counting: public application<T,R> {
 //////////////////////////////////////////////////////////////////////
     //Prints the relation
     
-    for(size_t i = 0; i < R_ab.num_columns; i++){
-      std::cout << a_encoding.value_to_key->at(ER_ab->at(0)->at(i)) << "\t"
-      << b_encoding.value_to_key->at(ER_ab->at(1)->at(i)) << "\t"
-      << std::endl;
-    }
+    size_t num_triangles = 0;
+    Block* head = TR_ab.levels->at(0)->at(0);
+    head->data->foreach([&](uint32_t d1){
+      Block *l2 = head->map->at(d1);
+      Set<uinteger> C(new uint8_t[ER_ab->at(0)->size()]);
+      l2->data->foreach([&](uint32_t d2){
+        if(head->map->find(d2) != head->map->end())
+          num_triangles += ops::set_intersect(&C,l2->data,head->map->at(d2)->data)->cardinality;
+      });
+    });
+
+    std::cout << num_triangles << std::endl;
   
 //////////////////////////////////////////////////////////////////////
 

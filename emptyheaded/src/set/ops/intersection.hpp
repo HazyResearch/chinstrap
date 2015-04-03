@@ -693,7 +693,7 @@ namespace ops{
     return C_in;
   }
 
-  inline Set<uinteger>* set_intersect_standard(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
+  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
     uint32_t * const C = (uint32_t*) C_in->data; 
     const uint32_t * const A = (uint32_t*) A_in->data;
     const uint32_t * const B = (uint32_t*) B_in->data;
@@ -722,7 +722,7 @@ namespace ops{
       //]
 
       //[ compute mask of common elements
-      uint32_t right_cyclic_shift = _MM_SHUFFLE(0,3,2,1);
+      const uint32_t right_cyclic_shift = _MM_SHUFFLE(0,3,2,1);
       __m128i cmp_mask1 = _mm_cmpeq_epi32(v_a, v_b);    // pairwise comparison
       v_b = _mm_shuffle_epi32(v_b, right_cyclic_shift);       // shuffling
       __m128i cmp_mask2 = _mm_cmpeq_epi32(v_a, v_b);    // again...

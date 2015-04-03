@@ -17,7 +17,6 @@ std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> 
   std::vector<std::multimap<uint32_t,uint32_t>*> *outputmultimaps = new std::vector<std::multimap<uint32_t,uint32_t>*>();
   std::vector<Block*> *outblocks = new std::vector<Block*>();
 
-  std::cout << "in encoding" << std::endl;
   uint32_t *new_set = new uint32_t[max_size];
   for(size_t i = 0; i < mymultimaps->size(); i++){
     int prev = -1;
@@ -39,9 +38,12 @@ std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> 
         new_set[new_set_size++] = (*it).first;
         blocks->at(i)->map->insert(std::pair<uint32_t,Block*>((*it).first,outblock));
       }
-      outmap->insert(std::pair<uint32_t,uint32_t>(cur_column->at((*it).second),(*it).second));
-      std::cout << (*it).first << " => " << (*it).second << '\n';
+      if(cur_column != NULL)
+        outmap->insert(std::pair<uint32_t,uint32_t>(cur_column->at((*it).second),(*it).second));
     }
+
+    outputmultimaps->push_back(outmap);
+    outblocks->push_back(outblock);
 
     //hack
     uint8_t *set_data_in = new uint8_t[max_size*sizeof(uint32_t)];
@@ -49,21 +51,17 @@ std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> 
   }
 
   return make_pair(outputmultimaps,outblocks);
-  //take block from previous level
-    //encode it 
-
-  //should return a pair that is the same as the input(next level)
 }
 
 class Trie{
 public:
+  std::vector<std::vector<Block*>*> *levels;
   Trie(std::vector<Column<uint32_t>*> *attr_in){
     const size_t num_levels = attr_in->size();
 
     //allocate enough memory for each level
     uint8_t **level_memory = new uint8_t*[num_levels];
     for(size_t i = 0; i < num_levels; i++){
-      std::cout << "level: " << i << " " << attr_in->at(i)->size() << std::endl;
       level_memory[i] = new uint8_t[attr_in->at(i)->size()*sizeof(uint32_t)];
     }
 
@@ -76,7 +74,6 @@ public:
     //parallel for
     std::multimap<uint32_t,uint32_t>* mymultimap = new std::multimap<uint32_t,uint32_t>(); 
     for(size_t i = 0; i < num_attributes; i++){
-      std::cout << "attribute: " << i << std::endl;
       mymultimap->insert(std::pair<uint32_t,uint32_t>(cur_attributes->at(i),i));
     }
     cur_level++;
@@ -85,17 +82,25 @@ public:
     std::vector<Block*> *blocks = new std::vector<Block*>();
     blocks->push_back(new Block());
 
-
-
-    encode(num_attributes,attr_in->at(cur_level),mymultimaps,blocks);
-    //build set
-
-    //for(size_t i = cur_level; i < num_levels; i++){}
+    typedef std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> level_pair;
     
+    levels = new std::vector<std::vector<Block*>*>();
+    levels->push_back(blocks);
+    for(; cur_level < num_levels; cur_level++){
+      level_pair out_pair = encode(num_attributes,attr_in->at(cur_level),mymultimaps,blocks);
+      mymultimaps = out_pair.first;
+      blocks = out_pair.second;
+      levels->push_back(blocks);
+    }
+    level_pair out_pair = encode(num_attributes,NULL,mymultimaps,blocks);
+    mymultimaps = out_pair.first;
+    blocks = out_pair.second;
+    levels->push_back(blocks);
+
+    //build set
 
     //for each thread you will need -> size of attribute memory (to build the set)
     //                              -> size of atribute  memory (to keep inidicies for next level)
-
 
     //pass a vector<vector<uint8_t*>> 3-levels down
     //the first level corresponds to the set
