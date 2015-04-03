@@ -1,18 +1,20 @@
-//
-//  Hello World server in C++
-//  Binds REP socket to tcp://*:5555
-//  Expects "Hello" from client, replies with "World"
-//
-#include "zmq.hpp"
-#include <string>
+#include <cstdlib>
+#include <dlfcn.h>
 #include <iostream>
-#ifndef _WIN32
+#include <fstream>
 #include <unistd.h>
-#else
-#include <windows.h>
+#include <unordered_map>
+#include <string>
 
-#define sleep(n)	Sleep(n)
-#endif
+#include "zmq.hpp"
+
+const size_t PATH_BUFFER_SIZE = 512;
+const char* CPP_FILE_NAME = "runnable.cpp";
+const char* OBJ_FILE_NAME = "runnable.o";
+const std::string COMPILE_COMMAND = (std::string("clang++ -O3 -dynamiclib ")
+                                     + CPP_FILE_NAME + " -o " + OBJ_FILE_NAME);
+
+typedef void (*run_t)(std::unordered_map<std::string, void*>& relations);
 
 int main () {
   //  Prepare our context and socket
@@ -20,20 +22,55 @@ int main () {
   zmq::socket_t socket (context, ZMQ_REP);
   socket.bind ("tcp://*:5555");
 
+  char dir_buffer[PATH_BUFFER_SIZE];
+  getcwd(dir_buffer, PATH_BUFFER_SIZE);
+  std::string dir(dir_buffer);
+
+  std::unordered_map<std::string, void*> relations;
+
+  assert(std::system(NULL));
+
   while (true) {
     zmq::message_t request;
 
-    //  Wait for next request from client
+    //  Wait for next request from client.
     socket.recv (&request);
-    std::cout << "Received Hello" << std::endl;
+    char* msg = (char*)request.data();
+    std::cout << "received a message" << std::endl;
 
-    //  Do some 'work'
-	 sleep(1);
+    // Write the message to a file.
+    std::ofstream outfile(CPP_FILE_NAME);
+    outfile << msg;
+    outfile.close();
+
+    // Compile the file.
+    std::system(COMPILE_COMMAND.c_str());
+
+    // Open and run the file.
+    void* handle = dlopen((dir + "/" + OBJ_FILE_NAME).c_str(), RTLD_NOW);
+    if (!handle) {
+      std::cerr << dlerror() << std::endl;
+      return 1;
+    }
+
+    run_t run = (run_t)dlsym(handle, "run");
+
+    char* error = dlerror();
+    if (error)  {
+      std::cerr << error << std::endl;
+      dlclose(handle);
+      return 1;
+    }
+
+    run(relations);
+
+    dlclose(handle);
 
     //  Send reply back to client
-    zmq::message_t reply (5);
-    memcpy ((void *) reply.data (), "World", 5);
-    socket.send (reply);
+    const char* reply_message = "executed file successfully";
+    zmq::message_t reply (strlen(reply_message) + 1);
+    memcpy ((void*)reply.data(), reply_message, strlen(reply_message) + 1);
+    socket.send(reply);
   }
   return 0;
 }
