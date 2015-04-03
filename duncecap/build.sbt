@@ -9,5 +9,6 @@ libraryDependencies ++= Seq(
  "org.apache.commons" % "commons-lang3" % "3.1",
  "io.argonaut" %% "argonaut" % "6.0.4",
  "org.apache.commons" % "commons-math3" % "3.2",
- "org.zeromq" % "jeromq" % "0.3.1"
+ "org.zeromq" % "jeromq" % "0.3.1",
+ "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.2"
 )
