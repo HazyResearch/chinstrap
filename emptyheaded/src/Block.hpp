@@ -1,5 +1,5 @@
-#ifndef _TRIE_H_
-#define _TRIE_H_
+#ifndef _BLOCK_H_
+#define _BLOCK_H_
 
 #include "set/ops.hpp"
 
