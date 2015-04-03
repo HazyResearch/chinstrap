@@ -1,4 +1,5 @@
 #include "main.hpp"
+//#include <tbb/tbb.h>
 
 template<class T, class R>
 class undirected_triangle_counting: public application<T,R> {
@@ -8,7 +9,7 @@ class undirected_triangle_counting: public application<T,R> {
 
 //////////////////////////////////////////////////////////////////////
     //File IO (for a tsv, csv should be roughly the same)
-    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/facebook/edgelist/data.txt");
+    tsv_reader f_reader("simple.txt");
     char *next = f_reader.tsv_get_first();
     R_ab.num_columns = 0;
     while(next != NULL){
@@ -42,19 +43,21 @@ class undirected_triangle_counting: public application<T,R> {
     //A mapping will need to be kept in the query compiler so it is known what
     //encoding each level in the Trie should map to.
     std::vector<Column<uint32_t>*> *ER_ab = new std::vector<Column<uint32_t>*>();
-    ER_ab->push_back(a_encoding.encoded->at(0));
+    ER_ab->push_back(a_encoding.encoded->at(0)); //perform filter, selection
     ER_ab->push_back(b_encoding.encoded->at(0));
 
-    //EncodedRelation ER_ab(a_encoding.columns->at(0),b_encoding.columns->at(0));
-    //Trie TR_ab(ER_ab);
+    //add some sort of lambda to do selections 
+    Trie TR_ab(ER_ab);
 
 //////////////////////////////////////////////////////////////////////
     //Prints the relation
+    
     for(size_t i = 0; i < R_ab.num_columns; i++){
       std::cout << a_encoding.value_to_key->at(ER_ab->at(0)->at(i)) << "\t"
       << b_encoding.value_to_key->at(ER_ab->at(1)->at(i)) << "\t"
       << std::endl;
     }
+  
 //////////////////////////////////////////////////////////////////////
 
   }

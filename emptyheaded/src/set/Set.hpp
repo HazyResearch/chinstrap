@@ -126,7 +126,7 @@ class Set{
     void copy_from(Set<T> src);
 
     //Constructors
-    static Set<T> from_array(uint8_t *set_data, uint32_t *array_data, size_t data_size);
+    static Set<T>* from_array(uint8_t *set_data, uint32_t *array_data, size_t data_size);
     static Set<T> from_flattened(uint8_t *set_data, size_t cardinality_in);
     static size_t flatten_from_array(uint8_t *set_data, const uint32_t * const array_data, const size_t data_size);
 };
@@ -158,10 +158,10 @@ inline Set<uinteger> Set<T>::decode(uint32_t *buffer){
 //CREATE A SET FROM AN ARRAY OF UNSIGNED INTEGERS
 ///////////////////////////////////////////////////////////////////////////////
 template <class T>
-inline Set<T> Set<T>::from_array(uint8_t *set_data, uint32_t *array_data, size_t data_size){
+inline Set<T>* Set<T>::from_array(uint8_t *set_data, uint32_t *array_data, size_t data_size){
   const double density = ((data_size > 0) ? (double)((array_data[data_size-1]-array_data[0])/data_size) : 0.0);
   const size_t bytes_in = T::build(set_data,array_data,data_size);
-  return Set<T>(set_data,data_size,bytes_in,density,T::get_type());
+  return new Set<T>(set_data,data_size,bytes_in,density,T::get_type());
 }
 
 ///////////////////////////////////////////////////////////////////////////////
