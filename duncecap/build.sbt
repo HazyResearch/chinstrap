@@ -1,7 +1,7 @@
 name := "DunceCap"
 
 //resolvers += "Sonatype (releases)" at "https://oss.sonatype.org/content/repositories/releases/"
-scalaVersion := "2.11.6"
+scalaVersion := "2.11.2"
 
 libraryDependencies ++= Seq(
  "org.scala-lang" % "scala-compiler" % "2.11.6",
