@@ -2,7 +2,7 @@ package DunceCap
 
 import scala.util.parsing.combinator.RegexParsers
 
-class DCParser extends RegexParsers {
+object DCParser extends RegexParsers {
   def identifier = """[_\p{L}][_\p{L}\p{Nd}]*""".r
   def typename = """long|string|float""".r // TODO: should I wrap this in another type or just let it be a string?
   def format = """csv|tsv""".r
@@ -32,6 +32,8 @@ class DCParser extends RegexParsers {
 
   def loadExpr = ((identifierWithType <~ "<-") <~ "load") ~ ("(" ~> string) ~ (("," ~> format) <~ ")") ^^
     {case id~file~fmt => ASTLoadExpression(id, file, fmt)}
+
+  def expr = loadExpr // TODO: other expressions
 }
 
 abstract trait ASTExpression
