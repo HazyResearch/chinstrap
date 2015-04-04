@@ -9,7 +9,7 @@ class undirected_triangle_counting: public application<T,R> {
 
 //////////////////////////////////////////////////////////////////////
     //File IO (for a tsv, csv should be roughly the same)
-    tsv_reader f_reader("simple.txt");
+    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/facebook/edgelist/data.txt");
     char *next = f_reader.tsv_get_first();
     R_ab.num_columns = 0;
     while(next != NULL){
