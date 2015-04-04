@@ -31,12 +31,6 @@ class undirected_triangle_counting: public application<T,R> {
     a_attributes->push_back(R_ab.get<1>());
     Encoding<uint64_t> a_encoding(a_attributes);
 
-    //encode B
-    /*
-    std::vector<Column<uint64_t>*> *b_attributes = new std::vector<Column<uint64_t>*>();
-    b_attributes->push_back(R_ab.get<1>());
-    Encoding<uint64_t> b_encoding(b_attributes);
-    */
 //////////////////////////////////////////////////////////////////////
     //Trie building
 
@@ -49,13 +43,15 @@ class undirected_triangle_counting: public application<T,R> {
     ER_ab->push_back(a_encoding.encoded->at(1));
 
     //add some sort of lambda to do selections 
-    Trie TR_ab(ER_ab);
+    Trie *TR_ab = Trie::build(ER_ab,[&](size_t index){
+      return ER_ab->at(0)->at(index) < ER_ab->at(1)->at(index);
+    });
 
 //////////////////////////////////////////////////////////////////////
     //Prints the relation
     
     size_t num_triangles = 0;
-    Block* head = TR_ab.levels->at(0)->at(0);
+    Block* head = TR_ab->levels->at(0)->at(0);
     head->data->foreach([&](uint32_t d1){
       Block *l2 = head->map->at(d1);
       Set<uinteger> C(new uint8_t[ER_ab->at(0)->size()]);
@@ -66,7 +62,6 @@ class undirected_triangle_counting: public application<T,R> {
     });
 
     std::cout << num_triangles << std::endl;
-  
 //////////////////////////////////////////////////////////////////////
 
   }
