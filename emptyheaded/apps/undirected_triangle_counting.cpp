@@ -38,6 +38,7 @@ class undirected_triangle_counting: public application<T,R> {
     //You can switch the ordering here to be what you want it to be in the Trie.
     //A mapping will need to be kept in the query compiler so it is known what
     //encoding each level in the Trie should map to.
+    auto bt = debug::start_clock();
     std::vector<Column<uint32_t>*> *ER_ab = new std::vector<Column<uint32_t>*>();
     ER_ab->push_back(a_encoding.encoded->at(0)); //perform filter, selection
     ER_ab->push_back(a_encoding.encoded->at(1));
@@ -46,20 +47,37 @@ class undirected_triangle_counting: public application<T,R> {
     Trie *TR_ab = Trie::build(ER_ab,[&](size_t index){
       return ER_ab->at(0)->at(index) < ER_ab->at(1)->at(index);
     });
-
+    debug::stop_clock("Build",bt);
 //////////////////////////////////////////////////////////////////////
     //Prints the relation
     
-    size_t num_triangles = 0;
     Block* head = TR_ab->levels->at(0)->at(0);
-    head->data->foreach([&](uint32_t d1){
+
+    NUM_THREADS = 48;
+    size_t num_triangles = 0;
+
+    uint8_t *buffer = new uint8_t[R_ab.num_columns*NUM_THREADS*300];
+    size_t *num_t = new size_t[NUM_THREADS*300];
+    
+    auto qt = debug::start_clock();
+    for(size_t i = 0; i < NUM_THREADS; i++){
+      num_t[i*300] = 0;
+    }
+
+    head->data->par_foreach([&](size_t tid, uint32_t d1){
       Block *l2 = head->map->at(d1);
-      Set<uinteger> C(new uint8_t[ER_ab->at(0)->size()]);
+      Set<uinteger> C(&buffer[tid*300]);
       l2->data->foreach([&](uint32_t d2){
-        if(head->map->find(d2) != head->map->end())
-          num_triangles += ops::set_intersect(&C,l2->data,head->map->at(d2)->data)->cardinality;
+        if(head->map->count(d2))
+          num_t[tid*300] += ops::set_intersect(&C,l2->data,head->map->at(d2)->data)->cardinality;
       });
     });
+
+    for(size_t i = 0; i < NUM_THREADS; i++){
+      num_triangles += num_t[i*300];
+    }
+
+    debug::stop_clock("Query",qt);
 
     std::cout << num_triangles << std::endl;
 //////////////////////////////////////////////////////////////////////
