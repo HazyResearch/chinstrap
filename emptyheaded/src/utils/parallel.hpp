@@ -7,6 +7,33 @@
 #include <cstring>
 
 namespace par{
+
+  template<class T>
+  class reducer{
+  public:
+    size_t padding = 300;
+    T *elem;
+    std::function<T (T, T)> f;
+    reducer(T init_in, std::function<T (T, T)> f_in){
+      f = f_in;
+      elem = new T[NUM_THREADS*padding];
+      for(size_t i = 0; i < NUM_THREADS; i++){
+        elem[i*padding] = init_in;
+      }
+      memset(elem,(uint8_t)0,sizeof(T)*NUM_THREADS*padding);
+    }
+    void update(size_t tid, T new_val){
+      elem[tid*padding] = f(elem[tid*padding],new_val);
+    }
+    T evaluate(T init){
+      for(size_t i = 0; i < NUM_THREADS; i++){
+        init = f(init,elem[i*padding]);
+      }
+      return init;
+    }
+
+  };
+
   static std::thread* threads = NULL;
   static void init_threads() {
     threads = new std::thread[NUM_THREADS];

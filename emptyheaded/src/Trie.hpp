@@ -39,7 +39,7 @@ std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> 
     size_t new_set_size = 0;
 
     for (auto it=mymultimap->begin(); it!=mymultimap->end(); ++it){
-      if((*it).first != prev){
+      if((int)(*it).first != prev){
         if(outblock != NULL && outmap != NULL){
           outputmultimaps->push_back(outmap);
           outblocks->push_back(outblock);

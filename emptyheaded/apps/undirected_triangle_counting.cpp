@@ -53,33 +53,28 @@ class undirected_triangle_counting: public application<T,R> {
     
     Block* head = TR_ab->levels->at(0)->at(0);
 
-    NUM_THREADS = 48;
-    size_t num_triangles = 0;
-
-    uint8_t *buffer = new uint8_t[R_ab.num_columns*NUM_THREADS*300];
-    size_t *num_t = new size_t[NUM_THREADS*300];
+    //allocate memory
+    allocator::memory<uint8_t> buffer(R_ab.num_columns);
+    par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
+      return a + b;
+    });
     
     auto qt = debug::start_clock();
-    for(size_t i = 0; i < NUM_THREADS; i++){
-      num_t[i*300] = 0;
-    }
-
     head->data->par_foreach([&](size_t tid, uint32_t d1){
       Block *l2 = head->map->at(d1);
-      Set<uinteger> C(&buffer[tid*300]);
+      Set<uinteger> C(buffer.get_memory(tid));
       l2->data->foreach([&](uint32_t d2){
-        if(head->map->count(d2))
-          num_t[tid*300] += ops::set_intersect(&C,l2->data,head->map->at(d2)->data)->cardinality;
+        if(head->map->count(d2)){
+          size_t count = ops::set_intersect(&C,l2->data,head->map->at(d2)->data)->cardinality;
+          num_triangles.update(tid,count);
+        }
       });
     });
-
-    for(size_t i = 0; i < NUM_THREADS; i++){
-      num_triangles += num_t[i*300];
-    }
-
+    
+    size_t result = num_triangles.evaluate(0);
     debug::stop_clock("Query",qt);
 
-    std::cout << num_triangles << std::endl;
+    std::cout << result << std::endl;
 //////////////////////////////////////////////////////////////////////
 
   }
