@@ -71,7 +71,7 @@ case class ASTAssignStatement(identifier : ASTIdentifier, expression : ASTExpres
 case class ASTPrintStatement(expression : ASTExpression) extends ASTStatement
 
 abstract trait ASTExpression extends ASTStatement
-case class ASTCount(expresion : ASTExpression) extends ASTExpression
+case class ASTCount(expression : ASTExpression) extends ASTExpression
 case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTCriterion]) extends ASTExpression
 case class ASTStringLiteral(str : String) extends ASTExpression
 
