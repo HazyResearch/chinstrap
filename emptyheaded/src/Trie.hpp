@@ -6,6 +6,10 @@
 #include <unordered_map>
 #include <map>
 
+allocator::memory<Block> ba(1000000);
+allocator::memory<std::multimap<uint32_t,uint32_t>> mm(1000000);
+allocator::memory<uint8_t> sd(1000000000);
+
 class Trie{
 public:
   std::vector<std::vector<Block*>*> *levels;
@@ -44,11 +48,12 @@ std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> 
           outputmultimaps->push_back(outmap);
           outblocks->push_back(outblock);
         }
-        outblock = new Block();
-        outmap = new std::multimap<uint32_t,uint32_t>();
+        outblock = ba.get_next(0);
+
+        outmap = mm.get_next(0);
         prev = (*it).first;
         new_set[new_set_size++] = (*it).first;
-        blocks->at(i)->map->insert(std::pair<uint32_t,Block*>((*it).first,outblock));
+        blocks->at(i)->map.insert(std::pair<uint32_t,Block*>((*it).first,outblock));
       }
       if(cur_column != NULL){
         outmap->insert(std::pair<uint32_t,uint32_t>(cur_column->at((*it).second),(*it).second));
@@ -58,8 +63,8 @@ std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> 
     outputmultimaps->push_back(outmap);
     outblocks->push_back(outblock);
 
-    //hack
-    uint8_t *set_data_in = new uint8_t[new_set_size*sizeof(uint64_t)];
+    //set is built now add it to the block
+    uint8_t *set_data_in = sd.get_next(0,new_set_size*sizeof(uint64_t));
     blocks->at(i)->data = Set<uinteger>::from_array(set_data_in,new_set,new_set_size);
   }
 
@@ -79,7 +84,7 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>*> *attr_in,
   const Column<uint32_t> * const cur_attributes = attr_in->at(cur_level);
   const size_t num_attributes = cur_attributes->size();
   //parallel for
-  std::multimap<uint32_t,uint32_t>* mymultimap = new std::multimap<uint32_t,uint32_t>(); 
+  std::multimap<uint32_t,uint32_t>* mymultimap = mm.get_next(0); 
   for(size_t i = 0; i < num_attributes; i++){
     if(f(i))
       mymultimap->insert(std::pair<uint32_t,uint32_t>(cur_attributes->at(i),i));
@@ -88,8 +93,7 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>*> *attr_in,
   mymultimaps->push_back(mymultimap);
 
   std::vector<Block*> *blocks = new std::vector<Block*>();
-  blocks->push_back(new Block());
-
+  blocks->push_back(ba.get_next(0));
   //////////////////////////////////////////////////////////////////////////////////////////////////////
   //Encode the remaining levels
   typedef std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> level_pair;

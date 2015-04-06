@@ -60,12 +60,12 @@ class undirected_triangle_counting: public application<T,R> {
     });
     
     auto qt = debug::start_clock();
-    head->data->par_foreach([&](size_t tid, uint32_t d1){
-      Block *l2 = head->map->at(d1);
+    head->data.par_foreach([&](size_t tid, uint32_t d1){
+      Block *l2 = head->map.at(d1);
       Set<uinteger> C(buffer.get_memory(tid));
-      l2->data->foreach([&](uint32_t d2){
-        if(head->map->count(d2)){
-          size_t count = ops::set_intersect(&C,l2->data,head->map->at(d2)->data)->cardinality;
+      l2->data.foreach([&](uint32_t d2){
+        if(head->map.count(d2)){
+          size_t count = ops::set_intersect(&C,&l2->data,&head->map.at(d2)->data)->cardinality;
           num_triangles.update(tid,count);
         }
       });

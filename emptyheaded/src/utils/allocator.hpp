@@ -14,7 +14,18 @@ namespace allocator{
     elem(size_t num_elems){
       max_index = num_elems;
       data = a.allocate(num_elems);
+      for(size_t i = 0; i < num_elems; i++){
+        a.construct(data+i);
+      }
       index = 0;
+    }
+    T* get_next(size_t num){
+      T* val = &data[index];
+      index += num;
+      return val;
+    }
+    T* get_next(){
+      return &data[index++];
     }
   };
 
@@ -31,7 +42,12 @@ namespace allocator{
     T* get_memory(size_t tid){
       return elements->at(tid).data;
     }
-
+    T* get_next(size_t tid){
+      return elements->at(tid).get_next();
+    }
+    T* get_next(size_t tid, size_t num){
+      return elements->at(tid).get_next(num);
+    }
   };
 };
 #endif
