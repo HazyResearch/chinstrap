@@ -51,7 +51,7 @@ class undirected_triangle_counting: public application<T,R> {
 //////////////////////////////////////////////////////////////////////
     //Prints the relation
     
-    Block* head = TR_ab->levels->at(0)->at(0);
+    Block* head = TR_ab->head;
 
     //allocate memory
     allocator::memory<uint8_t> buffer(R_ab.num_columns);

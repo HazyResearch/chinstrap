@@ -6,23 +6,35 @@
 #include <unordered_map>
 #include <map>
 
-allocator::memory<Block> ba(1000000);
-allocator::memory<std::multimap<uint32_t,uint32_t>> mm(1000000);
-allocator::memory<uint8_t> sd(1000000000);
+class TrieAllocator{
+public:
+  allocator::memory<Block> *block_allocator;
+  allocator::memory<std::multimap<uint32_t,uint32_t>> *multimap_allocator;
+  allocator::memory<uint8_t> *data_allocator;
+
+  TrieAllocator(size_t alloc_size){
+    block_allocator = new allocator::memory<Block>(alloc_size);
+    multimap_allocator = new allocator::memory<std::multimap<uint32_t,uint32_t>>(alloc_size);
+    data_allocator = new allocator::memory<uint8_t>(alloc_size);
+  }
+};
 
 class Trie{
 public:
-  std::vector<std::vector<Block*>*> *levels;
-    
+  Block* head;
+  TrieAllocator *alloc;
+
   template<typename F>
   static Trie* build(std::vector<Column<uint32_t>*> *attr_in, F f);
 
-  Trie(std::vector<std::vector<Block*>*> *levels_in){
-    levels = levels_in;
+  Trie(Block* head_in, TrieAllocator *alloc_in){
+    alloc = alloc_in;
+    head = head_in;
   }
 };
 
 std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> encode(
+  TrieAllocator *my_allocator,
   const size_t max_size,
   Column<uint32_t> *cur_column,
   std::vector<std::multimap<uint32_t,uint32_t>*> *mymultimaps, 
@@ -48,9 +60,9 @@ std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> 
           outputmultimaps->push_back(outmap);
           outblocks->push_back(outblock);
         }
-        outblock = ba.get_next(0);
+        outblock = my_allocator->block_allocator->get_next(0);
 
-        outmap = mm.get_next(0);
+        outmap = my_allocator->multimap_allocator->get_next(0);
         prev = (*it).first;
         new_set[new_set_size++] = (*it).first;
         blocks->at(i)->map.insert(std::pair<uint32_t,Block*>((*it).first,outblock));
@@ -64,7 +76,7 @@ std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> 
     outblocks->push_back(outblock);
 
     //set is built now add it to the block
-    uint8_t *set_data_in = sd.get_next(0,new_set_size*sizeof(uint64_t));
+    uint8_t *set_data_in = my_allocator->data_allocator->get_next(0,new_set_size*sizeof(uint64_t));
     blocks->at(i)->data = Set<uinteger>::from_array(set_data_in,new_set,new_set_size);
   }
 
@@ -83,8 +95,11 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>*> *attr_in,
   size_t cur_level = 0;
   const Column<uint32_t> * const cur_attributes = attr_in->at(cur_level);
   const size_t num_attributes = cur_attributes->size();
+  TrieAllocator *my_allocator = new TrieAllocator(num_attributes);
+
+  auto a0 = debug::start_clock();
   //parallel for
-  std::multimap<uint32_t,uint32_t>* mymultimap = mm.get_next(0); 
+  std::multimap<uint32_t,uint32_t>* mymultimap = my_allocator->multimap_allocator->get_next(0); 
   for(size_t i = 0; i < num_attributes; i++){
     if(f(i))
       mymultimap->insert(std::pair<uint32_t,uint32_t>(cur_attributes->at(i),i));
@@ -93,23 +108,21 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>*> *attr_in,
   mymultimaps->push_back(mymultimap);
 
   std::vector<Block*> *blocks = new std::vector<Block*>();
-  blocks->push_back(ba.get_next(0));
+  Block *head = my_allocator->block_allocator->get_next(0);
+  blocks->push_back(head);
+
   //////////////////////////////////////////////////////////////////////////////////////////////////////
   //Encode the remaining levels
   typedef std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> level_pair;
-  std::vector<std::vector<Block*>*> *levels_in = new std::vector<std::vector<Block*>*>();
-  levels_in->push_back(blocks);
   for(; cur_level < num_levels; cur_level++){
-    level_pair out_pair = encode(num_attributes,attr_in->at(cur_level),mymultimaps,blocks);
+    level_pair out_pair = encode(my_allocator,num_attributes,attr_in->at(cur_level),mymultimaps,blocks);
     mymultimaps = out_pair.first;
     blocks = out_pair.second;
-    levels_in->push_back(blocks);
   }
-  level_pair out_pair = encode(num_attributes,NULL,mymultimaps,blocks);
-  mymultimaps = out_pair.first;
-  blocks = out_pair.second;
-  levels_in->push_back(blocks);
+  encode(my_allocator,num_attributes,NULL,mymultimaps,blocks);
 
-  return new Trie(levels_in);
+  debug::stop_clock("building without allocs",a0);
+
+  return new Trie(head,my_allocator);
 }
 #endif
