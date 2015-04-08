@@ -43,7 +43,7 @@ object Repl extends App {
 
     override  def interpretStartingWith(code: String): Option[String] = {
       if (isInDunceCapMode) {
-        DCParser.parseAll(DCParser.expr, code) match {
+        DCParser.parseAll(DCParser.statement, code) match {
           case DCParser.Success(ast, _) => { println(ast) } // TODO: actually do something and return result
           case x => { println(x) }
         }
