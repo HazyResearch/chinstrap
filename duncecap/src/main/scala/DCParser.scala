@@ -63,27 +63,5 @@ object DCParser extends RegexParsers {
   def assignStatement = identifier ~ ("<-" ~> expression) ^^ { case id~e => ASTAssignStatement(id, e) }
   def printStatement = "print" ~> expression ^^ {case e => ASTPrintStatement(e)}
   def statement = loadStatement | assignStatement | printStatement
+ // def statements = statement.* ^^ {}
 }
-
-abstract trait ASTStatement
-case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, format : String) extends ASTStatement
-case class ASTAssignStatement(identifier : ASTIdentifier, expression : ASTExpression) extends ASTStatement
-case class ASTPrintStatement(expression : ASTExpression) extends ASTStatement
-
-abstract trait ASTExpression extends ASTStatement
-case class ASTCount(expression : ASTExpression) extends ASTExpression
-case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTCriterion]) extends ASTExpression
-case class ASTStringLiteral(str : String) extends ASTExpression
-
-abstract trait ASTCriterion extends ASTExpression
-case class ASTEq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion
-case class ASTLeq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion
-case class ASTGeq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion
-case class ASTLess(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion
-case class ASTGreater(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion
-case class ASTNeq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion
-
-abstract trait ASTIdentifier extends ASTExpression
-case class ASTRelation(identifierName : String, attrs : Map[String, Option[String]]) extends ASTIdentifier // attribute name to option with type, or no type if it can be inferred
-case class ASTScalar(identifierName : String) extends ASTIdentifier
-

@@ -44,7 +44,12 @@ object Repl extends App {
     override  def interpretStartingWith(code: String): Option[String] = {
       if (isInDunceCapMode) {
         DCParser.parseAll(DCParser.statement, code) match {
-          case DCParser.Success(ast, _) => { println(ast) } // TODO: actually do something and return result
+          case DCParser.Success(ast, _) => {
+            val codeStringBuilder = new CodeStringBuilder
+            ast.code(codeStringBuilder)
+            println(codeStringBuilder.toString) // TODO: actually do something and return result
+            c.send(codeStringBuilder.toString)
+          }
           case x => { println(x) }
         }
         None
@@ -76,4 +81,16 @@ object Repl extends App {
   settings.usejavacp.value = true
   settings.deprecation.value = true
   repl.process(settings)
+}
+
+class CodeStringBuilder {
+  val buffer = new StringBuilder
+  def println(str : String): Unit = {
+    buffer.append(str + "\n")
+  }
+
+  override def toString = {
+    buffer.toString
+  }
+
 }

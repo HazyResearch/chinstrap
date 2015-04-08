@@ -23,12 +23,14 @@ class Client{
     println("Connecting to hello world server...")
     socket.connect ("tcp://localhost:5555")
   }
-  def send(){
+
+
+  def send(message : String){
     //  Do 10 requests, waiting each time for a response
     //  Create a "Hello" message.
     //  Ensure that the last byte of our "Hello" message is 0 because
     //  our "Hello World" server is expecting a 0-terminated string:
-    val request = "Hello ".getBytes()
+    val request = message.getBytes
     request(request.length-1)=0 //Sets the last byte to 0
     // Send the message
     println("Sending request...") + request.toString
