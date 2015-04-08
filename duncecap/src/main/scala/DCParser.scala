@@ -1,17 +1,18 @@
 package DunceCap
 
+import scala.collection.immutable.ListMap
 import scala.util.parsing.combinator.RegexParsers
 
 object DCParser extends RegexParsers {
   
   def identifierName = """[_\p{L}][_\p{L}\p{Nd}]*""".r
-  def typename = """long|string|float""".r // TODO: should I wrap this in another type or just let it be a string?
+  def typename = """uint64_t|string|float""".r // TODO: should I wrap this in another type or just let it be a string?
   def format = """csv|tsv""".r
 
   def typedRelationIdentifier = identifierName ~ (("(" ~> typedAttrList) <~ ")") ^^ {case id~attrs => ASTRelation(id, attrs)}
   def typedAttrList : Parser[Map[String, Option[String]]] = notLastTypedAttr | lastTypedAttr
   def notLastTypedAttr = identifierName ~ (":" ~> typename) ~ ("," ~> typedAttrList) ^^ {case a~t~rest => rest + (a -> Some(t))}
-  def lastTypedAttr = identifierName ~ (":" ~> typename) ^^ {case a~t => Map(a -> Some(t))}
+  def lastTypedAttr = identifierName ~ (":" ~> typename) ^^ {case a~t => ListMap(a -> Some(t))}
 
   def identifier = relationIdentifier | scalarIdentifier
 

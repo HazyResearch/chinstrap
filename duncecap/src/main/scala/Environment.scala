@@ -2,14 +2,14 @@ package DunceCap
 
 import scala.collection.mutable
 
-
 object Environment {
-  // mapping from name of relation in repl to name of relation in C++
-  private var identifierNames : mutable.Map[String, String] = mutable.Map[String, String]()
-  private var identifierID = 0
+  val relations = mutable.Map[String, List[String]]()
 
-  def bindEmittedIdentifierName(DCIdentifierName : String): Unit = {
-
+  def addRelationBinding(identifier : String, types : List[String]): Unit = {
+    relations += (identifier -> types)
   }
 
+  def getTypes(identifier : String): List[String] = {
+    relations(identifier)
+  }
 }

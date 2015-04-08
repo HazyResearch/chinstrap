@@ -49,6 +49,7 @@ object Repl extends App {
             ast.code(codeStringBuilder)
             println(codeStringBuilder.toString) // TODO: actually do something and return result
             c.send(codeStringBuilder.toString)
+            ast.updateEnvironment
           }
           case x => { println(x) }
         }

@@ -2,6 +2,7 @@ package DunceCap
 
 abstract trait ASTStatement {
   def code(s : CodeStringBuilder)
+  def updateEnvironment = {}
 }
 
 /*abstract trait AST
@@ -31,8 +32,14 @@ case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, form
     s.println("}")
 
     // make sure to add the relation and encoding we've just made to the maps the server keeps track of
-    s.println(s"relations[\"${rel.identifierName}\"] = ${rel.identifierName};")
+    s.println(s"""relations["${rel.identifierName}"] = ${rel.identifierName};""")
+
+    s.println(s"""std::cout << ${rel.identifierName}->num_columns << " rows loaded." << std::endl;""")
     s.println("}")
+  }
+
+  override def updateEnvironment: Unit = {
+    Environment.addRelationBinding(rel.identifierName, rel.attrs.values.toList.map((optTypes : Option[String]) => optTypes.get))
   }
 }
 
@@ -41,7 +48,24 @@ case class ASTAssignStatement(identifier : ASTIdentifier, expression : ASTExpres
 }
 
 case class ASTPrintStatement(expression : ASTExpression) extends ASTStatement {
-  override def code(s: CodeStringBuilder): Unit = ???
+  override def code(s: CodeStringBuilder): Unit = {
+    expression match {
+      case ASTScalar(identifierName) => {
+        s.println("#include <iostream>")
+        s.println("#include <unordered_map>")
+        s.println("#include \"emptyheaded.hpp\"")
+        s.println("#include \"utils/io.hpp\"")
+
+        s.println("extern \"C\" void run(std::unordered_map<std::string, void*>& relations) {")
+
+        val typeString = Environment.getTypes(identifierName).mkString(", ")
+        s.println(s"""Relation<${typeString}> * ${identifierName}= (Relation<${typeString}> *)relations["${identifierName}"];""")
+        s.println(s"""std::cout << "${identifierName} has " << ${identifierName}->num_columns << " rows loaded." << std::endl;""")
+        s.println("}")
+      }
+      case _ => println(expression)
+    }
+  }
 }
 
 abstract trait ASTExpression extends ASTStatement
