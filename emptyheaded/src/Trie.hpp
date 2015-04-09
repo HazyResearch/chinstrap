@@ -21,14 +21,12 @@ public:
 
 class Trie{
 public:
-  Block* head;
-  TrieAllocator *alloc;
+  Block *head;
 
   template<typename F>
-  static Trie* build(std::vector<Column<uint32_t>*> *attr_in, F f);
+  static Trie* build(std::vector<Column<uint32_t>> *attr_in, F f);
 
-  Trie(Block* head_in, TrieAllocator *alloc_in){
-    alloc = alloc_in;
+  Trie(Block *head_in){
     head = head_in;
   }
 };
@@ -85,7 +83,7 @@ std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> 
 
 
 template<typename F>
-inline Trie* Trie::build(std::vector<Column<uint32_t>*> *attr_in,
+inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in,
   F f){
 
   const size_t num_levels = attr_in->size();
@@ -93,8 +91,8 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>*> *attr_in,
   //special code to encode the first level
   std::vector<std::multimap<uint32_t,uint32_t>*> *mymultimaps = new std::vector<std::multimap<uint32_t,uint32_t>*>(); 
   size_t cur_level = 0;
-  const Column<uint32_t> * const cur_attributes = attr_in->at(cur_level);
-  const size_t num_attributes = cur_attributes->size();
+  const Column<uint32_t> cur_attributes = attr_in->at(cur_level);
+  const size_t num_attributes = cur_attributes.size();
   TrieAllocator *my_allocator = new TrieAllocator(num_attributes);
 
   auto a0 = debug::start_clock();
@@ -102,7 +100,7 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>*> *attr_in,
   std::multimap<uint32_t,uint32_t>* mymultimap = my_allocator->multimap_allocator->get_next(0); 
   for(size_t i = 0; i < num_attributes; i++){
     if(f(i))
-      mymultimap->insert(std::pair<uint32_t,uint32_t>(cur_attributes->at(i),i));
+      mymultimap->insert(std::pair<uint32_t,uint32_t>(cur_attributes.at(i),i));
   }
   cur_level++;
   mymultimaps->push_back(mymultimap);
@@ -115,7 +113,7 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>*> *attr_in,
   //Encode the remaining levels
   typedef std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> level_pair;
   for(; cur_level < num_levels; cur_level++){
-    level_pair out_pair = encode(my_allocator,num_attributes,attr_in->at(cur_level),mymultimaps,blocks);
+    level_pair out_pair = encode(my_allocator,num_attributes,&attr_in->at(cur_level),mymultimaps,blocks);
     mymultimaps = out_pair.first;
     blocks = out_pair.second;
   }
@@ -123,6 +121,6 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>*> *attr_in,
 
   debug::stop_clock("building without allocs",a0);
 
-  return new Trie(head,my_allocator);
+  return new Trie(head);
 }
 #endif
