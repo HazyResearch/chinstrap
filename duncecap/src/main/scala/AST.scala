@@ -44,7 +44,9 @@ case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, form
 }
 
 case class ASTAssignStatement(identifier : ASTIdentifier, expression : ASTExpression) extends ASTStatement {
-  override def code(s: CodeStringBuilder): Unit = ???
+  override def code(s: CodeStringBuilder): Unit = {
+    expression.code(s)
+  }
 }
 
 case class ASTPrintStatement(expression : ASTExpression) extends ASTStatement {
@@ -72,54 +74,85 @@ abstract trait ASTExpression extends ASTStatement
 case class ASTCount(expression : ASTExpression) extends ASTExpression {
   override def code(s: CodeStringBuilder): Unit = ???
 }
+
 case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTCriterion]) extends ASTExpression {
 
-  def getDistinctAttrs(rels : List[ASTRelation]): List[String] = {
-    rels.map((rel : ASTRelation) => rel.attrs.keySet).foldLeft(Set[String]())(
-      (acc : Set[String], newSet : Set[String]) => acc ++ newSet).toList
+  def getDistinctAttrs(rels : List[ASTRelation]): List[(String, String)] = {
+    val attrsAndTypes = rels.map((rel : ASTRelation) => rel.attrs.keys.toList.zipWithIndex.map(
+      ( attrAndIndex : (String, Int)) => (attrAndIndex._1, Environment.getTypes(rel.identifierName)(attrAndIndex._2)))).flatten
+    attrsAndTypes.toSet.toList.sorted
   }
 
-  def emitAttrIntersectionBuffers(attrs : List[String], rels: ASTRelation) = {
-    // emit buffers for each
+  def emitEncodingForAttr(s: CodeStringBuilder, attr : String, attrType: String, relsAttrs : List[(String, List[String])]) = {
+    /**
+     * std::vector<Column<uint64_t>*> *a_attributes = new std::vector<Column<uint64_t>*>();
+     * a_attributes->push_back(R_ab.get<0>());
+     * a_attributes->push_back(R_ab.get<1>());
+     * Encoding<uint64_t> a_encoding(a_attributes);
+     */
+    s.println(s"""std::vector<Column<${attrType}>*> *${attr}_attributes = new std::vector<Column<${attrType}>*>();""")
+    relsAttrs.map((relAttrs : (String, List[String])) => s.println(
+      s"""${attr}_attributes->push_back(${relAttrs._1}->get<${relAttrs._2.indexOf(attr)}>());""") )
+    s.println(s""" Encoding<${attrType}> ${attr}_encoding(${attr}_attributes);""")
   }
 
-  def emitNPRR(attrs : List[String], rels: ASTRelation) : Unit = {
+  def emitTrieBuilding(s: CodeStringBuilder, allAttrs: List[String], relsAttrs : List[(String, List[String])]) = {
+    /*std::vector<Column<uint32_t>*> *ER_ab = new std::vector<Column<uint32_t>*>();
+    ER_ab->push_back(a_encoding.encoded->at(0)); //perform filter, selection
+    ER_ab->push_back(a_encoding.encoded->at(1));
+
+    //add some sort of lambda to do selections
+    Trie *TR_ab = Trie::build(ER_ab,[&](size_t index){
+      return ER_ab->at(0)->at(index) < ER_ab->at(1)->at(index);
+    }); */
+
+    // emit code to specify the levels of the tries
+    relsAttrs.map((relAttrs : (String, List[String])) => s.println(
+      s"""std::vector<Column<uint32_t>*> *E${relAttrs._1} = new std::vector<Column<uint32_t>*>();"""))
+    allAttrs.map((attr : String) => relsAttrs.filter((relAttr : (String, List[String])) => relAttr._2.contains(attr))
+      .unzip._1.zipWithIndex.map((relAttr : (String, Int)) => s.println(
+      s"""E${relAttr._1}->push_back(${attr}_encoding.encoded->at(${relAttr._2}));""")))
+
+    // emit code to construct each of the tries
+    relsAttrs.unzip._1.map((identifier : String) => s.println(s"""Trie *T${identifier} = True::build(E${identifier}, [&](size_t index){});""") )
+  }
+
+  def emitAttrIntersectionBuffers(s: CodeStringBuilder, attrs : List[String]) = {
+    attrs.map((attr : String) => s.println(s"""allocator::memory<uint8_t> ${attr}_buffer(10000); // TODO"""))
+  }
+
+   def emitAttrIntersection(s: CodeStringBuilder, attr : String, relsAttrs :  List[(String, List[String])]) = {
+    s.println(s"""Set<uinteger> ${attr}(${attr}_buffer.get_memory(tid)); //initialize the memory""")
+
+  }
+
+  def emitAttrLoopOverResult() = {
+  // this should include the walking down the trie, so that when you recursively call emitNPRR, you do so with different rel names
+  }
+
+  def emitNPRR(attrs : List[String], relsAttrs : List[(String, List[String])]) : Unit = {
     if (attrs.isEmpty) return
 
     val currAttr = attrs.head
-
-
+    // emitAttrIntersection(currAttr, )
+    // emitAttrLoopOverResult(currAttr, )
   }
 
   override def code(s: CodeStringBuilder): Unit = {
+    // call emitEncodingForAttr and emitTrieBuilding here
 
-    // Get access to all the relevant tries
-    rels.map((rel: ASTRelation) => s.println(s"Block* head = T${rel.identifierName}->head;"))
-
-    // the number of buffers we allocate needs to be equal to the number of set intersections we plan to do
+    val relations = rels.map((rel : ASTRelation) => (rel.identifierName, rel.attrs.keys.toList.reverse))
     val attrList = getDistinctAttrs(rels)
-    //emitAttrIntersectionBuffers(attrList, rels)
-    //emitNPRR(attrList, rels)
-
-    /*    auto qt = debug::start_clock();
-    head->data.par_foreach([&](size_t tid, uint32_t d1){
-      Block *l2 = head->map.at(d1);
-      Set<uinteger> C(buffer.get_memory(tid));
-      l2->data.foreach([&](uint32_t d2){
-        if(head->map.count(d2)){
-          size_t count = ops::set_intersect(&C,&l2->data,&head->map.at(d2)->data)->cardinality;
-          num_triangles.update(tid,count);
-        }
-      });
-    });
-
-    size_t result = num_triangles.evaluate(0);
-    debug::stop_clock("Query",qt); */
-
+    attrList.map(( attrAndType : (String, String)) => emitEncodingForAttr(s, attrAndType._1, attrAndType._2, relations))
+    emitTrieBuilding(s, attrList.unzip._1, relations)
+    emitAttrIntersectionBuffers(s, attrList.unzip._1)
     s.println("par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){")
     s.println("return a + b;")
     s.println("});")
-
+    //emitNPRR(attrList, rels)
+    s.println("// TODO nprr ")
+    s.println("size_t result = num_triangles.evaluate(0);")
+    s.println("std::cout << result << std::endl;")
   }
 }
 case class ASTStringLiteral(str : String) extends ASTExpression {

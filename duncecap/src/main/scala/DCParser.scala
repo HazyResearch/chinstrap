@@ -19,7 +19,7 @@ object DCParser extends RegexParsers {
   def relationIdentifier = identifierName ~ (("(" ~> attrList) <~ ")") ^^ {case id~attrs => ASTRelation(id, attrs)}
   def attrList : Parser[Map[String, Option[String]]] = notLastAttr | lastAttr
   def notLastAttr = identifierName ~ ("," ~> attrList) ^^ {case a~rest => rest + (a -> None)}
-  def lastAttr = identifierName ^^ {case a => Map(a -> None)}
+  def lastAttr = identifierName ^^ {case a => ListMap(a -> None)}
 
   def scalarIdentifier = identifierName ^^ { case id => ASTScalar(id)}
 
