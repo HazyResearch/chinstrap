@@ -22,10 +22,10 @@ namespace par{
       }
       memset(elem,(uint8_t)0,sizeof(T)*NUM_THREADS*padding);
     }
-    void update(size_t tid, T new_val){
+    inline void update(size_t tid, T new_val){
       elem[tid*padding] = f(elem[tid*padding],new_val);
     }
-    T evaluate(T init){
+    inline T evaluate(T init){
       for(size_t i = 0; i < NUM_THREADS; i++){
         init = f(init,elem[i*padding]);
       }

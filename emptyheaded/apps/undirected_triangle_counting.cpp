@@ -10,7 +10,7 @@ class undirected_triangle_counting: public application<T,R> {
 
 //////////////////////////////////////////////////////////////////////
     //File IO (for a tsv, csv should be roughly the same)
-    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/facebook/edgelist/duplicated.tsv");
+    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/higgs/edgelist/replicated.tsv");
     char *next = f_reader.tsv_get_first();
     R_ab.num_columns = 0;
     while(next != NULL){
@@ -69,7 +69,7 @@ class undirected_triangle_counting: public application<T,R> {
     Set<uinteger> A = TR_ab->head->data;
     A.par_foreach([&](size_t tid, uint32_t a_i){
       Set<uinteger> B(B_buffer.get_memory(tid)); //initialize the memory
-      B = ops::set_intersect(&B,&TR_ab->head->map.at(a_i)->data,&T_bc->head->data); //intersect the B
+      //B = ops::set_intersect(&B,&TR_ab->head->map.at(a_i)->data,&T_bc->head->data); //intersect the B
       
       TR_ab->head->map.at(a_i)->data.foreach([&](uint32_t b_i){ //Peel off B attributes
         if(T_bc->head->map.count(b_i)){ //Check that the set is not the empty set
