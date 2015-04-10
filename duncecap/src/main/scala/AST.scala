@@ -74,8 +74,11 @@ case class ASTCount(expression : ASTExpression) extends ASTExpression {
 case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTCriterion]) extends ASTExpression {
 
   def getDistinctAttrs(rels : List[ASTRelation]): List[(String, String)] = {
-    val attrsAndTypes = rels.map((rel : ASTRelation) => rel.attrs.keys.toList.zipWithIndex.map(
-      ( attrAndIndex : (String, Int)) => (attrAndIndex._1, Environment.getTypes(rel.identifierName)(attrAndIndex._2)))).flatten
+    val attrsAndTypes = rels.map((rel : ASTRelation) => {
+      rel.attrs.keys.toList.zipWithIndex.map(( attrAndIndex : (String, Int)) => {
+        (attrAndIndex._1, Environment.getTypes(rel.identifierName)(attrAndIndex._2))
+      })
+    }).flatten
     attrsAndTypes.toSet.toList.sorted
   }
 
@@ -104,7 +107,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       s"""E${relAttr._1}->push_back(${attr}_encoding.encoded->at(${relAttr._2}));""")))
 
     // emit code to construct each of the tries
-    relsAttrs.unzip._1.map((identifier : String) => s.println(s"""Trie *T${identifier} = Trie::build(E${identifier}, [&](size_t index){});""") )
+    relsAttrs.unzip._1.map((identifier : String) => s.println(s"""Trie *T${identifier} = Trie::build(E${identifier}, [&](size_t index){return true;});""") )
   }
 
   def emitAttrIntersectionBuffers(s: CodeStringBuilder, attrs : List[String]) = {
@@ -125,14 +128,14 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
 
     if (lastIntersection) {
-      s.println(s"""const size_t count = ${attr}->cardinality""")
+      s.println(s"""const size_t count = ${attr}.cardinality;""")
       s.println("num_triangles.update(tid,count);")
       List[(String, List[String])]()
     } else {
       // update relsAttrs by peeling attr off the attribute lists, and adding ->map.at(attr_i) to the relation name
       relsAttrs.map((rel : (String, List[String])) => {
         if (rel._2.head.contains(attr)) {
-          (rel._1 + "->map.at(${attr}_i)", rel._2.tail)
+          (rel._1 + s"->map.at(${attr}_i)", rel._2.tail)
         } else {
           rel
         }
@@ -147,11 +150,11 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     if (outermostLoop) {
       s.println(s"""${attrs.head}.par_foreach([&](size_t tid, uint32_t ${attrs.head}_i){""")
       emitNPRR(s, false, attrs.tail, relsAttrs)
-      s.println("}")
+      s.println("});")
     } else {
       s.println(s"""${attrs.head}.foreach([&](uint32_t ${attrs.head}_i) {""")
       emitNPRR(s, false, attrs.tail, relsAttrs)
-      s.println("}")
+      s.println("});")
     }
   }
 
@@ -159,17 +162,16 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     if (attrs.isEmpty) return
 
     val currAttr = attrs.head
-    var updatedRelsAttrs : List[(String, List[String])] = List[(String, List[String])]()
     if (attrs.tail.isEmpty) {
       emitAttrIntersection(s, true, currAttr, relsAttrs)
     } else {
-      updatedRelsAttrs = emitAttrIntersection(s, false, currAttr, relsAttrs)
+      val updatedRelsAttrs = emitAttrIntersection(s, false, currAttr, relsAttrs)
+      emitAttrLoopOverResult(s, initialCall, attrs, updatedRelsAttrs)
     }
-    emitAttrLoopOverResult(s, initialCall, attrs, updatedRelsAttrs)
+
   }
 
   override def code(s: CodeStringBuilder): Unit = {
-    // call emitEncodingForAttr and emitTrieBuilding here
     s.println("#include <iostream>")
     s.println("#include <unordered_map>")
     s.println("#include \"emptyheaded.hpp\"")
@@ -186,11 +188,11 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     s.println("par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){")
     s.println("return a + b;")
     s.println("});")
-    val firstBlockOfTrie = relations.map(( rel: (String, List[String])) => (rel._1 + "->head", rel._2))
+    val firstBlockOfTrie = relations.map(( rel: (String, List[String])) => ("T" + rel._1 + "->head", rel._2))
     emitNPRR(s, true, attrList.unzip._1, firstBlockOfTrie)
     s.println("size_t result = num_triangles.evaluate(0);")
     s.println("std::cout << result << std::endl;")
-    s.println(")")
+    s.println("}")
   }
 }
 case class ASTStringLiteral(str : String) extends ASTExpression {
