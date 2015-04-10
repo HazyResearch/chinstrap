@@ -111,40 +111,61 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     attrs.map((attr : String) => s.println(s"""allocator::memory<uint8_t> ${attr}_buffer(10000); // TODO"""))
   }
 
-  def emitAttrIntersection(s: CodeStringBuilder, attr : String, relsAttrs :  List[(String, List[String])]) : List[(String, List[String])]= {
-    s.println(s"""Set<uinteger> ${attr}(${attr}_buffer.get_memory(tid)); //initialize the memory""")
-    val relsAttrsWithAttr = relsAttrs.filter(( rel : (String, List[String])) => rel._2.head == attr)
-    if (relsAttrsWithAttr.size == 1) {
+  def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, relsAttrs :  List[(String, List[String])]) : List[(String, List[String])]= {
+    val relsAttrsWithAttr = relsAttrs.filter(( rel : (String, List[String])) => rel._2.contains(attr))
+    if (relsAttrsWithAttr.size == 1 || attr == "a") { // TODO: hack
       // no need to emit an intersection
-      s.println( s"""${attr} = ${relsAttrsWithAttr.head._1}->data;""")
+      s.println( s"""Set<uinteger> ${attr} = ${relsAttrsWithAttr.head._1}->data;""")
     } else {
+      s.println(s"""Set<uinteger> ${attr}(${attr}_buffer.get_memory(tid)); //initialize the memory""")
       // emit an intersection for the first two relations
       s.println(s"""${attr} = ops::set_intersect(&${attr},&${relsAttrsWithAttr.head._1}->data,&${relsAttrsWithAttr.tail.head._1}->data);""")
       val restOfRelsAttrsWithAttr = relsAttrsWithAttr.tail.tail
-      restOfRelsAttrsWithAttr.map((rel : (String, List[String])) => s.println(s"""ops::set_intersect(&${attr},&${attr}->data,&${rel._1}->data);"""))
+      restOfRelsAttrsWithAttr.map((rel : (String, List[String])) => s.println(s"""${attr} = ops::set_intersect(&${attr},&${attr}->data,&${rel._1}->data);"""))
     }
 
-    // update relsAttrs by peeling attr off the attribute lists, and adding ->map.at(attr_i) to the relation name
-    relsAttrs.map((rel : (String, List[String])) => {
-      if (rel._2.head == attr) {
-        (rel._1 + "->map.at(${attr}_i)", rel._2.tail)
-      } else {
-        rel
-      }
-    })
+    if (lastIntersection) {
+      s.println(s"""const size_t count = ${attr}->cardinality""")
+      s.println("num_triangles.update(tid,count);")
+      List[(String, List[String])]()
+    } else {
+      // update relsAttrs by peeling attr off the attribute lists, and adding ->map.at(attr_i) to the relation name
+      relsAttrs.map((rel : (String, List[String])) => {
+        if (rel._2.head.contains(attr)) {
+          (rel._1 + "->map.at(${attr}_i)", rel._2.tail)
+        } else {
+          rel
+        }
+      })
+    }
+
+
   }
 
-  def emitAttrLoopOverResult(s: CodeStringBuilder, attrs : List[String], relsAttrs : List[(String, List[String])]) = {
-  // this should include the walking down the trie, so that when you recursively call emitNPRR, you do so with different rel names
+  def emitAttrLoopOverResult(s: CodeStringBuilder, outermostLoop : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])]) = {
+    // this should include the walking down the trie, so that when you recursively call emitNPRR, you do so with different rel names
+    if (outermostLoop) {
+      s.println(s"""${attrs.head}.par_foreach([&](size_t tid, uint32_t ${attrs.head}_i){""")
+      emitNPRR(s, false, attrs.tail, relsAttrs)
+      s.println("}")
+    } else {
+      s.println(s"""${attrs.head}.foreach([&](uint32_t ${attrs.head}_i) {""")
+      emitNPRR(s, false, attrs.tail, relsAttrs)
+      s.println("}")
+    }
   }
 
-  def emitNPRR(s: CodeStringBuilder, attrs : List[String], relsAttrs : List[(String, List[String])]) : Unit = {
+  def emitNPRR(s: CodeStringBuilder, initialCall : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])]) : Unit = {
     if (attrs.isEmpty) return
 
     val currAttr = attrs.head
-    val updatedRelsAttrs = emitAttrIntersection(s, currAttr, relsAttrs)
-
-    // emitAttrLoopOverResult(currAttr, )
+    var updatedRelsAttrs : List[(String, List[String])] = List[(String, List[String])]()
+    if (attrs.tail.isEmpty) {
+      emitAttrIntersection(s, true, currAttr, relsAttrs)
+    } else {
+      updatedRelsAttrs = emitAttrIntersection(s, false, currAttr, relsAttrs)
+    }
+    emitAttrLoopOverResult(s, initialCall, attrs, updatedRelsAttrs)
   }
 
   override def code(s: CodeStringBuilder): Unit = {
@@ -166,8 +187,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     s.println("return a + b;")
     s.println("});")
     val firstBlockOfTrie = relations.map(( rel: (String, List[String])) => (rel._1 + "->head", rel._2))
-    emitNPRR(s, attrList.unzip._1, firstBlockOfTrie)
-    s.println("// TODO nprr ")
+    emitNPRR(s, true, attrList.unzip._1, firstBlockOfTrie)
     s.println("size_t result = num_triangles.evaluate(0);")
     s.println("std::cout << result << std::endl;")
     s.println(")")
