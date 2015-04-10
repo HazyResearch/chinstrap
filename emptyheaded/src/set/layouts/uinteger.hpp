@@ -106,7 +106,7 @@ inline size_t uinteger::par_foreach(
    (void) number_of_bytes; (void) t;
 
    uint32_t* data = (uint32_t*) data_in;
-   return par::for_range(0, cardinality, 64,
+   return par::for_range(0, cardinality, 128,
      [&f, &data](size_t tid, size_t i) {
         f(tid, data[i]);
      });

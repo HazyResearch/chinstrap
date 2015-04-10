@@ -7,18 +7,20 @@ namespace debug{
   //static size_t bitset_length = 0;
   //static size_t pshort_requirement = 16;
   //static double bitset_req = (1.0/256.0);
-
-  static double startClock (){
-    return 0.0;
+  struct timeval tim; 
+  static double start_clock (){
+    gettimeofday(&tim, NULL);  
+    return tim.tv_sec+(tim.tv_usec/1000000.0); 
   }
 
-  static double stopClock(double t_in){
-    double t2=0.0;
+  static inline double stop_clock(double t_in){
+    gettimeofday(&tim, NULL);  
+    double t2=tim.tv_sec+(tim.tv_usec/1000000.0);  
     return t2 - t_in;
   }
-  static double stopClock(std::string in,double t_in){
-    double t2=0.0;
-    std::cout << "Time["+in+"]: " << t2-t_in << " s" << std::endl;
+  static double stop_clock(std::string in,double t_in){
+    double t2= stop_clock(t_in);
+    std::cout << "Time["+in+"]: " << t2 << " s" << std::endl;
     return t2 - t_in;
   }
 

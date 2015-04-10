@@ -693,7 +693,7 @@ namespace ops{
     return C_in;
   }
 
-  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
+  inline Set<uinteger>* set_intersect_standard(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
     uint32_t * const C = (uint32_t*) C_in->data; 
     const uint32_t * const A = (uint32_t*) A_in->data;
     const uint32_t * const B = (uint32_t*) B_in->data;
@@ -768,6 +768,18 @@ namespace ops{
     C_in->type= type::UINTEGER;
 
     return C_in;  
+  }
+  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in) {
+    const Set<uinteger> *rare = (A_in->cardinality > B_in->cardinality) ? B_in:A_in;
+    const Set<uinteger> *freq = (A_in->cardinality > B_in->cardinality) ? A_in:B_in;
+    const unsigned long min_size = 1;
+
+    //return set_intersect_standard(C_in, rare, freq);
+
+    if(std::max(A_in->cardinality,B_in->cardinality) / std::max(min_size, std::min(A_in->cardinality,B_in->cardinality)) > 32)
+      return set_intersect_galloping(C_in, rare, freq);
+    else
+      return set_intersect_standard(C_in, rare, freq);
   }
 }
 #endif

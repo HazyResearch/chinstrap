@@ -5,12 +5,11 @@
 
 class Block{
   public:
-  std::unordered_map<uint32_t,Block*> *map;
-  Set<uinteger> *data;
-
+  std::unordered_map<uint32_t,Block*> map;
+  Set<uinteger> data;
   Block(){
-    map = new std::unordered_map<uint32_t,Block*>();
-  }
+    map.reserve(64);
+  };
 };
 
 #endif

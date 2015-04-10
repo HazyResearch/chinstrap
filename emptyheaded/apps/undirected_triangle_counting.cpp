@@ -1,5 +1,6 @@
 #include "main.hpp"
 //#include <tbb/tbb.h>
+#define WRITE_VECTOR 1
 
 template<class T, class R>
 class undirected_triangle_counting: public application<T,R> {
@@ -9,7 +10,7 @@ class undirected_triangle_counting: public application<T,R> {
 
 //////////////////////////////////////////////////////////////////////
     //File IO (for a tsv, csv should be roughly the same)
-    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/facebook/edgelist/data.txt");
+    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/higgs/edgelist/replicated.tsv");
     char *next = f_reader.tsv_get_first();
     R_ab.num_columns = 0;
     while(next != NULL){
@@ -38,6 +39,7 @@ class undirected_triangle_counting: public application<T,R> {
     //You can switch the ordering here to be what you want it to be in the Trie.
     //A mapping will need to be kept in the query compiler so it is known what
     //encoding each level in the Trie should map to.
+    auto bt = debug::start_clock();
     std::vector<Column<uint32_t>*> *ER_ab = new std::vector<Column<uint32_t>*>();
     ER_ab->push_back(a_encoding.encoded->at(0)); //perform filter, selection
     ER_ab->push_back(a_encoding.encoded->at(1));
@@ -46,22 +48,44 @@ class undirected_triangle_counting: public application<T,R> {
     Trie *TR_ab = Trie::build(ER_ab,[&](size_t index){
       return ER_ab->at(0)->at(index) < ER_ab->at(1)->at(index);
     });
-
+    debug::stop_clock("Build",bt);
 //////////////////////////////////////////////////////////////////////
     //Prints the relation
     
-    size_t num_triangles = 0;
-    Block* head = TR_ab->levels->at(0)->at(0);
-    head->data->foreach([&](uint32_t d1){
-      Block *l2 = head->map->at(d1);
-      Set<uinteger> C(new uint8_t[ER_ab->at(0)->size()]);
-      l2->data->foreach([&](uint32_t d2){
-        if(head->map->find(d2) != head->map->end())
-          num_triangles += ops::set_intersect(&C,l2->data,head->map->at(d2)->data)->cardinality;
+    //R(a,b) join T(b,c) join S(a,c)
+    //TR_ab = R(a,b) 
+    Trie *T_bc = TR_ab; //T(b,c)
+    Trie *S_ac = TR_ab; //S(a,c)
+
+    //allocate memory
+    allocator::memory<uint8_t> B_buffer(R_ab.num_columns);
+    allocator::memory<uint8_t> C_buffer(R_ab.num_columns);
+    par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
+      return a + b;
+    });
+    
+    auto qt = debug::start_clock();
+
+    Set<uinteger> A = TR_ab->head->data;
+    A.par_foreach([&](size_t tid, uint32_t a_i){
+      Set<uinteger> B(B_buffer.get_memory(tid)); //initialize the memory
+      //B = ops::set_intersect(&B,&TR_ab->head->map.at(a_i)->data,&T_bc->head->data); //intersect the B
+      
+      TR_ab->head->map.at(a_i)->data.foreach([&](uint32_t b_i){ //Peel off B attributes
+        if(T_bc->head->map.count(b_i)){ //Check that the set is not the empty set
+          Set<uinteger> C(C_buffer.get_memory(tid));
+          const size_t count = ops::set_intersect(&C,
+            &T_bc->head->map.at(b_i)->data,
+            &S_ac->head->map.at(a_i)->data)->cardinality;
+          num_triangles.update(tid,count);
+        }
       });
     });
+    
+    size_t result = num_triangles.evaluate(0);
+    debug::stop_clock("Query",qt);
 
-    std::cout << num_triangles << std::endl;
+    std::cout << result << std::endl;
 //////////////////////////////////////////////////////////////////////
 
   }
