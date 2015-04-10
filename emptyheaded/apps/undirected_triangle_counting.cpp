@@ -66,17 +66,20 @@ class undirected_triangle_counting: public application<T,R> {
     
     auto qt = debug::start_clock();
 
-    Set<uinteger> A = TR_ab->head->data;
+    const std::unordered_map<uint32_t,Block*> map = TR_ab->head->map;
+    const Set<uinteger> A = TR_ab->head->data;
     A.par_foreach([&](size_t tid, uint32_t a_i){
       Set<uinteger> B(B_buffer.get_memory(tid)); //initialize the memory
       //B = ops::set_intersect(&B,&TR_ab->head->map.at(a_i)->data,&T_bc->head->data); //intersect the B
-      
-      TR_ab->head->map.at(a_i)->data.foreach([&](uint32_t b_i){ //Peel off B attributes
-        if(T_bc->head->map.count(b_i)){ //Check that the set is not the empty set
+      const Set<uinteger> op1 = map.at(a_i)->data;
+
+      op1.foreach([&](uint32_t b_i){ //Peel off B attributes
+        auto iter = map.find(b_i);
+        if(iter != map.end()){ //Check that the set is not the empty set
           Set<uinteger> C(C_buffer.get_memory(tid));
           const size_t count = ops::set_intersect(&C,
-            &T_bc->head->map.at(b_i)->data,
-            &S_ac->head->map.at(a_i)->data)->cardinality;
+            &iter->second->data,
+            &op1)->cardinality;
           num_triangles.update(tid,count);
         }
       });
