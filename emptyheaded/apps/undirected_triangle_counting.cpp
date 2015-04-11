@@ -10,6 +10,8 @@ class undirected_triangle_counting: public application<T,R> {
 
 //////////////////////////////////////////////////////////////////////
     //File IO (for a tsv, csv should be roughly the same)
+
+    auto rt = debug::start_clock();
     tsv_reader f_reader("/dfs/scratch0/caberger/datasets/higgs/edgelist/replicated.tsv");
     char *next = f_reader.tsv_get_first();
     R_ab->num_columns = 0;
@@ -22,16 +24,16 @@ class undirected_triangle_counting: public application<T,R> {
       next = f_reader.tsv_get_next();
       R_ab->num_columns++;
     }
-
+    debug::stop_clock("Reading File",rt);
 //////////////////////////////////////////////////////////////////////
     //Encoding
-
+    auto et = debug::start_clock();
     //encode A
     std::vector<Column<uint64_t>> *a_attributes = new std::vector<Column<uint64_t>>();
     a_attributes->push_back(R_ab->get<0>());
     a_attributes->push_back(R_ab->get<1>());
     Encoding<uint64_t> *a_encoding = new Encoding<uint64_t>(a_attributes);
-
+    debug::stop_clock("Encoding",et);
 //////////////////////////////////////////////////////////////////////
     //Trie building
 
@@ -50,8 +52,7 @@ class undirected_triangle_counting: public application<T,R> {
     });
     debug::stop_clock("Build",bt);
 //////////////////////////////////////////////////////////////////////
-    //Prints the relation
-    
+    //Prints the relation    
     //R(a,b) join T(b,c) join S(a,c)
     //TR_ab = R(a,b) 
     Trie *T_bc = TR_ab; //T(b,c)
@@ -89,8 +90,7 @@ class undirected_triangle_counting: public application<T,R> {
     debug::stop_clock("Query",qt);
 
     std::cout << result << std::endl;
-    
-//////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////
   }
 };
 
