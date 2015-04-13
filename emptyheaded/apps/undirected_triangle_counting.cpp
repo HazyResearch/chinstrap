@@ -1,6 +1,6 @@
+#define WRITE_VECTOR 1
 #include "main.hpp"
 //#include <tbb/tbb.h>
-#define WRITE_VECTOR 1
 
 template<class T, class R>
 class undirected_triangle_counting: public application<T,R> {
@@ -10,9 +10,8 @@ class undirected_triangle_counting: public application<T,R> {
 
 //////////////////////////////////////////////////////////////////////
     //File IO (for a tsv, csv should be roughly the same)
-
     auto rt = debug::start_clock();
-    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/higgs/edgelist/replicated.tsv");
+    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/socLivejournal/edgelist/replicated.tsv");
     char *next = f_reader.tsv_get_first();
     R_ab->num_columns = 0;
     while(next != NULL){
