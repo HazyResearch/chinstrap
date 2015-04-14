@@ -13,7 +13,7 @@ You can also use :load as in the standard scala repl to load in multiple lines t
 
 ### Compile to a single file
 
-sbt "run datalog_file runnable.cpp"
+sbt "run datalog_filepath runnable.cpp"
 
 ### Server
 
