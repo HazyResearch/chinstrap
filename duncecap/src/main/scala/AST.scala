@@ -7,6 +7,7 @@ abstract trait ASTStatement {
 
 case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, format : String) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
+    s.println("#define WRITE_VECTOR 1")
     s.println("#include <iostream>")
     s.println("#include <unordered_map>")
     s.println("#include \"emptyheaded.hpp\"")
@@ -21,7 +22,7 @@ case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, form
     s.println(s" ${rel.identifierName}->num_columns = 0;")
     s.println("while(next != NULL){")
     for (i <- (0 to (rel.attrs.size-1)).toList) {
-      s.println(s"${rel.identifierName}->get<${i}>()->append_from_string(next);")
+      s.println(s"${rel.identifierName}->get<${i}>().append_from_string(next);")
       s.println("next = f_reader.tsv_get_next();")
     }
     s.println(s"${rel.identifierName}->num_columns++;")
@@ -49,6 +50,7 @@ case class ASTPrintStatement(expression : ASTExpression) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     expression match {
       case ASTScalar(identifierName) => {
+        s.println("#define WRITE_VECTOR 1")
         s.println("#include <iostream>")
         s.println("#include <unordered_map>")
         s.println("#include \"emptyheaded.hpp\"")
@@ -90,28 +92,28 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   }
 
   def emitEncodingForAttr(s: CodeStringBuilder, attr : String, attrType: String, relsAttrs : List[(String, List[String])]) = {
-    s.println(s"""std::vector<Column<${attrType}>*> *${attr}_attributes = new std::vector<Column<${attrType}>*>();""")
+    s.println(s"""std::vector<Column<${attrType}>> *${attr}_attributes = new std::vector<Column<${attrType}>>();""")
     relsAttrs.map((relAttrs : (String, List[String])) => {
       if (relAttrs._2.contains(attr))
         s.println(s"""${attr}_attributes->push_back(${relAttrs._1}->get<${relAttrs._2.indexOf(attr)}>());""")
     })
-    s.println(s""" Encoding<${attrType}> ${attr}_encoding(${attr}_attributes);""")
+    s.println(s""" Encoding<${attrType}> ${attr}_encoding(${attr}_attributes); // TODO heap allocate""")
   }
 
   def emitTrieBuilding(s: CodeStringBuilder, allAttrs: List[String], relsAttrs : List[(String, List[String])]) = {
     // emit code to specify the levels of the tries
     relsAttrs.map((relAttrs : (String, List[String])) => s.println(
-      s"""std::vector<Column<uint32_t>*> *E${relAttrs._1} = new std::vector<Column<uint32_t>*>();"""))
+      s"""std::vector<Column<uint32_t>> *E${relAttrs._1} = new std::vector<Column<uint32_t>>();"""))
     allAttrs.map((attr : String) => relsAttrs.filter((relAttr : (String, List[String])) => relAttr._2.contains(attr))
       .unzip._1.zipWithIndex.map((relAttr : (String, Int)) => s.println(
-      s"""E${relAttr._1}->push_back(${attr}_encoding.encoded->at(${relAttr._2}));""")))
+      s"""E${relAttr._1}->push_back(${attr}_encoding.encoded.at(${relAttr._2}));""")))
 
     // emit code to construct each of the tries
     relsAttrs.unzip._1.map((identifier : String) => s.println(s"""Trie *T${identifier} = Trie::build(E${identifier}, [&](size_t index){return true;});""") )
   }
 
   def emitAttrIntersectionBuffers(s: CodeStringBuilder, attrs : List[String]) = {
-    attrs.map((attr : String) => s.println(s"""allocator::memory<uint8_t> ${attr}_buffer(10000); // TODO"""))
+    attrs.map((attr : String) => s.println(s"""allocator::memory<uint8_t> ${attr}_buffer(${attr}_encoding.key_to_value.size()); // TODO"""))
   }
 
   def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, relsAttrs :  List[(String, List[String])]) : List[(String, List[String])]= {
@@ -172,6 +174,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   }
 
   override def code(s: CodeStringBuilder): Unit = {
+    s.println("#define WRITE_VECTOR 1")
     s.println("#include <iostream>")
     s.println("#include <unordered_map>")
     s.println("#include \"emptyheaded.hpp\"")
