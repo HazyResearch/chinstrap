@@ -13,7 +13,7 @@ class undirected_triangle_counting: public application<T,R> {
     auto rt = debug::start_clock();
     tsv_reader f_reader("/dfs/scratch0/caberger/datasets/socLivejournal/edgelist/replicated.tsv");
     char *next = f_reader.tsv_get_first();
-    R_ab->num_columns = 0;
+    R_ab->num_rows = 0;
     while(next != NULL){
       //have to code generate number of attributes here
       //maybe can accomplish with variadic templates? Might be hard.
@@ -21,7 +21,7 @@ class undirected_triangle_counting: public application<T,R> {
       next = f_reader.tsv_get_next();
       R_ab->get<1>().append_from_string(next);
       next = f_reader.tsv_get_next();
-      R_ab->num_columns++;
+      R_ab->num_rows++;
     }
     debug::stop_clock("Reading File",rt);
 //////////////////////////////////////////////////////////////////////
@@ -58,8 +58,8 @@ class undirected_triangle_counting: public application<T,R> {
     Trie *S_ac = TR_ab; //S(a,c)
 
     //allocate memory
-    allocator::memory<uint8_t> B_buffer(R_ab->num_columns);
-    allocator::memory<uint8_t> C_buffer(R_ab->num_columns);
+    allocator::memory<uint8_t> B_buffer(R_ab->num_rows);
+    allocator::memory<uint8_t> C_buffer(R_ab->num_rows);
     par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
       return a + b;
     });

@@ -74,8 +74,8 @@ public:
 template <typename... T>
 struct Relation : RelationImpl <range <sizeof...(T)>, T...>
 {
-  static constexpr std::size_t num_rows() { return sizeof...(T); }
-  size_t num_columns;
+  static constexpr std::size_t num_columns() { return sizeof...(T); }
+  size_t num_rows;
 
   /*
   // primary template
