@@ -1,12 +1,10 @@
 package DunceCap
 
-abstract trait ASTStatement {
-  def code(s : CodeStringBuilder)
-  def updateEnvironment = {}
-}
-
-case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, format : String) extends ASTStatement {
-  override def code(s: CodeStringBuilder): Unit = {
+/**
+ * All code generation should start from this object:
+ */
+object CodeGen {
+  def emitHeaderAndCodeForAST(s: CodeStringBuilder, root: ASTNode) = {
     s.println("#define WRITE_VECTOR 1")
     s.println("#include <iostream>")
     s.println("#include <unordered_map>")
@@ -14,7 +12,39 @@ case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, form
     s.println("#include \"utils/io.hpp\"")
 
     s.println("extern \"C\" void run(std::unordered_map<std::string, void*>& relations) {")
+    root.code(s)
+    s.println("}")
+  }
+  def emitMainMethod(s : CodeStringBuilder): Unit = {
+    s.println("int main() {")
+    s.println("std::unordered_map<std::string, void*> relations;")
+    s.println("run(relations);")
+    s.println("}")
+  }
+}
 
+abstract trait ASTNode {
+  def code(s: CodeStringBuilder)
+}
+
+case class ASTStatements(statements : List[ASTStatement]) extends ASTNode {
+  def code(s: CodeStringBuilder): Unit = {
+    statements.map((statement : ASTStatement) => {
+      s.println("{")
+      statement.code(s)
+      s.println("}")
+      statement.updateEnvironment
+    })
+
+  }
+}
+
+abstract trait ASTStatement extends ASTNode {
+  def updateEnvironment = {}
+}
+
+case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, format : String) extends ASTNode with ASTStatement {
+  override def code(s: CodeStringBuilder): Unit = {
     s.println(s"Relation<uint64_t,uint64_t>* ${rel.identifierName} = new Relation<uint64_t,uint64_t>();")
     assert(format == "tsv") // TODO : add in csv option
     s.println(s"""tsv_reader f_reader("data/${(filename.str)}");""")
@@ -32,7 +62,6 @@ case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, form
     s.println(s"""relations["${rel.identifierName}"] = ${rel.identifierName};""")
 
     s.println(s"""std::cout << ${rel.identifierName}->num_columns << " rows loaded." << std::endl;""")
-    s.println("}")
   }
 
   override def updateEnvironment: Unit = {
@@ -40,35 +69,27 @@ case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, form
   }
 }
 
-case class ASTAssignStatement(identifier : ASTIdentifier, expression : ASTExpression) extends ASTStatement {
+case class ASTAssignStatement(identifier : ASTIdentifier, expression : ASTExpression) extends ASTNode with ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     expression.code(s)
   }
 }
 
-case class ASTPrintStatement(expression : ASTExpression) extends ASTStatement {
+case class ASTPrintStatement(expression : ASTExpression) extends ASTNode with ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     expression match {
       case ASTScalar(identifierName) => {
-        s.println("#define WRITE_VECTOR 1")
-        s.println("#include <iostream>")
-        s.println("#include <unordered_map>")
-        s.println("#include \"emptyheaded.hpp\"")
-        s.println("#include \"utils/io.hpp\"")
-
-        s.println("extern \"C\" void run(std::unordered_map<std::string, void*>& relations) {")
 
         val typeString = Environment.getTypes(identifierName).mkString(", ")
         s.println(s"""Relation<${typeString}> * ${identifierName}= (Relation<${typeString}> *)relations["${identifierName}"];""")
         s.println(s"""std::cout << "${identifierName} has " << ${identifierName}->num_columns << " rows loaded." << std::endl;""")
-        s.println("}")
       }
       case _ => println(expression)
     }
   }
 }
 
-abstract trait ASTExpression extends ASTStatement
+abstract trait ASTExpression extends ASTNode
 case class ASTCount(expression : ASTExpression) extends ASTExpression {
   override def code(s: CodeStringBuilder): Unit = ???
 }
@@ -174,14 +195,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   }
 
   override def code(s: CodeStringBuilder): Unit = {
-    s.println("#define WRITE_VECTOR 1")
-    s.println("#include <iostream>")
-    s.println("#include <unordered_map>")
-    s.println("#include \"emptyheaded.hpp\"")
-    s.println("#include \"utils/io.hpp\"")
-
-    s.println("extern \"C\" void run(std::unordered_map<std::string, void*>& relations) {")
-
     val relations = rels.map((rel : ASTRelation) => (rel.identifierName, rel.attrs.keys.toList.reverse))
     val attrList = getDistinctAttrs(rels)
     emitRelationLookupAndCast(s, relations.unzip._1)
@@ -195,7 +208,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     emitNPRR(s, true, attrList.unzip._1, firstBlockOfTrie)
     s.println("size_t result = num_triangles.evaluate(0);")
     s.println("std::cout << result << std::endl;")
-    s.println("}")
   }
 }
 case class ASTStringLiteral(str : String) extends ASTExpression {

@@ -46,8 +46,7 @@ object Repl extends App {
         DCParser.parseAll(DCParser.statement, code) match {
           case DCParser.Success(ast, _) => {
             val codeStringBuilder = new CodeStringBuilder
-            ast.code(codeStringBuilder)
-            println(codeStringBuilder.toString) // TODO: actually do something and return result
+            CodeGen.emitHeaderAndCodeForAST(codeStringBuilder, ast)
             c.send(codeStringBuilder.toString)
             ast.updateEnvironment
           }
