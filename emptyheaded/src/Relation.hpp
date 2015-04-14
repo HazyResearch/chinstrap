@@ -43,14 +43,12 @@ using range = type_of <Range <L> >;
 template <size_t N, typename T>
 class RelationElem
 {
-  Column<T>* elem;
+  Column<T> elem;
 public:
-  Column<T>*&       get()       { return elem; }
-  const Column<T>*& get() const { return elem; }
+  Column<T>&       get()       { return elem; }
+  const Column<T>& get() const { return elem; }
   
-  RelationElem(){
-    elem = new Column<T>();
-  }
+  RelationElem(){}
 
 };
 
@@ -66,10 +64,10 @@ class RelationImpl <sizes <N...>, T...> : RelationElem <N, T>...
 
 public:
   template <size_t M>
-  Column<pick <M>>*& get() { return elem <M>::get(); }
+  Column<pick <M>>& get() { return elem <M>::get(); }
 
   template <size_t M>
-  const Column<pick <M>>*& get() const { return elem <M>::get(); }
+  const Column<pick <M>>& get() const { return elem <M>::get(); }
 };
 
 
