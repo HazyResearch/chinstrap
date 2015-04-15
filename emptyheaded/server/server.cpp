@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <dlfcn.h>
 #include <iostream>
+#include <sstream>
 #include <fstream>
 #include <unistd.h>
 #include <unordered_map>
@@ -14,6 +15,12 @@ const char* OBJ_FILE_NAME = "runnable.o";
 const std::string COMPILE_COMMAND = (std::string("clang++ -O3 -dynamiclib -std=c++11 -march=native -mtune=native -Isrc ") + CPP_FILE_NAME + " -o " + OBJ_FILE_NAME);
 
 typedef void (*run_t)(std::unordered_map<std::string, void*>& relations);
+
+void replyToClient(const char* reply_message, zmq::socket_t& socket) {
+  zmq::message_t reply (strlen(reply_message) + 1);
+  memcpy ((void*)reply.data(), reply_message, strlen(reply_message) + 1);
+  socket.send(reply);
+}
 
 int main () {
   //  Prepare our context and socket
@@ -44,7 +51,12 @@ int main () {
 
     // Compile the file.
     std::cout << COMPILE_COMMAND << std::endl;
-    std::system(COMPILE_COMMAND.c_str());
+    int status = std::system(COMPILE_COMMAND.c_str());
+    if (status != 0) {
+      replyToClient("FAILURE: compilation errors", socket);
+      continue;
+    }
+
     // Open and run the file.
     void* handle = dlopen((dir + "/" + OBJ_FILE_NAME).c_str(), RTLD_NOW);
     if (!handle) {
@@ -61,15 +73,18 @@ int main () {
       return 1;
     }
 
+    // Redirect cout while running the file
+    std::streambuf* oldCoutStreamBuf = std::cout.rdbuf();
+    std::ostringstream strCout;
+    std::cout.rdbuf( strCout.rdbuf() );
+
     run(relations);
 
-    dlclose(handle);
+    // Restore old cout
+    std::cout.rdbuf( oldCoutStreamBuf );
 
-    //  Send reply back to client
-    const char* reply_message = "executed file successfully";
-    zmq::message_t reply (strlen(reply_message) + 1);
-    memcpy ((void*)reply.data(), reply_message, strlen(reply_message) + 1);
-    socket.send(reply);
+    dlclose(handle);
+    replyToClient(("SUCCESS: executed file\n" + strCout.str()).c_str(), socket);
   }
   return 0;
 }
