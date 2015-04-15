@@ -139,6 +139,8 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
   def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, relsAttrs :  List[(String, List[String])]) : List[(String, List[String])]= {
     val relsAttrsWithAttr = relsAttrs.filter(( rel : (String, List[String])) => rel._2.contains(attr))
+    assert(!relsAttrsWithAttr.isEmpty)
+
     if (relsAttrsWithAttr.size == 1) { // TODO: no need to intersect same col in repeated relation
       // no need to emit an intersection
       s.println( s"""Set<uinteger> ${attr} = ${relsAttrsWithAttr.head._1}->data;""")
@@ -147,7 +149,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       // emit an intersection for the first two relations
       s.println(s"""${attr} = ops::set_intersect(&${attr},&${relsAttrsWithAttr.head._1}->data,&${relsAttrsWithAttr.tail.head._1}->data);""")
       val restOfRelsAttrsWithAttr = relsAttrsWithAttr.tail.tail
-      restOfRelsAttrsWithAttr.map((rel : (String, List[String])) => s.println(s"""${attr} = ops::set_intersect(&${attr},&${attr}->data,&${rel._1}->data);"""))
+      restOfRelsAttrsWithAttr.map((rel : (String, List[String])) => s.println(s"""${attr} = ops::set_intersect(&${attr},&${attr},&${rel._1}->data);"""))
     }
 
     if (lastIntersection) {
@@ -157,15 +159,13 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     } else {
       // update relsAttrs by peeling attr off the attribute lists, and adding ->map.at(attr_i) to the relation name
       relsAttrs.map((rel : (String, List[String])) => {
-        if (rel._2.head.contains(attr)) {
+        if (!rel._2.isEmpty && rel._2.head.contains(attr)) {
           (rel._1 + s"->map.at(${attr}_i)", rel._2.tail)
         } else {
           rel
         }
       })
     }
-
-
   }
 
   def emitAttrLoopOverResult(s: CodeStringBuilder, outermostLoop : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])]) = {
@@ -191,7 +191,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       val updatedRelsAttrs = emitAttrIntersection(s, false, currAttr, relsAttrs)
       emitAttrLoopOverResult(s, initialCall, attrs, updatedRelsAttrs)
     }
-
   }
 
   override def code(s: CodeStringBuilder): Unit = {

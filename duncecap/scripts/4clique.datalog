@@ -1,0 +1,7 @@
+R(a:uint64_t, b:uint64_t) <- load("medium.txt", tsv)
+S(b:uint64_t, c:uint64_t) <- load("medium.txt", tsv)
+T(a:uint64_t, c:uint64_t) <- load("medium.txt", tsv)
+U(a:uint64_t, c:uint64_t) <- load("medium.txt", tsv)
+V(a:uint64_t, c:uint64_t) <- load("medium.txt", tsv)
+W(a:uint64_t, c:uint64_t) <- load("medium.txt", tsv)
+X(a,b,c) <- R(a,b),S(b,c),T(c,d),U(d,a),V(a,c),W(b,d)
