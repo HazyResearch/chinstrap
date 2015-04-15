@@ -1,5 +1,11 @@
 package DunceCap
 
+package object dc {
+  type JoinedRelation = (String, List[String])
+  type JoinedRelations = List[JoinedRelation]
+  type RenamedRelationInfo = List[((String, String),(String, Int))]
+}
+
 /**
  * All code generation should start from this object:
  */
@@ -94,6 +100,37 @@ case class ASTCount(expression : ASTExpression) extends ASTExpression {
   override def code(s: CodeStringBuilder): Unit = ???
 }
 
+object ASTJoinAndSelectHelpers {
+  /**
+   *
+   * @param relsAttrs
+   * @return
+   */
+  def rewriteNamesOfDuplicatedRelations(relsAttrs : List[(String, List[String])]) = {
+    val sortedRelsAttrs = relsAttrs.sortBy((relAttr : (String, List[String])) => relAttr._1)
+    val distinctRelNames = relsAttrs.unzip._1.distinct
+    val result = distinctRelNames.foldLeft((List[dc.JoinedRelation](), List[((String, String),(String, Int))]()))(
+      (rewrittenRelsAttrsAndNamingMap : (dc.JoinedRelations, dc.RenamedRelationInfo), relationName : String) => {
+        val relsToRewrite : dc.JoinedRelations = relsAttrs.filter((rel : dc.JoinedRelation) => rel._1 == relationName)
+        assert(!relsToRewrite.isEmpty)
+        val numAttrs = relsToRewrite.head._2.size
+        val rewrittenRels : dc.JoinedRelations = relsToRewrite.zipWithIndex.map({ case (rel, index) =>
+          (rel._1 + index.toString, rel._2)
+        })
+
+        val renamedRelationInfo : dc.RenamedRelationInfo  = rewrittenRels.map((rel : dc.JoinedRelation) => {
+          rel._2.zipWithIndex.map({case (attrName, index) =>
+            ((rel._1, attrName), (relationName, index))
+          })
+        }).flatten
+
+        val rewrittenAttrNames = (0 until numAttrs).toList.map((index : Int) => "_" + index.toString)
+        val updatedRenamedRelationInfo : dc.RenamedRelationInfo = renamedRelationInfo:::rewrittenRelsAttrsAndNamingMap._2
+        ((relationName, rewrittenAttrNames)::rewrittenRelsAttrsAndNamingMap._1, updatedRenamedRelationInfo)
+      })
+    (result._1, result._2.toMap)
+  }
+}
 case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTCriterion]) extends ASTExpression {
 
   def getDistinctAttrs(rels : List[ASTRelation]): List[(String, String)] = {
