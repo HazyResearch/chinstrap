@@ -7,9 +7,7 @@ class Block{
   public:
   std::unordered_map<uint32_t,Block*> map;
   Set<uinteger> data;
-  Block(){
-    map.reserve(64);
-  };
+  Block(){};
 };
 
 #endif
