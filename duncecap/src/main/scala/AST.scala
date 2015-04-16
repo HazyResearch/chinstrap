@@ -4,7 +4,6 @@ package object dc {
   type JoinedRelation = (String, List[String])
   type JoinedRelations = List[JoinedRelation]
   type RenamedRelationInfo = List[((String, String),(String, Int))]
-  type RenamedRelationMap = Map[(String, String),(String, Int)]
 }
 
 /**
@@ -132,8 +131,8 @@ object ASTJoinAndSelectHelpers {
     (result._1, result._2.toMap)
   }
 }
-
 case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTCriterion]) extends ASTExpression {
+
   def getDistinctAttrs(rels : List[ASTRelation]): List[(String, String)] = {
     val attrsAndTypes = rels.map((rel : ASTRelation) => {
       rel.attrs.keys.toList.zipWithIndex.map(( attrAndIndex : (String, Int)) => {
@@ -150,15 +149,11 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     })
   }
 
-  def emitEncodingForAttr(s: CodeStringBuilder, attr : String, attrType: String, relsAttrs : List[(String, List[String])], rewrittenMap : dc.RenamedRelationMap) = {
+  def emitEncodingForAttr(s: CodeStringBuilder, attr : String, attrType: String, relsAttrs : List[(String, List[String])]) = {
     s.println(s"""std::vector<Column<${attrType}>> *${attr}_attributes = new std::vector<Column<${attrType}>>();""")
-    val realRelationNamesAndIndices = relsAttrs.filter((relAttrs : (String, List[String])) => {
-      relAttrs._2.contains(attr)
-    }).map((relAttrs : (String, List[String])) => {
-      rewrittenMap((relAttrs._1, attr))
-    })
-    realRelationNamesAndIndices.map((nameAndIndex: (String, Int)) => {
-      s.println(s"""${attr}_attributes->push_back(${nameAndIndex._1}->get<${nameAndIndex._2}>());""")
+    relsAttrs.map((relAttrs : (String, List[String])) => {
+      if (relAttrs._2.contains(attr))
+        s.println(s"""${attr}_attributes->push_back(${relAttrs._1}->get<${relAttrs._2.indexOf(attr)}>());""")
     })
     s.println(s""" Encoding<${attrType}> ${attr}_encoding(${attr}_attributes); // TODO heap allocate""")
   }
@@ -185,7 +180,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
     if (relsAttrsWithAttr.size == 1) { // TODO: no need to intersect same col in repeated relation
       // no need to emit an intersection
-      s.println(s"""Set<uinteger> ${attr} = ${relsAttrsWithAttr.head._1}->data;""")
+      s.println( s"""Set<uinteger> ${attr} = ${relsAttrsWithAttr.head._1}->data;""")
     } else {
       s.println(s"""Set<uinteger> ${attr}(${attr}_buffer.get_memory(tid)); //initialize the memory""")
       // emit an intersection for the first two relations
@@ -235,26 +230,11 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
   }
 
-  def invertMap[A,B]( m: Map[A,B] ) : Map[B,A] = {
-    val k = ( ( m values ) toList ) distinct
-    val v = k map { e => ( ( m keys ) toList ) filter { x => m(x) == e } }
-    ( k zip v.head ) toMap
-  }
-
-  def getUniqueRelationsWithOriginalAttrNames(map: dc.RenamedRelationMap): List[(String, List[String])] = {
-    val invertedMap = invertMap(map)
-    invertedMap.map((String, Int) => )
-  }
-
-
-
   override def code(s: CodeStringBuilder): Unit = {
     val relations = rels.map((rel : ASTRelation) => (rel.identifierName, rel.attrs.keys.toList.reverse))
-    val (rewrittenRelations, map) = ASTJoinAndSelectHelpers.rewriteNamesOfDuplicatedRelations(relations)
     val attrList = getDistinctAttrs(rels)
-    emitRelationLookupAndCast(s, map.values.toList.unzip._1) // TODO (sctu): this is repetitive, pretty sure I already computed that list once
-    attrList.map(( attrAndType : (String, String)) => emitEncodingForAttr(s, attrAndType._1, attrAndType._2, relations, map))
-    val uniqueRelationsWithOriginalAttrNames =
+    emitRelationLookupAndCast(s, relations.unzip._1)
+    attrList.map(( attrAndType : (String, String)) => emitEncodingForAttr(s, attrAndType._1, attrAndType._2, relations))
     emitTrieBuilding(s, attrList.unzip._1, relations)
     emitAttrIntersectionBuffers(s, attrList.unzip._1)
     s.println("par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){")
