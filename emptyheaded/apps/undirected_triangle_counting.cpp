@@ -1,12 +1,14 @@
 #define WRITE_VECTOR 1
 #include "main.hpp"
-//#include <tbb/tbb.h>
 
 template<class T, class R>
 class undirected_triangle_counting: public application<T,R> {
   void run(){
     //create the relation (currently a column wise table)
     Relation<uint64_t,uint64_t> *R_ab = new Relation<uint64_t,uint64_t>();
+
+    std::cout << "Set: " << sizeof(Set<uinteger>) << std::endl;
+    //std::cout << "Block: " << sizeof(Block) << std::endl;
 
 //////////////////////////////////////////////////////////////////////
     //File IO (for a tsv, csv should be roughly the same)
@@ -40,6 +42,7 @@ class undirected_triangle_counting: public application<T,R> {
     //You can switch the ordering here to be what you want it to be in the Trie.
     //A mapping will need to be kept in the query compiler so it is known what
     //encoding each level in the Trie should map to.
+    
     auto bt = debug::start_clock();
     std::vector<Column<uint32_t>> *ER_ab = new std::vector<Column<uint32_t>>();
     ER_ab->push_back(a_encoding->encoded.at(0)); //perform filter, selection
@@ -50,6 +53,8 @@ class undirected_triangle_counting: public application<T,R> {
       return ER_ab->at(0).at(index) < ER_ab->at(1).at(index);
     });
     debug::stop_clock("Build",bt);
+    /*
+
 //////////////////////////////////////////////////////////////////////
     //Prints the relation    
     //R(a,b) join T(b,c) join S(a,c)
@@ -90,6 +95,7 @@ class undirected_triangle_counting: public application<T,R> {
 
     std::cout << result << std::endl;
     //////////////////////////////////////////////////////////////////////
+    */
   }
 };
 

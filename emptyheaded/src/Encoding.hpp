@@ -3,7 +3,8 @@
 
 #include <unordered_map>
 #include "Column.hpp"
-
+#include "tbb/parallel_sort.h"
+#include "tbb/task_scheduler_init.h"
 
 template<class T>
 struct OrderByFrequency{
@@ -14,7 +15,7 @@ struct OrderByFrequency{
   bool operator()(std::pair<uint32_t,T> i, std::pair<uint32_t,T> j) const {
     size_t i_size = frequency->at(i.first);
     size_t j_size = frequency->at(j.first);
-    return i_size < j_size;
+    return i_size > j_size;
   }
 };
 
@@ -26,10 +27,18 @@ struct Encoding{
 
   Encoding(std::vector<Column<T>> *attr_in){
     const size_t num_attributes = attr_in->size();
+    const size_t num_rows = attr_in->at(0).size();
 
+    auto a = debug::start_clock();
+    
     //Get the frequency of each value
     std::vector<std::pair<uint32_t,T>> sorted_values;
     std::vector<size_t> frequency;
+
+    sorted_values.reserve(num_rows*num_attributes);
+    frequency.reserve(num_rows*num_attributes);
+    value_to_key.reserve(num_rows*num_attributes);
+
     for(size_t i = 0; i < num_attributes; i++){
       const Column<T> input = attr_in->at(i);
       for(size_t j = 0; j < input.size(); j++){
@@ -43,30 +52,44 @@ struct Encoding{
         }
       }
     }
+    debug::stop_clock("serial",a);
 
+
+    a = debug::start_clock();
     //sort by the frequency
-    std::sort(sorted_values.begin(),sorted_values.end(),OrderByFrequency<T>(&frequency));
+    tbb::task_scheduler_init init(NUM_THREADS);
+    tbb::parallel_sort(sorted_values.begin(),sorted_values.end(),OrderByFrequency<T>(&frequency));
 
     //reassign id's
-    key_to_value.reserve(frequency.size());
-    for(size_t i = 0; i < sorted_values.size(); i++){
-      value_to_key.at(sorted_values.at(i).second) = key_to_value.size();
-      key_to_value.push_back(sorted_values.at(i).second);
-    }
+
+    T *k2v = new T[sorted_values.size()];
+    key_to_value.assign(k2v,k2v+sorted_values.size());
+    par::for_range(0,sorted_values.size(),100,[&](size_t tid, size_t i){
+      (void) tid;
+      key_to_value.at(i) = sorted_values.at(i).second;
+      value_to_key.at(sorted_values.at(i).second) = i;
+    });
 
     //create new encoded column
     encoded.reserve(num_attributes);
+
+    const size_t alloc_size = num_attributes*num_rows;
+    uint32_t *new_columns = new uint32_t[alloc_size];
+
     for(size_t i = 0; i < num_attributes; i++){
       const Column<T> input = attr_in->at(i);
       Column<uint32_t> output;
-      output.reserve(input.size());
-      for(size_t j = 0; j < input.size(); j++){
+      output.assign(new_columns+(i*num_rows),new_columns+((i+1)*num_rows));
+      par::for_range(0,input.size(),100,[&](size_t tid, size_t j){
+        (void) tid;
         const T value = input.at(j);
         const uint32_t key = value_to_key.at(value);
-        output.append(key);
-      }
+        output.set(j,key);
+      });
       encoded.push_back(output);
     }
+
+    debug::stop_clock("parallel",a);
 
   };
 };

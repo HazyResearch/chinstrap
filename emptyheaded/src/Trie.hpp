@@ -3,45 +3,41 @@
 
 #include "Block.hpp"
 #include "Encoding.hpp"
-#include <unordered_map>
-#include <map>
+#include "tbb/parallel_sort.h"
+#include "tbb/task_scheduler_init.h"
 
-class TrieAllocator{
-public:
-  allocator::memory<Block> *block_allocator;
-  allocator::memory<std::multimap<uint32_t,uint32_t>> *multimap_allocator;
-  allocator::memory<uint8_t> *data_allocator;
-
-  TrieAllocator(size_t alloc_size){
-    block_allocator = new allocator::memory<Block>(alloc_size);
-    multimap_allocator = new allocator::memory<std::multimap<uint32_t,uint32_t>>(alloc_size);
-    data_allocator = new allocator::memory<uint8_t>(alloc_size);
+struct SortColumns{
+  std::vector<Column<uint32_t>> *columns; 
+  SortColumns(std::vector<Column<uint32_t>> *columns_in){
+    columns = columns_in;
+  }
+  bool operator()(size_t i, size_t j) const {
+    for(size_t c = 0; c < columns->size(); c++){
+      if(columns->at(c).at(i) != columns->at(c).at(j)){
+        return columns->at(c).at(i) < columns->at(c).at(j);
+      }
+    }
+    return true;
   }
 };
 
-class Trie{
-public:
-  Block *head;
 
+struct Trie{
   template<typename F>
   static Trie* build(std::vector<Column<uint32_t>> *attr_in, F f);
-
-  Trie(Block *head_in){
-    head = head_in;
-  }
 };
-
-std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> encode(
+/*
+std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<SparseBlock<SparseBlock*>*>*> encode(
   TrieAllocator *my_allocator,
   const size_t max_size,
   Column<uint32_t> *cur_column,
   std::vector<std::multimap<uint32_t,uint32_t>*> *mymultimaps, 
-  std::vector<Block*> *blocks){
+  std::vector<SparseBlock<SparseBlock*>*> *blocks){
   //encode sets out of multimaps
   //build hash maps
 
   std::vector<std::multimap<uint32_t,uint32_t>*> *outputmultimaps = new std::vector<std::multimap<uint32_t,uint32_t>*>();
-  std::vector<Block*> *outblocks = new std::vector<Block*>();
+  std::vector<SparseBlock<SparseBlock*>*> *outblocks = new std::vector<SparseBlock<SparseBlock*>*>();
   //maybe use a vector of blocks instead of a vector of block pointers
   uint32_t *new_set = new uint32_t[max_size];
   for(size_t i = 0; i < mymultimaps->size(); i++){
@@ -49,7 +45,7 @@ std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> 
     std::multimap<uint32_t,uint32_t> *mymultimap = mymultimaps->at(i);
 
     std::multimap<uint32_t,uint32_t>*outmap = NULL;
-    Block *outblock = NULL;
+    SparseBlock<SparseBlock*> *outblock = NULL;
     size_t new_set_size = 0;
 
     for (auto it=mymultimap->begin(); it!=mymultimap->end(); ++it){
@@ -63,7 +59,7 @@ std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> 
         outmap = my_allocator->multimap_allocator->get_next(0);
         prev = (*it).first;
         new_set[new_set_size++] = (*it).first;
-        blocks->at(i)->map.insert(std::pair<uint32_t,Block*>((*it).first,outblock));
+        blocks->at(i)->map.insert(std::pair<uint32_t,SparseBlock<SparseBlock*>*>((*it).first,outblock));
       }
       if(cur_column != NULL){
         outmap->insert(std::pair<uint32_t,uint32_t>(cur_column->at((*it).second),(*it).second));
@@ -80,21 +76,36 @@ std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> 
 
   return make_pair(outputmultimaps,outblocks);
 }
-
+*/
 
 template<typename F>
-inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in,
-  F f){
+inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in, F f){
 
   const size_t num_levels = attr_in->size();
+  const size_t num_rows = attr_in->at(0).size();
 
+  uint32_t *indicies = new uint32_t[num_rows];
+  uint32_t *iterator = indicies;
+  for(size_t i = 0; i < num_rows; i++){
+    *iterator++ = i; 
+  }
+  tbb::task_scheduler_init init(NUM_THREADS);
+  tbb::parallel_sort(indicies,indicies+num_rows,SortColumns(attr_in));
+
+  /*
+  for(size_t i = 0; i < num_rows; i++){
+    std::cout << indicies[i] << std::endl;
+  }
+  */
+
+/*
   //special code to encode the first level
   std::vector<std::multimap<uint32_t,uint32_t>*> *mymultimaps = new std::vector<std::multimap<uint32_t,uint32_t>*>(); 
   size_t cur_level = 0;
   const Column<uint32_t> cur_attributes = attr_in->at(cur_level);
   const size_t num_attributes = cur_attributes.size();
-  TrieAllocator *my_allocator = new TrieAllocator(num_attributes);
-
+  */
+/*
   auto a0 = debug::start_clock();
   //parallel for
   std::multimap<uint32_t,uint32_t>* mymultimap = my_allocator->multimap_allocator->get_next(0); 
@@ -105,13 +116,18 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in,
   cur_level++;
   mymultimaps->push_back(mymultimap);
 
-  std::vector<Block*> *blocks = new std::vector<Block*>();
-  Block *head = my_allocator->block_allocator->get_next(0);
+  std::vector<SparseBlock<SparseBlock*>*> *blocks = new std::vector<SparseBlock<SparseBlock*>*>();
+  
+  */
+  // = new Block<Sparse<Block<Sparse>>>();
+  //Block<SparseBlock> sb = new Block<SparseBlock>();
+//my_allocator->block_allocator->get_next(0);
+  /*
   blocks->push_back(head);
 
   //////////////////////////////////////////////////////////////////////////////////////////////////////
   //Encode the remaining levels
-  typedef std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<Block*>*> level_pair;
+  typedef std::pair<std::vector<std::multimap<uint32_t,uint32_t>*>*,std::vector<SparseBlock<SparseBlock*>*>*> level_pair;
   for(; cur_level < num_levels; cur_level++){
     level_pair out_pair = encode(my_allocator,num_attributes,&attr_in->at(cur_level),mymultimaps,blocks);
     mymultimaps = out_pair.first;
@@ -120,7 +136,7 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in,
   encode(my_allocator,num_attributes,NULL,mymultimaps,blocks);
 
   debug::stop_clock("building without allocs",a0);
-
-  return new Trie(head);
+  */
+  return new Trie();
 }
 #endif

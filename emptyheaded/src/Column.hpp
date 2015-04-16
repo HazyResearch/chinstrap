@@ -4,12 +4,14 @@
 #include "utils/utils.hpp"
 
 template <class T>
-class Column{
-public:
+struct Column{
   std::vector<T> col;
   Column<T>(){}
   inline T at(size_t i) const{
     return col.at(i);
+  }
+  inline void set(size_t i, T val){
+    col.at(i) = val;
   }
   inline void append(T elem){
     col.push_back(elem);
@@ -20,6 +22,10 @@ public:
   inline void reserve(size_t size){
     col.reserve(size);
   }
+  inline void assign(T * start, T* end){
+    col.assign(start,end);
+  }
+
   void append_from_string(const char *string_element);
 };
 

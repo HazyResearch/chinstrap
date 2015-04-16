@@ -3,11 +3,20 @@
 
 #include "set/ops.hpp"
 
-class Block{
-  public:
-  std::unordered_map<uint32_t,Block*> map;
-  Set<uinteger> data;
-  Block(){};
-};
+/*
+4 types of blocks should exits (head,dense,sparse,and tail)
+1. Head should have just an array of pointers
+2. Dense should have a set along with an array of pointers to next level
+array of pointers is indexed in by ID
+3. Sparse should have a set along with an unordered map (for now)
+4. Tail should have just the set data
+
+Data should be laid out like 
+----------------------------------
+| Set | Set Data | Map | Map Data
+----------------------------------
+*/
+
+
 
 #endif

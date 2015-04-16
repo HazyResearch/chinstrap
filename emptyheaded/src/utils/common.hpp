@@ -59,7 +59,7 @@
 #define INTS_PER_REG 4
 #define BYTES_PER_REG 16
 
-static size_t NUM_THREADS = 1;
+static size_t NUM_THREADS = 48;
 
 namespace type{
   enum file : uint8_t{
