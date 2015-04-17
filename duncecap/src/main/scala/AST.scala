@@ -1,5 +1,7 @@
 package DunceCap
 
+import scala.collection.mutable
+
 /**
  * All code generation should start from this object:
  */
@@ -96,6 +98,43 @@ case class ASTCount(expression : ASTExpression) extends ASTExpression {
 }
 
 object NPRRSetupHelper {
+  type Relation = (String, List[String])
+  type Relations = List[Relation]
+  type RName = String
+  type RIndex = Int
+  type Column = (RName, RIndex)
+
+  def DFS(visited : mutable.Set[Column], start : Column, relations : Relations) : List[Column] = {
+    assert(!visited.contains(start))
+    visited.add(start)
+
+    val letters = relations.filter((rel : Relation) => rel._1 == start._1).map((rel : Relation) => {
+      rel._2(start._2)
+    }).toSet
+
+    relations.flatMap((rel : Relation) => {
+      rel._2.zipWithIndex.foldLeft(List[Column](start))((accum: List[Column],  attrAndIndex : (String, RIndex)) =>{
+        if (letters.contains(attrAndIndex._1) && !visited.contains((rel._1, attrAndIndex._2))) {
+          accum ++ DFS(visited, (rel._1, attrAndIndex._2), relations)
+        } else {
+          accum
+        }
+      })
+    }).distinct // TODO make less gross
+  }
+
+  def buildEncodingEquivalenceClasses(relations : Relations): Set[List[(RName, RIndex)]] = {
+    val visited = mutable.Set[(RName, RIndex)]()
+    relations.flatMap((rel : Relation) => {
+      (0 until rel._2.size).toList.flatMap((index : RIndex) => {
+        if (!visited.contains((rel._1, index))) {
+          Some(DFS(visited, (rel._1, index), relations))
+        } else {
+          None
+        }
+      }) // result will be List List[List[(RName, RIndex)]]
+    }).toSet
+  }
 }
 
 case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTCriterion]) extends ASTExpression {
