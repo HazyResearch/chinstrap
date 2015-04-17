@@ -45,7 +45,8 @@ abstract trait ASTStatement extends ASTNode {
 
 case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, format : String) extends ASTNode with ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
-    s.println(s"Relation<uint64_t,uint64_t>* ${rel.identifierName} = new Relation<uint64_t,uint64_t>();")
+    val relationTypes = rel.attrs.values.toList.map((optTypes : Option[String]) => optTypes.get).mkString(",")
+    s.println(s"Relation<${relationTypes}>* ${rel.identifierName} = new Relation<${relationTypes}>();")
     assert(format == "tsv") // TODO : add in csv option
     s.println(s"""tsv_reader f_reader("data/${(filename.str)}");""")
     s.println("char *next = f_reader.tsv_get_first();")
@@ -94,6 +95,9 @@ case class ASTCount(expression : ASTExpression) extends ASTExpression {
   override def code(s: CodeStringBuilder): Unit = ???
 }
 
+object NPRRSetupHelper {
+}
+
 case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTCriterion]) extends ASTExpression {
 
   def emitRelationLookupAndCast(s: CodeStringBuilder, rels : List[String]) = {
@@ -103,13 +107,13 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     })
   }
 
-  def emitTrieBuilding(s: CodeStringBuilder, relsAttrs : List[(String, List[String])], encodingHistory : Map[Int, List[(String, String)]]) = {
+  def emitTrieBuilding(s: CodeStringBuilder, relsAttrs : List[(String, List[String])], encodingHistory : Map[String, List[(String, String)]]) = {
     // emit code to specify the levels of the tries
     relsAttrs.map((relAttrs : (String, List[String])) => {
       s.println(s"""std::vector<Column<uint32_t>> *E${relAttrs._1} = new std::vector<Column<uint32_t>>();""")
       relAttrs._2.zipWithIndex.map((origAndRewrittenAttr : (String, Int)) => {
-        val encodingIndex = encodingHistory(origAndRewrittenAttr._2).indexOf((relAttrs._1, origAndRewrittenAttr._1))
-        s.println(s"""E${relAttrs._1}->push_back(_${origAndRewrittenAttr._2}_encoding.encoded.at(${encodingIndex}));""")
+        val encodingIndex = encodingHistory(relAttrs._1 + "_" + origAndRewrittenAttr._2.toString).indexOf((relAttrs._1, origAndRewrittenAttr._1))
+        s.println(s"""E${relAttrs._1}->push_back(${relAttrs._1}_${origAndRewrittenAttr._2}_encoding.encoded.at(${encodingIndex}));""")
       })
     })
 
@@ -128,7 +132,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     if (relsAttrsWithAttr.size == 1) { // TODO: no need to intersect same col in repeated relation
       // no need to emit an intersection
       s.println( s"""Set<uinteger> ${attr} = ${relsAttrsWithAttr.head}->data;""")
-    } else {
+     } else {
       s.println(s"""Set<uinteger> ${attr}(${attr}_buffer.get_memory(tid)); //initialize the memory""")
       // emit an intersection for the first two relations
       s.println(s"""${attr} = ops::set_intersect(&${attr},&${relsAttrsWithAttr.head}->data,&${relsAttrsWithAttr.tail.head}->data);""")
@@ -264,34 +268,35 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     /**
      * Now emit the encodings of each of the attrs
      */
-
     val (rewrittenRelations, mapToOriginalAttrs) = rewriteNamesOfDuplicatedRelations(relations)
-    val attrAndTypeList = rewrittenRelations.map((rel : RRelation) => {
-      rel._2 zip Environment.getTypes(rel._1)
-    }).flatten.distinct.sorted
-    attrAndTypeList.map(( attrIndexAndType : (Int, String)) => {
-      emitEncodingInitForAttr(s, "_" + attrIndexAndType._1.toString, attrIndexAndType._2)
+    rewrittenRelations.map((rel : RRelation) => {
+      (rel._2 zip Environment.getTypes(rel._1)).map(( attrIndexAndType : (Int, String)) => {
+        emitEncodingInitForAttr(s, rel._1 + "_" + attrIndexAndType._1.toString, attrIndexAndType._2)
+      })
     })
+
 
     val mapAttrToRelAndIndex : Map[String, List[(String, Int)]] = createMapAttrToRelAndIndex(fullAttrList, mapToOriginalAttrs)
     println("blah " + mapAttrToRelAndIndex)
-    val history : Map[Int, List[(String, String)]] = rewrittenRelations.map((rel : RRelation) => {
+    val history : Map[String, List[(String, String)]] = rewrittenRelations.map((rel : RRelation) => {
       rel._2.map((attrIndex : Int) => {
-        val resultForIndex = mapToOriginalAttrs((rel._1, attrIndex)).unzip._2.map((originalAttrName : String) => {
+        val historyForIndex = mapToOriginalAttrs((rel._1, attrIndex)).unzip._2.map((originalAttrName : String) => {
           mapAttrToRelAndIndex(originalAttrName).map((occurrence : (String, Int)) => {
-            emitAttrEncoding(s, "_" + attrIndex.toString, occurrence._1, occurrence._2)
+            emitAttrEncoding(s, rel._1 + "_" + attrIndex.toString, occurrence._1, occurrence._2)
             println((occurrence._1, occurrence._2))
             (occurrence._1, originalAttrName) /*these will give us a history of the order in which we did the push_backs*/
           })
         }).flatten
-        (attrIndex, resultForIndex)
+        (rel._1 + "_" + attrIndex.toString, historyForIndex)
       })
     }).flatten.toMap
 
     println("history")
     println(history)
-    attrAndTypeList.map(( attrIndexAndType : (Int, String)) => {
-      emitBuildEncodingForAttr(s, "_" + attrIndexAndType._1.toString, attrIndexAndType._2)
+    rewrittenRelations.map((rel : RRelation) => {
+      (rel._2 zip Environment.getTypes(rel._1)).map(( attrIndexAndType : (Int, String)) => {
+        emitBuildEncodingForAttr(s, rel._1 + "_" + attrIndexAndType._1.toString, attrIndexAndType._2)
+      })
     })
 
     /**
