@@ -42,8 +42,38 @@ object NPRRSetupUtil {
         } else {
           None
         }
-      }) // result will be List List[List[(RName, RIndex)]]
+      })
     })
+  }
+
+  /**
+   * @return Columns relevant to the encoding of any columns named attr
+   */
+  def getEncodingsRelevantToAttr(targetAttr : String, relations : Relations, encodings : List[EquivalenceClass]) : Set[Column]= {
+    relations.flatMap((rel : Relation) => {
+      rel._2.zipWithIndex.flatMap((attrAndIndex : (String, Int)) => {
+        val (attr, index) = attrAndIndex
+        if (attr == targetAttr) {
+          Some(encodings.flatMap((klass : EquivalenceClass) => {
+            if (klass.contains((rel._1, index))) {
+              Some((klass.head._1, klass.head._2))
+            } else {
+              None
+            }
+          }).distinct)
+        } else {
+          None
+        }
+      }).flatten
+    }).toSet
+  }
+
+
+  def mkEncodingName(col : Column) = {
+    col._1 + "_" + col._2
+  }
+  def mkEncodingName(klass : EquivalenceClass) = {
+    klass.head._1 + "_" + klass.head._2
   }
 
   def getDistinctRelations(relations : Relations): RWRelations = {

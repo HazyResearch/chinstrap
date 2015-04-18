@@ -1,7 +1,5 @@
 package DunceCap
 
-import scala.collection.mutable
-
 /**
  * All code generation should start from this object:
  */
@@ -101,18 +99,26 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
   import NPRRSetupUtil._
 
-  def emitRelationLookupAndCast(s: CodeStringBuilder, rels : List[String]) = {
+  private def emitRelationLookupAndCast(s: CodeStringBuilder, rels : List[String]) = {
     rels.map((identifierName : String) => {
       val typeString = Environment.getTypes(identifierName).mkString(", ")
       s.println(s"""Relation<${typeString}> * ${identifierName}= (Relation<${typeString}> *)relations["${identifierName}"];""")
     })
   }
 
-  def emitAttrIntersectionBuffers(s: CodeStringBuilder, attrs : List[String]) = {
-    attrs.map((attr : String) => s.println(s"""allocator::memory<uint8_t> ${attr}_buffer(10000); // TODO"""))
+  private def emitAttrIntersectionBuffers(s: CodeStringBuilder, attrs : List[String], relations : Relations, equivalanceClasses : List[EquivalenceClass]) = {
+    attrs.map((attr : String) => {
+      val encodings : Set[Column] = getEncodingsRelevantToAttr(attr, relations, equivalanceClasses)
+      s.println(s"""size_t ${attr}_bufsize_arr[] = {""")
+      s.println(encodings.map((encoding : Column) => {
+        s"""${mkEncodingName(encoding)}_encoding.key_to_value.size()"""
+      }).mkString(","))
+      s.println("};")
+      s.println(s"""allocator::memory<uint8_t> ${attr}_buffer(*std::max_element(${attr}_bufsize_arr,${attr}_bufsize_arr+${encodings.size}));""")
+    })
   }
 
-  def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, relsAttrs :  List[(String, List[String])]) : List[(String, List[String])]= {
+  private def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, relsAttrs :  List[(String, List[String])]) : List[(String, List[String])]= {
     val relsAttrsWithAttr = relsAttrs.filter(( rel : (String, List[String])) => rel._2.contains(attr)).unzip._1.distinct
     assert(!relsAttrsWithAttr.isEmpty)
 
@@ -143,7 +149,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
   }
 
-  def emitAttrLoopOverResult(s: CodeStringBuilder, outermostLoop : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])]) = {
+  private def emitAttrLoopOverResult(s: CodeStringBuilder, outermostLoop : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])]) = {
     // this should include the walking down the trie, so that when you recursively call emitNPRR, you do so with different rel names
     if (outermostLoop) {
       s.println(s"""${attrs.head}.par_foreach([&](size_t tid, uint32_t ${attrs.head}_i){""")
@@ -156,7 +162,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
   }
 
-  def emitNPRR(s: CodeStringBuilder, initialCall : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])]) : Unit = {
+  private def emitNPRR(s: CodeStringBuilder, initialCall : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])]) : Unit = {
     if (attrs.isEmpty) return
 
     val currAttr = attrs.head
@@ -168,19 +174,19 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
   }
 
-  def emitAttrEncoding(s : CodeStringBuilder, rewrittenAttrName : String, relName: String, attrIndex: Int): Unit = {
+  private def emitAttrEncoding(s : CodeStringBuilder, rewrittenAttrName : String, relName: String, attrIndex: Int): Unit = {
     s.println( s"""${rewrittenAttrName}_attributes->push_back(${relName}->get<${attrIndex}>()); """)
   }
 
-  def emitEncodingInitForAttr(s: CodeStringBuilder, attr : String, attrType: String) = {
+  private def emitEncodingInitForAttr(s: CodeStringBuilder, attr : String, attrType: String) = {
     s.println(s"""std::vector<Column<${attrType}>> *${attr}_attributes = new std::vector<Column<${attrType}>>();""")
   }
 
-  def emitBuildEncodingForAttr(s: CodeStringBuilder,  attr : String, attrType: String) = {
+  private def emitBuildEncodingForAttr(s: CodeStringBuilder,  attr : String, attrType: String) = {
     s.println(s"""Encoding<${attrType}> ${attr}_encoding(${attr}_attributes); // TODO heap allocate""")
   }
 
-  def emitEncodingForEquivalenceClass(s : CodeStringBuilder, klass : EquivalenceClass) ={
+  private def emitEncodingForEquivalenceClass(s : CodeStringBuilder, klass : EquivalenceClass) ={
     val encodingName = klass.head._1 + "_" + klass.head._2
     val encodingType = Environment.getTypes(klass.head._1)(klass.head._2)
     emitEncodingInitForAttr(s, encodingName, encodingType)
@@ -222,7 +228,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     /**
      * Now emit the encodings of each of the attrs
      */
-
     val equivalenceClasses = buildEncodingEquivalenceClasses(relations)
     equivalenceClasses.map((klass : EquivalenceClass) => {
       emitEncodingForEquivalenceClass(s, klass)
@@ -237,7 +242,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
      * Emit the buffers that we will do intersections for each attr in
      */
     val fullOriginalAttrList = relations.map((rel : Relation) => rel._2).flatten.distinct.sorted
-    emitAttrIntersectionBuffers(s, fullOriginalAttrList)
+    emitAttrIntersectionBuffers(s, fullOriginalAttrList, relations, equivalenceClasses)
 
     s.println("par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){")
     s.println("return a + b;")
