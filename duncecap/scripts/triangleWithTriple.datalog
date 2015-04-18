@@ -1,0 +1,3 @@
+R(a:uint64_t, b:uint64_t) <- load("small.txt", tsv)
+S(a:uint64_t,d:uint64_t,e:uint64_t) <- load("triple.txt",tsv)
+U(a,b,c,d,e) <- R(a,b),R(b,c),R(a,c),S(a,d,e)

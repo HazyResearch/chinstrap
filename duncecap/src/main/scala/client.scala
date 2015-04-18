@@ -29,6 +29,8 @@ class Client{
    * @return whether or not the message was executed successfully
    */
   def send(message : String) : Boolean = {
+    println(message)
+    //return true
     //  Do 10 requests, waiting each time for a response
     //  Create a "Hello" message.
     //  Ensure that the last byte of our "Hello" message is 0 because
