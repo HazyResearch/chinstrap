@@ -108,13 +108,8 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
   private def emitAttrIntersectionBuffers(s: CodeStringBuilder, attrs : List[String], relations : Relations, equivalanceClasses : List[EquivalenceClass]) = {
     attrs.map((attr : String) => {
-      val encodings : Set[Column] = getEncodingsRelevantToAttr(attr, relations, equivalanceClasses)
-      s.println(s"""size_t ${attr}_bufsize_arr[] = {""")
-      s.println(encodings.map((encoding : Column) => {
-        s"""${mkEncodingName(encoding)}_encoding.key_to_value.size()"""
-      }).mkString(","))
-      s.println("};")
-      s.println(s"""allocator::memory<uint8_t> ${attr}_buffer(*std::max_element(${attr}_bufsize_arr,${attr}_bufsize_arr+${encodings.size}));""")
+      val encoding : Column= getEncodingRelevantToAttr(attr, relations, equivalanceClasses)
+      s.println(s"""allocator::memory<uint8_t> ${attr}_buffer(${mkEncodingName(encoding)}_encoding.key_to_value.size());""")
     })
   }
 

@@ -49,8 +49,8 @@ object NPRRSetupUtil {
   /**
    * @return Columns relevant to the encoding of any columns named attr
    */
-  def getEncodingsRelevantToAttr(targetAttr : String, relations : Relations, encodings : List[EquivalenceClass]) : Set[Column]= {
-    relations.flatMap((rel : Relation) => {
+  def getEncodingRelevantToAttr(targetAttr : String, relations : Relations, encodings : List[EquivalenceClass]) : Column = {
+    val cols = relations.flatMap((rel : Relation) => {
       rel._2.zipWithIndex.flatMap((attrAndIndex : (String, Int)) => {
         val (attr, index) = attrAndIndex
         if (attr == targetAttr) {
@@ -65,7 +65,10 @@ object NPRRSetupUtil {
           None
         }
       }).flatten
-    }).toSet
+    }).distinct
+
+    assert(cols.size == 1) // if not, true, equivalence classes were not properly constructed
+    return cols.head
   }
 
 
