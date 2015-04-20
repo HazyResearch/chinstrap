@@ -39,6 +39,7 @@ struct Encoding{
     frequency.reserve(num_rows*num_attributes);
     value_to_key.reserve(num_rows*num_attributes);
 
+    //TODO: Parallelize, cleanup memory usage.
     for(size_t i = 0; i < num_attributes; i++){
       const Column<T> input = attr_in->at(i);
       for(size_t j = 0; j < input.size(); j++){

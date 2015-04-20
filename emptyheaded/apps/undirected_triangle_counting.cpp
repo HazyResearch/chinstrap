@@ -7,9 +7,6 @@ class undirected_triangle_counting: public application<T,R> {
     //create the relation (currently a column wise table)
     Relation<uint64_t,uint64_t> *R_ab = new Relation<uint64_t,uint64_t>();
 
-    std::cout << "Set: " << sizeof(Set<uinteger>) << std::endl;
-    //std::cout << "Block: " << sizeof(Block) << std::endl;
-
 //////////////////////////////////////////////////////////////////////
     //File IO (for a tsv, csv should be roughly the same)
     auto rt = debug::start_clock();
@@ -50,17 +47,17 @@ class undirected_triangle_counting: public application<T,R> {
 
     //add some sort of lambda to do selections 
     Trie *TR_ab = Trie::build(ER_ab,[&](size_t index){
-      return ER_ab->at(0).at(index) < ER_ab->at(1).at(index);
+      //std::cout << ER_ab->at(0).at(index) << " " << ER_ab->at(1).at(index) << std::endl;
+      return ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
     });
     debug::stop_clock("Build",bt);
-    /*
 
 //////////////////////////////////////////////////////////////////////
     //Prints the relation    
     //R(a,b) join T(b,c) join S(a,c)
     //TR_ab = R(a,b) 
-    Trie *T_bc = TR_ab; //T(b,c)
-    Trie *S_ac = TR_ab; //S(a,c)
+    //Trie *T_bc = TR_ab; //T(b,c)
+    //Trie *S_ac = TR_ab; //S(a,c)
 
     //allocate memory
     allocator::memory<uint8_t> B_buffer(R_ab->num_rows);
@@ -71,22 +68,25 @@ class undirected_triangle_counting: public application<T,R> {
     
     auto qt = debug::start_clock();
 
-    const std::unordered_map<uint32_t,Block*> map = TR_ab->head->map;
-    const Set<uinteger> A = TR_ab->head->data;
+    const Head H = TR_ab->head;
+    const Set<uinteger> A = H.data;
     A.par_foreach([&](size_t tid, uint32_t a_i){
       Set<uinteger> B(B_buffer.get_memory(tid)); //initialize the memory
       //B = ops::set_intersect(&B,&TR_ab->head->map.at(a_i)->data,&T_bc->head->data); //intersect the B
-      const Set<uinteger> op1 = map.at(a_i)->data;
+      const Set<uinteger> op1 = H.get_block(a_i).data;
+
+      //std::cout << "1Node: " << a_i << " " << op1.cardinality << std::endl;
 
       op1.foreach([&](uint32_t b_i){ //Peel off B attributes
-        auto iter = map.find(b_i);
-        if(iter != map.end()){ //Check that the set is not the empty set
+        //std::cout << "\t1nbr: " << b_i << std::endl;
+        const Block l2 = H.get_block(b_i);
+        //if(l2 != NULL){ //Check that the set is not the empty set
           Set<uinteger> C(C_buffer.get_memory(tid));
           const size_t count = ops::set_intersect(&C,
-            &iter->second->data,
+            &l2.data,
             &op1)->cardinality;
           num_triangles.update(tid,count);
-        }
+        //}
       });
     });
     
@@ -95,7 +95,6 @@ class undirected_triangle_counting: public application<T,R> {
 
     std::cout << result << std::endl;
     //////////////////////////////////////////////////////////////////////
-    */
   }
 };
 

@@ -37,6 +37,7 @@ namespace allocator{
   template<class T>
   class memory{
   public:
+    const size_t multplier = 2;
     size_t num_elems;
     std::vector<size_t> indicies;
     std::vector<std::vector<elem<T>>> *elements;
@@ -66,9 +67,10 @@ namespace allocator{
     inline T* get_next(size_t tid, size_t num){
       T* val = elements->at(tid).at(indicies.at(tid)).get_next(num);
       if(val == NULL){
-        if(num > num_elems)
-          num_elems = num*num_elems;
+        while(num > num_elems)
+          num_elems = num_elems*multplier;
 
+        std::cout << "Reallocing" << std::endl;
         assert(num < num_elems);
         elements->at(tid).push_back(elem<T>(num_elems));
         indicies.at(tid)++;

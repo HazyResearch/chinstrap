@@ -17,6 +17,20 @@ Data should be laid out like
 ----------------------------------
 */
 
+struct Block{
+  Set<uinteger> data;
+};  
 
+struct Head{
+  Set<uinteger> data;
+  Block* map;
+
+  inline Block get_block(uint32_t index) const {
+    return map[index];
+  }
+  inline void set_block(uint32_t index, Block b){
+    map[index] = b;
+  }
+};
 
 #endif
