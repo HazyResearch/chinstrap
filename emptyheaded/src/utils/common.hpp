@@ -1,3 +1,4 @@
+#define WRITE_VECTOR 1
 #ifndef COMMON_H
 #define COMMON_H
 

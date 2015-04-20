@@ -9,7 +9,9 @@ object Environment {
     relationTypes += (identifier -> types)
   }
 
+
   def getTypes(identifier : String): List[String] = {
     relationTypes(identifier)
   }
+
 }

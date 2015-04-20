@@ -24,8 +24,12 @@ class Client{
     socket.connect ("tcp://localhost:5555")
   }
 
-
-  def send(message : String){
+  /**
+   * @param message code that the server should compile and run
+   * @return whether or not the message was executed successfully
+   */
+  def send(message : String) : Boolean = {
+    //return true
     //  Do 10 requests, waiting each time for a response
     //  Create a "Hello" message.
     //  Ensure that the last byte of our "Hello" message is 0 because
@@ -42,6 +46,8 @@ class Client{
     val reply = socket.recv(0)
     //  When displaying reply as a String, omit the last byte because
     //  our "Hello World" server has sent us a 0-terminated string:
-    println("Received reply: [" + new String(reply,0,reply.length-1) + "]")
+    val processedReply = new String(reply,0,reply.length-1)
+    println(processedReply)
+    return processedReply.startsWith("SUCCESS")
   }
 }
