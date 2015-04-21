@@ -12,7 +12,10 @@
 const size_t PATH_BUFFER_SIZE = 512;
 const char* CPP_FILE_NAME = "runnable.cpp";
 const char* OBJ_FILE_NAME = "runnable.o";
-const std::string COMPILE_COMMAND = (std::string("clang++ -O3 ") + CPP_FILE_NAME + " -o " + OBJ_FILE_NAME + std::string("-dynamiclib -std=c++11 -march=native -mtune=native -Isrc "));
+const std::string COMPILE_COMMAND = (std::string("clang++ ") // Start with an std::string to overload the + operator
+                                     + CPP_FILE_NAME
+                                     + " -o " + OBJ_FILE_NAME
+                                     + " -shared -fPIC -std=c++11 -march=native -mtune=native -Isrc -O3");
 
 typedef void (*run_t)(std::unordered_map<std::string, void*>& relations);
 
@@ -60,7 +63,7 @@ int main () {
     // Open and run the file.
     void* handle = dlopen((dir + "/" + OBJ_FILE_NAME).c_str(), RTLD_NOW);
     if (!handle) {
-      std::cerr << dlerror() << std::endl;
+      std::cerr << "dlopen() error: " << dlerror() << std::endl;
       return 1;
     }
 
@@ -68,10 +71,12 @@ int main () {
 
     char* error = dlerror();
     if (error)  {
-      std::cerr << error << std::endl;
+      std::cerr << "dlsym() error: " << error << std::endl;
       dlclose(handle);
       return 1;
     }
+
+    std::cout << "successfully compiled and loaded run() function" << std::endl;
 
     // Redirect cout while running the file
     std::streambuf* oldCoutStreamBuf = std::cout.rdbuf();
@@ -85,6 +90,8 @@ int main () {
 
     dlclose(handle);
     replyToClient(("SUCCESS: executed file\n" + strCout.str()).c_str(), socket);
+
+    std::cout << "successfully executed file" << std::endl;
   }
   return 0;
 }
