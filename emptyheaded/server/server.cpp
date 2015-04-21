@@ -12,7 +12,7 @@
 const size_t PATH_BUFFER_SIZE = 512;
 const char* CPP_FILE_NAME = "runnable.cpp";
 const char* OBJ_FILE_NAME = "runnable.o";
-const std::string COMPILE_COMMAND = (std::string("clang++ -O3 -dynamiclib -std=c++11 -march=native -mtune=native -Isrc ") + CPP_FILE_NAME + " -o " + OBJ_FILE_NAME);
+const std::string COMPILE_COMMAND = (std::string("clang++ -O3 ") + CPP_FILE_NAME + " -o " + OBJ_FILE_NAME + std::string("-dynamiclib -std=c++11 -march=native -mtune=native -Isrc "));
 
 typedef void (*run_t)(std::unordered_map<std::string, void*>& relations);
 
@@ -26,7 +26,7 @@ int main () {
   //  Prepare our context and socket
   zmq::context_t context (1);
   zmq::socket_t socket (context, ZMQ_REP);
-  socket.bind ("tcp://*:5555");
+  socket.bind ("tcp://*:7000");
 
   char dir_buffer[PATH_BUFFER_SIZE];
   getcwd(dir_buffer, PATH_BUFFER_SIZE);

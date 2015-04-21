@@ -4,7 +4,7 @@
 #CXX ?= g++-4.7
 #CXX = /dfs/scratch0/noetzli/downloads/tmp/cilkplus-install/bin/g++ -Wcast-align
 override CXX = clang++
-override CXXFLAGS += -lpthread -mavx -std=c++11 -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
+override CXXFLAGS += -ldl -lpthread -mavx -std=c++11 -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
 
 INCLUDE_DIRS=-Isrc
 OBJDIR=build
