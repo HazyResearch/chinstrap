@@ -48,7 +48,7 @@ case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, form
     val relationTypes = rel.attrs.values.toList.map((optTypes : Option[String]) => optTypes.get).mkString(",")
     s.println(s"Relation<${relationTypes}>* ${rel.identifierName} = new Relation<${relationTypes}>();")
     assert(format == "tsv") // TODO : add in csv option
-    s.println(s"""tsv_reader f_reader("data/${(filename.str)}");""")
+    s.println(s"""tsv_reader f_reader("${(filename.str)}");""")
     s.println("char *next = f_reader.tsv_get_first();")
     s.println(s" ${rel.identifierName}->num_columns = 0;")
     s.println("while(next != NULL){")

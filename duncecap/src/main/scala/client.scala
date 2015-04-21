@@ -21,7 +21,7 @@ class Client{
   def init() {
     //  Prepare our context and socket
     println("Connecting to hello world server...")
-    socket.connect ("tcp://localhost:5555")
+    socket.connect ("tcp://localhost:7000")
   }
 
   /**
