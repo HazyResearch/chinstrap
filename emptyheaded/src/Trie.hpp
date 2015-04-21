@@ -84,7 +84,7 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in, F f){
   tbb::parallel_sort(indicies,iterator,SortColumns(attr_in));
 
   //Where all real data goes
-  allocator::memory<uint8_t> data_allocator(num_rows*num_levels*sizeof(uint64_t)+sizeof(Block));
+  allocator::memory<uint8_t> data_allocator((num_rows*num_levels*(sizeof(uint64_t)+sizeof(Block)))/NUM_THREADS);
   //always just need two buffers(that swap)
   allocator::memory<size_t> ranges(num_rows_post_filter);
   allocator::memory<size_t> next_ranges(num_rows_post_filter);
@@ -127,11 +127,16 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in, F f){
     encode_tail(start,end,new_set_data_buffer.get_memory(tid),&attr_in->at(cur_level),indicies);
 
     Block tail;
-    const size_t set_alloc_size = (end-start)*sizeof(uint64_t);
+    size_t set_alloc_size =  (end-start)*sizeof(uint64_t);
     uint8_t* set_data_in = data_allocator.get_next(tid,set_alloc_size);
     tail.data = Set<layout>::from_array(set_data_in,new_set_data_buffer.get_memory(tid),(end-start));
-    assert(set_alloc_size > tail.data.number_of_bytes);
-    data_allocator.roll_back(tid,tail.data.number_of_bytes);
+    while(set_alloc_size < tail.data.number_of_bytes){
+      data_allocator.roll_back(tid,set_alloc_size);
+      set_alloc_size *= 2;
+      set_data_in = data_allocator.get_next(tid,set_alloc_size);
+      tail.data = Set<layout>::from_array(set_data_in,new_set_data_buffer.get_memory(tid),(end-start));
+    }
+    data_allocator.roll_back(tid,set_alloc_size-tail.data.number_of_bytes);
 
     new_head.set_block(data,tail);
   });

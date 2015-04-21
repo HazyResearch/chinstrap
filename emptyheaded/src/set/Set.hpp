@@ -11,8 +11,6 @@ FOUND IN STATIC CLASSES IN THE LAYOUT FOLDER.
 
 #include "layouts/hybrid.hpp"
 
-typedef uinteger layout;
-
 template <class T>
 class Set{ 
   public: 

@@ -897,5 +897,56 @@ namespace ops{
   inline Set<uinteger>* set_intersect(Set<uinteger> *C_in,const Set<bitset> *A_in,const Set<uinteger> *B_in){
     return set_intersect(C_in,B_in,A_in);
   }
+  inline Set<hybrid>* set_intersect(Set<hybrid> *C_in,const Set<hybrid> *A_in,const Set<hybrid> *B_in){
+    if(A_in->cardinality == 0 || B_in->cardinality == 0){
+      C_in->cardinality = 0;
+      C_in->number_of_bytes = 0;
+      return C_in;
+    }
+
+    switch (A_in->type) {
+        case type::UINTEGER:
+          switch (B_in->type) {
+            case type::UINTEGER:
+              #ifdef STATS
+              debug::num_uint_uint++;
+              #endif
+              return (Set<hybrid>*)set_intersect((Set<uinteger>*)C_in,(const Set<uinteger>*)A_in,(const Set<uinteger>*)B_in);
+              break;
+            case type::BITSET:
+              #ifdef STATS
+              type::num_uint_bs++;
+              #endif
+              return (Set<hybrid>*)set_intersect((Set<uinteger>*)C_in,(const Set<uinteger>*)A_in,(const Set<bitset>*)B_in);
+              break;
+            default:
+              break;
+          }
+        break;
+        case type::BITSET:
+          switch (B_in->type) {
+            case type::UINTEGER:
+              #ifdef STATS
+              debug::num_uint_bs++;
+              #endif
+              return (Set<hybrid>*)set_intersect((Set<uinteger>*)C_in,(const Set<uinteger>*)B_in,(const Set<bitset>*)A_in);
+            break;
+            case type::BITSET:
+              #ifdef STATS
+              debug::num_bs_bs++;
+              #endif
+              return (Set<hybrid>*)set_intersect((Set<bitset>*)C_in,(const Set<bitset>*)A_in,(const Set<bitset>*)B_in);
+            break;
+            default:
+            break;
+          }
+        break;
+        default:
+        break;
+    }
+
+    std::cout << "ERROR" << std::endl;
+    return C_in;
+  }
 }
 #endif
