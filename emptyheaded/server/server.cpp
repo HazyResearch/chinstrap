@@ -10,8 +10,8 @@
 #include "zmq.hpp"
 
 const size_t PATH_BUFFER_SIZE = 512;
-const char* CPP_FILE_NAME = "runnable.cpp";
-const char* OBJ_FILE_NAME = "runnable.o";
+const char* CPP_FILE_NAME = "GENERATED_runnable.cpp";
+const char* OBJ_FILE_NAME = "GENERATED_runnable.o";
 const std::string COMPILE_COMMAND = (std::string("clang++ ") // Start with an std::string to overload the + operator
                                      + CPP_FILE_NAME
                                      + " -o " + OBJ_FILE_NAME
