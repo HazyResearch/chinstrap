@@ -22,16 +22,19 @@ APPS_SOURCES=$(shell ls apps)
 TOOLS_SOURCES=$(shell ls tools)
 TESTS_SOURCES=$(shell find tests -name '*.cpp' -exec basename {} \;)
 SERVER_SOURCES=server.cpp
+GENERATED_SOURCES=$(shell ls generated)
 
 APPS=$(APPS_SOURCES:.cpp=)
 TOOLS=$(TOOLS_SOURCES:.cpp=)
 TESTS=$(TESTS_SOURCES:.cpp=)
 SERVER=$(SERVER_SOURCES:.cpp=)
+GENERATED=${GENERATED_SOURCES:.cpp=}
 
 APPS_EXES=$(APPS:%=$(EXEDIR)/%)
 TOOLS_EXES=$(TOOLS:%=$(EXEDIR)/%)
 TESTS_EXES=$(TESTS:%=$(EXEDIR)/%)
 SERVER_EXES=$(SERVER:%=$(EXEDIR)/%)
+GENERATED_EXES=$(GENERATED:%=$(EXEDIR)/%)
 
 all: $(APPS_EXES) $(TOOLS_EXES) $(SERVER_EXES)
 
@@ -50,11 +53,16 @@ $(TOOLS_EXES): $(OBJECTS) $(EXEDIR)
 $(SERVER_EXES): $(OBJECTS) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=server%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -o $@ $(INCLUDE_DIRS)
 
+$(GENERATED_EXES): $(OBJECTS) $(EXEDIR)
+	$(CXX) $(CXXFLAGS) $(@:bin%=generated%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -o $@ $(INCLUDE_DIRS)
+
 $(TESTS_EXES): $(OBJECTS) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=tests%.cpp) $(OBJECTS) ./lib/gtest-1.7.0/src/gtest_main.o ./lib/gtest-1.7.0/src/gtest-all.o $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS) -DGOOGLE_TEST -I./lib/gtest-1.7.0/include/ -I./lib/gtest-1.7.0/ -I./apps/
 
 $(OBJECTS): $(SOURCES) $(HEADERS) $(OBJDIR)
 	$(CXX) $(CXXFLAGS) $(LIB_INCS) -o $@ -c $(@:build%.o=src%.cpp) $(INCLUDE_DIRS)
+
+generated: $(GENERATED_EXES)
 
 gtest:
 	cd ./lib/gtest-1.7.0/ && ./configure

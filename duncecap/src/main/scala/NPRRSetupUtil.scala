@@ -22,15 +22,15 @@ object NPRRSetupUtil {
       rel._2(start._2)
     }).toSet
 
-    relations.flatMap((rel : Relation) => {
-      rel._2.zipWithIndex.foldLeft(List[Column](start))((accum: List[Column],  attrAndIndex : (String, RIndex)) =>{
+    relations.foldLeft(List[Column](start))((accum: List[Column], rel : Relation) => {
+      accum ++ rel._2.zipWithIndex.flatMap((attrAndIndex : (String, RIndex)) =>{
         if (letters.contains(attrAndIndex._1) && !visited.contains((rel._1, attrAndIndex._2))) {
-          accum ++ DFS(visited, (rel._1, attrAndIndex._2), relations)
+          Some(DFS(visited, (rel._1, attrAndIndex._2), relations))
         } else {
-          accum
+          None
         }
-      })
-    }).distinct // TODO make less gross
+      }).flatten
+    })
   }
 
   def buildEncodingEquivalenceClasses(relations : Relations): List[List[(RName, RIndex)]] = {

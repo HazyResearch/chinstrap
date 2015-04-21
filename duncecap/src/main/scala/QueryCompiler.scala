@@ -1,13 +1,15 @@
 package DunceCap
 
 import java.io.{FileWriter, File, BufferedWriter}
+import sys.process._
+import java.nio.file.{Paths, Files}
 
 /**
- * You can compile the output of this class by doing
+ * You can run the output of this class by doing
  *
- * clang++ runnable.cpp -o runnable.exe -std=c++11 -march=native -mtune=native -Isrc
+ * ./bin/outputFilename
  *
- * from the emptyheaded directory
+ * from the emptyheaded/bin directory
  */
 object QueryCompiler extends App {
   val usage = "Usage: ./QueryCompiler query.datalog outputFilename"
@@ -23,10 +25,29 @@ object QueryCompiler extends App {
         val codeStringBuilder = new CodeStringBuilder
         CodeGen.emitHeaderAndCodeForAST(codeStringBuilder, ast)
         CodeGen.emitMainMethod(codeStringBuilder)
-        val file = new File(s"""../emptyheaded/${outputFilename}""")
+
+        val cppDir = "../emptyheaded/generated"
+        val cppFilepath = s"""${cppDir}/${outputFilename}.cpp"""
+        if (!Files.exists(Paths.get(cppDir))) {
+          println(s"""Making directory ${cppDir}""")
+          s"""mkdir ${cppDir}""" !
+        } else {
+          println(s"""Found directory ${cppDir}, continuing...""")
+        }
+
+        val file = new File(cppFilepath)
         val bw = new BufferedWriter(new FileWriter(file))
         bw.write(codeStringBuilder.toString)
         bw.close()
+
+        sys.process.Process(Seq("make", "clean"), new File("../emptyheaded")).!
+        val result = sys.process.Process(Seq("make", "generated"), new File("../emptyheaded")).!
+
+        if (result != 0) {
+          println("FAILURE: Compilation errors.")
+        } else {
+          println("SUCCESS.")
+        }
       }
       case x => println(x)
     }
