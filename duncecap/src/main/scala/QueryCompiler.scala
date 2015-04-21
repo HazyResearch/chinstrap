@@ -2,6 +2,7 @@ package DunceCap
 
 import java.io.{FileWriter, File, BufferedWriter}
 import sys.process._
+import java.nio.file.{Paths, Files}
 
 /**
  * You can compile the output of this class by doing
@@ -24,8 +25,17 @@ object QueryCompiler extends App {
         val codeStringBuilder = new CodeStringBuilder
         CodeGen.emitHeaderAndCodeForAST(codeStringBuilder, ast)
         CodeGen.emitMainMethod(codeStringBuilder)
-        val cppFilepath = s"""../emptyheaded/apps/generated/${outputFilename}.cpp"""
+
+        val cppDir = "../emptyheaded/generated"
+        val cppFilepath = s"""${cppDir}/${outputFilename}.cpp"""
         val binaryFilepath = s"""../emptyheaded/bin/${outputFilename}.exe"""
+        if (!Files.exists(Paths.get(cppDir))) {
+          println(s"""Making directory ${cppDir}""")
+          s"""mkdir ${cppDir}""" !
+        } else {
+          println(s"""Found directory ${cppDir}, continuing...""")
+        }
+
         val file = new File(cppFilepath)
         val bw = new BufferedWriter(new FileWriter(file))
         bw.write(codeStringBuilder.toString)
