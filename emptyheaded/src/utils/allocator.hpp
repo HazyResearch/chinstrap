@@ -32,6 +32,12 @@ namespace allocator{
         return &data[index++];
       return NULL;
     }
+    inline void roll_back(size_t num){
+      index -= num;
+    }
+    inline void deallocate(){
+      a.deallocate(data,max_index);
+    }
   };
 
   template<class T>
@@ -40,45 +46,56 @@ namespace allocator{
     const size_t multplier = 2;
     size_t num_elems;
     std::vector<size_t> indicies;
-    std::vector<std::vector<elem<T>>> *elements;
+    std::vector<std::vector<elem<T>>> elements;
     memory(size_t num_elems_in){
       num_elems = num_elems_in;
-      elements = new std::vector<std::vector<elem<T>>>();
       for(size_t i = 0; i < NUM_THREADS; i++){
         std::vector<elem<T>> current;
         current.push_back(elem<T>(num_elems));
-        elements->push_back(current);
+        elements.push_back(current);
         indicies.push_back(0);
       }
     }
     inline T* get_memory(size_t tid){
-      return elements->at(tid).at(indicies.at(tid)).data;
+      return elements.at(tid).at(indicies.at(tid)).data;
     }
     inline T* get_next(size_t tid){
-      T* val = elements->at(tid).at(indicies.at(tid)).get_next();
+      T* val = elements.at(tid).at(indicies.at(tid)).get_next();
       if(val == NULL){
-        elements->at(tid).push_back(elem<T>(num_elems));
+        elements.at(tid).push_back(elem<T>(num_elems));
         indicies.at(tid)++;
-        val = elements->at(tid).at(indicies.at(tid)).get_next();
+        val = elements.at(tid).at(indicies.at(tid)).get_next();
         assert(val != NULL);
       }
       return val;
     }
     inline T* get_next(size_t tid, size_t num){
-      T* val = elements->at(tid).at(indicies.at(tid)).get_next(num);
+      T* val = elements.at(tid).at(indicies.at(tid)).get_next(num);
       if(val == NULL){
         while(num > num_elems)
           num_elems = num_elems*multplier;
 
         std::cout << "Reallocing" << std::endl;
         assert(num < num_elems);
-        elements->at(tid).push_back(elem<T>(num_elems));
+        elements.at(tid).push_back(elem<T>(num_elems));
         indicies.at(tid)++;
-        val = elements->at(tid).at(indicies.at(tid)).get_next(num);
+        val = elements.at(tid).at(indicies.at(tid)).get_next(num);
         assert(val != NULL);
       }
       return val;
     }
+    inline void roll_back(size_t tid, size_t num){
+      elements.at(tid).at(indicies.at(tid)).roll_back(num);
+    }
+    inline void deallocate(){
+      for(size_t i = 0; i < NUM_THREADS; i++){
+        std::vector<elem<T>> e = elements.at(i);
+        for(size_t j = 0; j < e.size(); j++){
+          e.at(j).deallocate();
+        }
+      }
+    }
+
   };
 };
 #endif

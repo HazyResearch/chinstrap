@@ -18,11 +18,11 @@ Data should be laid out like
 */
 
 struct Block{
-  Set<uinteger> data;
-};  
+  Set<layout> data;
+};
 
 struct Head{
-  Set<uinteger> data;
+  Set<layout> data;
   Block* map;
 
   inline Block get_block(uint32_t index) const {

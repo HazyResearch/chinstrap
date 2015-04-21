@@ -43,26 +43,32 @@ size_t produce_ranges(size_t start, size_t end,
     uint32_t cur = current->at(indicies[i]);
     uint32_t prev = cur;
 
-    //std::cout << cur << std::endl;
     while(cur == prev && (i+1) < end){
       prev = current->at(indicies[++i]);
     }
 
     next_ranges[num_distinct] = start_range;
-    //std::cout << "Elem #: " << num_distinct << " " << start_range << std::endl;
     data[num_distinct] = cur;
     num_distinct++;
   }
   next_ranges[num_distinct] = end;
-  //std::cout << "Final: " << num_distinct << std::endl;
   return num_distinct; //should be all you need.
 }
 
 void encode_tail(size_t start, size_t end, uint32_t *data, Column<uint32_t> *current, uint32_t *indicies){
-  //std::cout << indicies[3] << std::endl;
   for(size_t i = start; i < end; i++){
     *data++ = current->at(indicies[i]);
   }
+}
+
+template<typename F>
+uint32_t* perform_selection(uint32_t *iterator, size_t num_rows, F f){
+  for(size_t i = 0; i < num_rows; i++){
+    if(f(i)){
+      *iterator++ = i; 
+    }
+  }
+  return iterator;
 }
 
 template<typename F>
@@ -70,66 +76,47 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in, F f){
   const size_t num_levels = attr_in->size();
   const size_t num_rows = attr_in->at(0).size();
 
+  //Filter rows via selection and sort for the Trie
   uint32_t *indicies = new uint32_t[num_rows];
-  uint32_t *iterator = indicies;
-  for(size_t i = 0; i < num_rows; i++){
-    if(f(i)){
-      *iterator++ = i; 
-    }
-  }
+  uint32_t *iterator = perform_selection(indicies,num_rows,f);
+  const size_t num_rows_post_filter = iterator-indicies;
   tbb::task_scheduler_init init(NUM_THREADS);
   tbb::parallel_sort(indicies,iterator,SortColumns(attr_in));
 
-  //always just need two buffers
-  const size_t num_rows_post_filter = iterator-indicies;
-
+  //Where all real data goes
   allocator::memory<uint8_t> data_allocator(num_rows*num_levels*sizeof(uint64_t)+sizeof(Block));
-  size_t *ranges = new size_t[num_rows_post_filter];
-  size_t *next_ranges = new size_t[num_rows_post_filter];
-  uint32_t *set_data_buffer = new uint32_t[num_rows_post_filter];
-  uint32_t *new_set_data_buffer = new uint32_t[num_rows_post_filter];
+  //always just need two buffers(that swap)
+  allocator::memory<size_t> ranges(num_rows_post_filter);
+  allocator::memory<size_t> next_ranges(num_rows_post_filter);
+  allocator::memory<uint32_t> set_data_buffer(num_rows_post_filter);
+  allocator::memory<uint32_t> new_set_data_buffer(num_rows_post_filter);
 
-  //std::cout << "stage 1" << std::endl;
 
-  ///std::pair<size_t,size_t> 
+  //Find the ranges for distinct values in the head
   size_t head_size = produce_ranges(0,
     num_rows_post_filter,
-    ranges,
-    set_data_buffer,
+    ranges.get_memory(0),
+    set_data_buffer.get_memory(0),
     indicies,
     &attr_in->at(0));
 
-  std::cout << head_size << std::endl;
-
+  //Build the head set.
   Head new_head;
-  uint8_t* set_data_in = data_allocator.get_next(0,head_size*sizeof(uint64_t));
-  new_head.data = Set<uinteger>::from_array(set_data_in,set_data_buffer,head_size);
+  const size_t head_alloc_size = head_size*sizeof(uint64_t);
+  uint8_t* set_data_in = data_allocator.get_next(0,head_alloc_size);
+  new_head.data = Set<layout>::from_array(set_data_in,set_data_buffer.get_memory(0),head_size);
+  assert(head_alloc_size > new_head.data.number_of_bytes);
+  data_allocator.roll_back(0,head_alloc_size-new_head.data.number_of_bytes);
 
-  /*  
-  new_head.data.foreach([&](uint32_t d){
-    std::cout << "data: " << d << " " << set_data_buffer[d] << std::endl;
-  });
-  */
-  
   new_head.map = (Block*)data_allocator.get_next(0,num_rows*sizeof(Block));
-
-  //memset to null
-  /*
-  par::for_range(0,num_rows,100,[&](size_t tid, size_t i){
-    (void) tid;
-    new_head.set_block(i,NULL);
-  });
-  */
-
-  std::cout << "made it to for" << std::endl;
 
   size_t cur_level = 1;
   par::for_range(0,head_size,100,[&](size_t tid, size_t i){
     (void) tid;
     //some sort of recursion here
-    size_t start = ranges[i];
-    size_t end = ranges[i+1];
-    uint32_t data = set_data_buffer[i];
+    size_t start = ranges.get_memory(0)[i];
+    size_t end = ranges.get_memory(0)[i+1];
+    uint32_t data = set_data_buffer.get_memory(0)[i];
     
     while(cur_level < (num_levels-1)){
       std::cout << "ERROR" << std::endl;
@@ -137,23 +124,22 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in, F f){
     }
 
     //places items in set data buffer
-    encode_tail(start,end,new_set_data_buffer,&attr_in->at(cur_level),indicies);
+    encode_tail(start,end,new_set_data_buffer.get_memory(tid),&attr_in->at(cur_level),indicies);
 
-    Block tail;// = new Block();
-    uint8_t* set_data_in = data_allocator.get_next(0,(end-start)*sizeof(uint64_t));
-    tail.data = Set<uinteger>::from_array(set_data_in,new_set_data_buffer,(end-start));
+    Block tail;
+    const size_t set_alloc_size = (end-start)*sizeof(uint64_t);
+    uint8_t* set_data_in = data_allocator.get_next(tid,set_alloc_size);
+    tail.data = Set<layout>::from_array(set_data_in,new_set_data_buffer.get_memory(tid),(end-start));
+    assert(set_alloc_size > tail.data.number_of_bytes);
+    data_allocator.roll_back(tid,tail.data.number_of_bytes);
 
     new_head.set_block(data,tail);
-    
-    /*
-    std::cout << "Node: " << data << " " << set_data_buffer[1] << std::endl;
-    new_head.get_block(data).data.foreach([&](uint32_t data){
-      std::cout << "\tnbr: " << data << std::endl;
-    });
-    */
-
   });
 
+  next_ranges.deallocate();
+  ranges.deallocate();
+  set_data_buffer.deallocate();
+  new_set_data_buffer.deallocate(); 
 
   //encode the set, create a block with NULL pointers to next level
   //should be a 1-1 between pointers in block and next ranges

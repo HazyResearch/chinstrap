@@ -9,7 +9,9 @@ FOR THE DEVELOPER. IMPLEMENTATION FOR PRIMITIVE TYPE OPS CAN BE
 FOUND IN STATIC CLASSES IN THE LAYOUT FOLDER.
 */
 
-#include "layouts/uinteger.hpp"
+#include "layouts/hybrid.hpp"
+
+typedef uinteger layout;
 
 template <class T>
 class Set{ 

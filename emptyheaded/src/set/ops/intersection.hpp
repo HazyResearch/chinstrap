@@ -781,5 +781,121 @@ namespace ops{
     else
       return set_intersect_standard(C_in, rare, freq);
   }
+
+  inline Set<bitset>* set_intersect(Set<bitset> *C_in, const Set<bitset> *A_in, const Set<bitset> *B_in){
+    long count = 0l;
+    C_in->number_of_bytes = 0;
+
+    if(A_in->number_of_bytes > 0 && B_in->number_of_bytes > 0){
+      const uint64_t *a_index = (uint64_t*) A_in->data;
+      const uint64_t *b_index = (uint64_t*) B_in->data;
+
+      uint64_t * const C = (uint64_t*)(C_in->data+sizeof(uint64_t));
+      const uint64_t * const A = (uint64_t*)(A_in->data+sizeof(uint64_t));
+      const uint64_t * const B = (uint64_t*)(B_in->data+sizeof(uint64_t));
+      const size_t s_a = ((A_in->number_of_bytes-sizeof(uint64_t))/sizeof(uint64_t));
+      const size_t s_b = ((B_in->number_of_bytes-sizeof(uint64_t))/sizeof(uint64_t));
+
+      #if WRITE_VECTOR == 0
+      (void) C;
+      #endif
+
+      const bool a_big = a_index[0] > b_index[0];
+      const uint64_t start_index = (a_big) ? a_index[0] : b_index[0];
+      const uint64_t a_start_index = (a_big) ? 0:(b_index[0]-a_index[0]);
+      const uint64_t b_start_index = (a_big) ? (a_index[0]-b_index[0]):0;
+
+      const uint64_t end_index = ((a_index[0]+s_a) > (b_index[0]+s_b)) ? (b_index[0]+s_b):(a_index[0]+s_a);
+      const uint64_t total_size = (start_index > end_index) ? 0:(end_index-start_index);
+
+      //16 uint16_ts
+      //8 ints
+      //4 longs
+      size_t i = 0;
+
+      #if WRITE_VECTOR == 1
+      uint64_t *c_index = (uint64_t*) C_in->data;
+      c_index[0] = start_index;
+      #endif
+
+      #if VECTORIZE == 1
+      uint64_t tmp[4];
+      while((i+3) < total_size){
+        const __m256 a1 = _mm256_loadu_ps((const float*)(A + i + a_start_index));
+        const __m256 a2 = _mm256_loadu_ps((const float*)(B + i + b_start_index));
+        const __m256 r = _mm256_and_ps(a2, a1);
+
+        #if WRITE_VECTOR == 1
+        _mm256_storeu_ps((float*)(C + i), r);
+        #endif
+
+        _mm256_storeu_ps((float*)tmp, r);
+        count += _mm_popcnt_u64(tmp[0]);
+        count += _mm_popcnt_u64(tmp[1]);
+        count += _mm_popcnt_u64(tmp[2]);
+        count += _mm_popcnt_u64(tmp[3]);
+
+        i += 4;
+      }
+      #endif
+
+      for(; i < total_size; i++){
+        const uint64_t result = A[i+a_start_index] & B[i+b_start_index];
+
+        #if WRITE_VECTOR == 1
+        C[i] = result;
+        #endif
+
+        count += _mm_popcnt_u64(result);
+      }
+      C_in->number_of_bytes = total_size*sizeof(uint64_t)+sizeof(uint64_t);
+    }
+    const double density = 0.0;//(count > 0) ? (double)count/(8*small_length) : 0.0;
+
+    C_in->cardinality = count;
+    C_in->density = density;
+    C_in->type= type::BITSET;
+
+    return C_in;
+  }
+  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in,const Set<uinteger> *A_in,const Set<bitset> *B_in){
+    uint32_t * const C = (uint32_t*)C_in->data;
+    const uint32_t * const A = (uint32_t*)A_in->data;
+    const size_t s_a = A_in->cardinality;
+    const size_t s_b = (B_in->number_of_bytes > 0) ? (B_in->number_of_bytes-sizeof(uint64_t))/sizeof(uint64_t):0;
+    const uint64_t start_index = (B_in->number_of_bytes > 0) ? ((uint64_t*)B_in->data)[0]:0;
+
+    const uint64_t * const B = (uint64_t*)(B_in->data+sizeof(uint64_t));
+
+    #if WRITE_VECTOR == 0
+    (void) C;
+    #endif
+
+    size_t count = 0;
+    for(size_t i = 0; i < s_a; i++){
+      const uint32_t cur = A[i];
+      const size_t cur_index = bitset::word_index(cur);
+      if((cur_index < (s_b+start_index)) && (cur_index >= start_index) && bitset::is_set(cur,B,start_index)){
+        #if WRITE_VECTOR == 1
+        C[count] = cur;
+        #endif
+        count++;
+      } else if(cur_index >= (s_b+start_index)){
+        break;
+      }
+    }
+    // XXX: Correct density computation
+    const double density = 0.0;//((count > 1) ? ((double)count/(C[count - 1]-C[0])) : 0.0);
+
+    C_in->cardinality = count;
+    C_in->number_of_bytes = count*sizeof(uint32_t);
+    C_in->density = density;
+    C_in->type= type::UINTEGER;
+
+    return C_in;
+  }
+  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in,const Set<bitset> *A_in,const Set<uinteger> *B_in){
+    return set_intersect(C_in,B_in,A_in);
+  }
 }
 #endif

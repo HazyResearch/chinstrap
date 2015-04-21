@@ -71,21 +71,18 @@ class undirected_triangle_counting: public application<T,R> {
     const Set<uinteger> A = H.data;
     A.par_foreach([&](size_t tid, uint32_t a_i){
       Set<uinteger> B(B_buffer.get_memory(tid)); //initialize the memory
+      Set<uinteger> C(C_buffer.get_memory(tid));
+
       //B = ops::set_intersect(&B,&TR_ab->head->map.at(a_i)->data,&T_bc->head->data); //intersect the B
       const Set<uinteger> op1 = H.get_block(a_i).data;
-
       //std::cout << "1Node: " << a_i << " " << op1.cardinality << std::endl;
 
       op1.foreach([&](uint32_t b_i){ //Peel off B attributes
-        //std::cout << "\t1nbr: " << b_i << std::endl;
         const Block l2 = H.get_block(b_i);
-        //if(l2 != NULL){ //Check that the set is not the empty set
-          Set<uinteger> C(C_buffer.get_memory(tid));
-          const size_t count = ops::set_intersect(&C,
-            &l2.data,
-            &op1)->cardinality;
-          num_triangles.update(tid,count);
-        //}
+        const size_t count = ops::set_intersect(&C,
+          &l2.data,
+          &op1)->cardinality;
+        num_triangles.update(tid,count);
       });
     });
     

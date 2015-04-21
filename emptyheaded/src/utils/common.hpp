@@ -59,7 +59,12 @@
 #define INTS_PER_REG 4
 #define BYTES_PER_REG 16
 
-static size_t NUM_THREADS = 1;
+static size_t NUM_THREADS = 48;
+
+namespace common{
+  static size_t bitset_length = 0;
+  static double bitset_req = (1.0/256.0);
+}
 
 namespace type{
   enum file : uint8_t{
