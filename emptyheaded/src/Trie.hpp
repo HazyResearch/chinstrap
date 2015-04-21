@@ -21,7 +21,6 @@ struct SortColumns{
   }
 };
 
-
 struct Trie{
   Head head;
 
@@ -88,8 +87,9 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in, F f){
   size_t *ranges = new size_t[num_rows_post_filter];
   size_t *next_ranges = new size_t[num_rows_post_filter];
   uint32_t *set_data_buffer = new uint32_t[num_rows_post_filter];
+  uint32_t *new_set_data_buffer = new uint32_t[num_rows_post_filter];
 
-  std::cout << "stage 1" << std::endl;
+  //std::cout << "stage 1" << std::endl;
 
   ///std::pair<size_t,size_t> 
   size_t head_size = produce_ranges(0,
@@ -105,11 +105,9 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in, F f){
   uint8_t* set_data_in = data_allocator.get_next(0,head_size*sizeof(uint64_t));
   new_head.data = Set<uinteger>::from_array(set_data_in,set_data_buffer,head_size);
 
-  std::cout << "alloc head" << std::endl;
-
-  /*
+  /*  
   new_head.data.foreach([&](uint32_t d){
-    std::cout << "data: " << d << std::endl;
+    std::cout << "data: " << d << " " << set_data_buffer[d] << std::endl;
   });
   */
   
@@ -132,22 +130,23 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in, F f){
     size_t start = ranges[i];
     size_t end = ranges[i+1];
     uint32_t data = set_data_buffer[i];
+    
     while(cur_level < (num_levels-1)){
       std::cout << "ERROR" << std::endl;
       cur_level++;
     }
 
     //places items in set data buffer
-    encode_tail(start,end,set_data_buffer,&attr_in->at(cur_level),indicies);
+    encode_tail(start,end,new_set_data_buffer,&attr_in->at(cur_level),indicies);
 
     Block tail;// = new Block();
     uint8_t* set_data_in = data_allocator.get_next(0,(end-start)*sizeof(uint64_t));
-    tail.data = Set<uinteger>::from_array(set_data_in,set_data_buffer,(end-start));
+    tail.data = Set<uinteger>::from_array(set_data_in,new_set_data_buffer,(end-start));
 
     new_head.set_block(data,tail);
-
+    
     /*
-    std::cout << "Node: " << data << std::endl;
+    std::cout << "Node: " << data << " " << set_data_buffer[1] << std::endl;
     new_head.get_block(data).data.foreach([&](uint32_t data){
       std::cout << "\tnbr: " << data << std::endl;
     });

@@ -10,7 +10,7 @@ class undirected_triangle_counting: public application<T,R> {
 //////////////////////////////////////////////////////////////////////
     //File IO (for a tsv, csv should be roughly the same)
     auto rt = debug::start_clock();
-    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/socLivejournal/edgelist/replicated.tsv");
+    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/higgs/edgelist/replicated.tsv");
     char *next = f_reader.tsv_get_first();
     R_ab->num_rows = 0;
     while(next != NULL){
@@ -47,7 +47,6 @@ class undirected_triangle_counting: public application<T,R> {
 
     //add some sort of lambda to do selections 
     Trie *TR_ab = Trie::build(ER_ab,[&](size_t index){
-      //std::cout << ER_ab->at(0).at(index) << " " << ER_ab->at(1).at(index) << std::endl;
       return ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
     });
     debug::stop_clock("Build",bt);

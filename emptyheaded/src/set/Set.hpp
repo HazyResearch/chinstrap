@@ -20,7 +20,10 @@ class Set{
     double density;
     type::layout type;
 
-    Set(){};
+    Set(){
+      number_of_bytes = 0;
+      cardinality = 0;
+    };
     //All values passed in
     Set(uint8_t *data_in, 
       size_t cardinality_in, 
