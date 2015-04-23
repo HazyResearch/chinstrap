@@ -23,12 +23,12 @@ struct Block{
 
 struct Head{
   Set<layout> data;
-  Block* map;
+  Block** map;
 
-  inline Block get_block(uint32_t index) const {
+  inline Block* get_block(uint32_t index) const {
     return map[index];
   }
-  inline void set_block(uint32_t index, Block b){
+  inline void set_block(uint32_t index, Block *b){
     map[index] = b;
   }
 };

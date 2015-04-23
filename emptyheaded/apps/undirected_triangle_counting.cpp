@@ -74,15 +74,17 @@ class undirected_triangle_counting: public application<T,R> {
       Set<layout> C(C_buffer.get_memory(tid));
 
       //B = ops::set_intersect(&B,&TR_ab->head->map.at(a_i)->data,&T_bc->head->data); //intersect the B
-      const Set<layout> op1 = H.get_block(a_i).data;
+      const Set<layout> op1 = H.get_block(a_i)->data;
       //std::cout << "1Node: " << a_i << " " << op1.cardinality << std::endl;
 
       op1.foreach([&](uint32_t b_i){ //Peel off B attributes
-        const Block l2 = H.get_block(b_i);
-        const size_t count = ops::set_intersect(&C,
-          &l2.data,
-          &op1)->cardinality;
-        num_triangles.update(tid,count);
+        const Block* l2 = H.get_block(b_i);
+        if(l2 != NULL){
+          const size_t count = ops::set_intersect(&C,
+            &l2->data,
+            &op1)->cardinality;
+          num_triangles.update(tid,count);
+        }
       });
     });
     

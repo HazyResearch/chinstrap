@@ -71,6 +71,24 @@ uint32_t* perform_selection(uint32_t *iterator, size_t num_rows, F f){
   return iterator;
 }
 
+template<class T>
+T* build_block(const size_t tid, allocator::memory<uint8_t> *data_allocator, 
+  const size_t set_size, uint32_t *set_data_buffer){
+
+  T *block = (T*)data_allocator->get_next(tid,sizeof(T));
+  size_t set_alloc_size =  set_size*sizeof(uint64_t);
+  uint8_t* set_data_in = data_allocator->get_next(tid,set_alloc_size,BYTES_PER_REG);
+  block->data = Set<layout>::from_array(set_data_in,set_data_buffer,set_size);
+  while(set_alloc_size < block->data.number_of_bytes){
+    data_allocator->roll_back(tid,set_alloc_size);
+    set_alloc_size *= 2;
+    set_data_in = data_allocator->get_next(tid,set_alloc_size,BYTES_PER_REG);
+    block->data = Set<layout>::from_array(set_data_in,set_data_buffer,set_size);
+  }
+  data_allocator->roll_back(tid,set_alloc_size-block->data.number_of_bytes);
+  return block;
+}
+
 template<typename F>
 inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in, F f){
   const size_t num_levels = attr_in->size();
@@ -91,7 +109,6 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in, F f){
   allocator::memory<uint32_t> set_data_buffer(num_rows_post_filter);
   allocator::memory<uint32_t> new_set_data_buffer(num_rows_post_filter);
 
-
   //Find the ranges for distinct values in the head
   size_t head_size = produce_ranges(0,
     num_rows_post_filter,
@@ -101,14 +118,8 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in, F f){
     &attr_in->at(0));
 
   //Build the head set.
-  Head new_head;
-  const size_t head_alloc_size = head_size*sizeof(uint64_t);
-  uint8_t* set_data_in = data_allocator.get_next(0,head_alloc_size,BYTES_PER_REG);
-  new_head.data = Set<layout>::from_array(set_data_in,set_data_buffer.get_memory(0),head_size);
-  assert(head_alloc_size > new_head.data.number_of_bytes);
-  data_allocator.roll_back(0,head_alloc_size-new_head.data.number_of_bytes);
-
-  new_head.map = (Block*)data_allocator.get_next(0,num_rows*sizeof(Block),BYTES_PER_CACHELINE);
+  Head new_head = *build_block<Head>(0,&data_allocator,head_size,set_data_buffer.get_memory(0));
+  new_head.map = (Block**)data_allocator.get_next(0,num_rows*sizeof(Block*));
 
   size_t cur_level = 1;
   par::for_range(0,head_size,100,[&](size_t tid, size_t i){
@@ -126,19 +137,14 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in, F f){
     //places items in set data buffer
     encode_tail(start,end,new_set_data_buffer.get_memory(tid),&attr_in->at(cur_level),indicies);
 
-    Block tail;// = *(Block*)data_allocator.get_next(tid,sizeof(Block));
-    size_t set_alloc_size =  (end-start)*sizeof(uint64_t);
-    uint8_t* set_data_in = data_allocator.get_next(tid,set_alloc_size,BYTES_PER_REG);
-    tail.data = Set<layout>::from_array(set_data_in,new_set_data_buffer.get_memory(tid),(end-start));
-    while(set_alloc_size < tail.data.number_of_bytes){
-      data_allocator.roll_back(tid,set_alloc_size);
-      set_alloc_size *= 2;
-      set_data_in = data_allocator.get_next(tid,set_alloc_size,BYTES_PER_REG);
-      tail.data = Set<layout>::from_array(set_data_in,new_set_data_buffer.get_memory(tid),(end-start));
-    }
-    data_allocator.roll_back(tid,set_alloc_size-tail.data.number_of_bytes);
-
+    Block *tail = build_block<Block>(tid,&data_allocator,(end-start),new_set_data_buffer.get_memory(tid));
     new_head.set_block(data,tail);
+    /*
+    std::cout << "node: " << data << std::endl;
+    new_head.get_block(data)->data.foreach([&](uint32_t d){
+      std::cout << d << std::endl;
+    });
+    */
   });
 
   next_ranges.deallocate();
