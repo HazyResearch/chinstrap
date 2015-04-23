@@ -17,8 +17,13 @@ Data should be laid out like
 ----------------------------------
 */
 
+struct Tail{
+  Set<layout> data;
+};
+
 struct Block{
   Set<layout> data;
+  std::unordered_map<uint32_t,Block*> map;
 };
 
 struct Head{
