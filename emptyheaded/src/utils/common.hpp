@@ -58,6 +58,7 @@
 #define SHORTS_PER_REG 8
 #define INTS_PER_REG 4
 #define BYTES_PER_REG 16
+#define BYTES_PER_CACHELINE 64
 
 static size_t NUM_THREADS = 48;
 

@@ -5,44 +5,49 @@
 
 namespace allocator{
   template<class T>
-  class elem{
-  public:
-    size_t index;
-    size_t max_index;
-    std::allocator<T> a;
-    T* data;
+  struct elem{
+    uint8_t *ptr;
+    uint8_t *max_ptr;
+    uint8_t *cur;
     elem(size_t num_elems){
-      max_index = num_elems;
-      data = a.allocate(num_elems);
-      for(size_t i = 0; i < num_elems; i++){
-        a.construct(data+i);
-      }
-      index = 0;
+      ptr = (uint8_t*)malloc(num_elems*sizeof(T));
+      max_ptr = ptr+num_elems*sizeof(T);
+      cur = ptr;
     }
     inline T* get_next(size_t num){
-      if(index + num < max_index){
-        T* val = &data[index];
-        index += num;
+      if((cur+num*sizeof(T)) < max_ptr){
+        T* val = (T*)cur;
+        cur += num*sizeof(T);
         return val;
       }
       return NULL;
     }
+    inline T* get_next(size_t num, size_t align){
+      const size_t offset = (size_t) cur % align;
+      if(offset != 0){
+        cur += (align-offset);
+      }
+      assert( (size_t) cur % align == 0 );
+      return get_next(num);
+    }
     inline T* get_next(){
-      if(index < max_index)
-        return &data[index++];
+      if(cur+sizeof(T) < max_ptr){
+        T* val = (T*)cur;
+        cur += sizeof(T);
+        return val;
+      }
       return NULL;
     }
     inline void roll_back(size_t num){
-      index -= num;
+      cur -= sizeof(T)*num;
     }
     inline void deallocate(){
-      a.deallocate(data,max_index);
+      free(ptr);
     }
   };
 
   template<class T>
-  class memory{
-  public:
+  struct memory{
     const size_t multplier = 2;
     size_t num_elems;
     std::vector<size_t> indicies;
@@ -57,7 +62,7 @@ namespace allocator{
       }
     }
     inline T* get_memory(size_t tid){
-      return elements.at(tid).at(indicies.at(tid)).data;
+      return (T*)elements.at(tid).at(indicies.at(tid)).cur;
     }
     inline T* get_next(size_t tid){
       T* val = elements.at(tid).at(indicies.at(tid)).get_next();
@@ -72,6 +77,21 @@ namespace allocator{
     inline T* get_next(size_t tid, size_t num){
       T* val = elements.at(tid).at(indicies.at(tid)).get_next(num);
       if(val == NULL){
+        while(num >= num_elems)
+          num_elems = num_elems*multplier;
+
+        std::cout << "Reallocing1" << std::endl;
+        assert(num < num_elems);
+        elements.at(tid).push_back(elem<T>(num_elems));
+        indicies.at(tid)++;
+        val = elements.at(tid).at(indicies.at(tid)).get_next(num);
+        assert(val != NULL);
+      }
+      return val;
+    }
+    inline T* get_next(size_t tid, size_t num, size_t align){
+      T* val = elements.at(tid).at(indicies.at(tid)).get_next(num,align);
+      if(val == NULL){
         while(num > num_elems)
           num_elems = num_elems*multplier;
 
@@ -79,7 +99,7 @@ namespace allocator{
         assert(num < num_elems);
         elements.at(tid).push_back(elem<T>(num_elems));
         indicies.at(tid)++;
-        val = elements.at(tid).at(indicies.at(tid)).get_next(num);
+        val = elements.at(tid).at(indicies.at(tid)).get_next(num,align);
         assert(val != NULL);
       }
       return val;
@@ -95,7 +115,6 @@ namespace allocator{
         }
       }
     }
-
   };
 };
 #endif

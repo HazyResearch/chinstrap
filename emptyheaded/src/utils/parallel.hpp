@@ -5,14 +5,15 @@
 #include <thread>
 #include <atomic>
 #include <cstring>
+#include "tbb/cache_aligned_allocator.h"
 
 namespace par{
-
   template<class T>
   class reducer{
   public:
     size_t padding = 300;
     T *elem;
+    //tbb::cache_aligned_allocator<T>
     std::function<T (T, T)> f;
     reducer(T init_in, std::function<T (T, T)> f_in){
       f = f_in;
