@@ -60,7 +60,7 @@
 #define BYTES_PER_REG 16
 #define BYTES_PER_CACHELINE 64
 
-static size_t NUM_THREADS = 48;
+static size_t NUM_THREADS = 1;
 
 namespace common{
   static size_t bitset_length = 0;

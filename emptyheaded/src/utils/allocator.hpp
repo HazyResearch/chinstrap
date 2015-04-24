@@ -11,6 +11,10 @@ namespace allocator{
     uint8_t *cur;
     elem(size_t num_elems){
       ptr = (uint8_t*)malloc(num_elems*sizeof(T));
+      if(ptr == NULL){
+        std::cout << "ERROR: Malloc failed" << std::endl;
+        exit(1);
+      }
       max_ptr = ptr+num_elems*sizeof(T);
       cur = ptr;
     }
@@ -80,7 +84,7 @@ namespace allocator{
         while(num >= num_elems)
           num_elems = num_elems*multplier;
 
-        std::cout << "Reallocing1" << std::endl;
+        std::cout << "Allocating more memory: try a larger allocation size for better performance." << std::endl;
         assert(num < num_elems);
         elements.at(tid).push_back(elem<T>(num_elems));
         indicies.at(tid)++;
@@ -95,7 +99,7 @@ namespace allocator{
         while(num > num_elems)
           num_elems = num_elems*multplier;
 
-        std::cout << "Reallocing" << std::endl;
+        std::cout << "Allocating more memory: try a larger allocation size for better performance." << std::endl;
         assert(num < num_elems);
         elements.at(tid).push_back(elem<T>(num_elems));
         indicies.at(tid)++;
@@ -107,7 +111,7 @@ namespace allocator{
     inline void roll_back(size_t tid, size_t num){
       elements.at(tid).at(indicies.at(tid)).roll_back(num);
     }
-    inline void deallocate(){
+    inline void free(){
       for(size_t i = 0; i < NUM_THREADS; i++){
         std::vector<elem<T>> e = elements.at(i);
         for(size_t j = 0; j < e.size(); j++){

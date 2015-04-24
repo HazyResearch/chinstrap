@@ -29,7 +29,7 @@ struct Encoding{
     const size_t num_attributes = attr_in->size();
     const size_t num_rows = attr_in->at(0).size();
 
-    auto a = debug::start_clock();
+    //auto a = debug::start_clock();
     
     //Get the frequency of each value
     std::vector<std::pair<uint32_t,T>> sorted_values;
@@ -53,10 +53,10 @@ struct Encoding{
         }
       }
     }
-    debug::stop_clock("serial",a);
+    //debug::stop_clock("serial",a);
 
 
-    a = debug::start_clock();
+    //a = debug::start_clock();
     //sort by the frequency
     tbb::task_scheduler_init init(NUM_THREADS);
     tbb::parallel_sort(sorted_values.begin(),sorted_values.end(),OrderByFrequency<T>(&frequency));
@@ -89,9 +89,7 @@ struct Encoding{
       });
       encoded.push_back(output);
     }
-
-    debug::stop_clock("parallel",a);
-
+    //debug::stop_clock("parallel",a);
   };
 };
 

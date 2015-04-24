@@ -7,11 +7,10 @@ class undirected_triangle_counting: public application<T,R> {
     //create the relation (currently a column wise table)
     Relation<uint64_t,uint64_t> *R_ab = new Relation<uint64_t,uint64_t>();
 
-    std::cout << sizeof(Block) << " " << sizeof(Set<layout>) << std::endl;
-
 //////////////////////////////////////////////////////////////////////
     //File IO (for a tsv, csv should be roughly the same)
     auto rt = debug::start_clock();
+    //tsv_reader f_reader("simple.txt");
     tsv_reader f_reader("/dfs/scratch0/caberger/datasets/socLivejournal/edgelist/replicated.tsv");
     char *next = f_reader.tsv_get_first();
     R_ab->num_rows = 0;
@@ -51,8 +50,16 @@ class undirected_triangle_counting: public application<T,R> {
     Trie *TR_ab = Trie::build(ER_ab,[&](size_t index){
       return ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
     });
+    
     debug::stop_clock("Build",bt);
 
+    /*
+    std::cout << "D: " << a_encoding->key_to_value.at(456629) << std::endl;
+    const Head H = TR_ab->head;
+    H.get_block(456629)->data.foreach([&](uint32_t data){
+      std::cout << data << " " << a_encoding->key_to_value.at(data) << std::endl;
+    });
+    */
 //////////////////////////////////////////////////////////////////////
     //Prints the relation    
     //R(a,b) join T(b,c) join S(a,c)
@@ -77,7 +84,6 @@ class undirected_triangle_counting: public application<T,R> {
 
       //B = ops::set_intersect(&B,&TR_ab->head->map.at(a_i)->data,&T_bc->head->data); //intersect the B
       const Set<layout> op1 = ((Tail*) H.get_block(a_i))->data;
-      //std::cout << "1Node: " << a_i << " " << op1.cardinality << std::endl;
 
       op1.foreach([&](uint32_t b_i){ //Peel off B attributes
         const Tail* l2 = (Tail*)H.get_block(b_i);

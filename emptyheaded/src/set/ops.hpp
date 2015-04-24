@@ -5,6 +5,6 @@
 #include "ops/sse_masks.hpp"
 #include "ops/intersection.hpp"
 
-typedef uinteger layout;
+typedef bitset layout;
 
 #endif
