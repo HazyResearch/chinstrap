@@ -10,9 +10,7 @@ QUITE SIMPLE THE LAYOUT JUST CONTAINS UNSIGNED INTEGERS IN THE SET.
 class uinteger{
   public:
     static type::layout get_type();
-    static size_t build(uint8_t *r_in, const uint32_t *data, const size_t length);
-    static size_t build_flattened(uint8_t *r_in, const uint32_t *data, const size_t length);
-    static std::tuple<size_t,size_t,type::layout> get_flattened_data(const uint8_t *set_data, const size_t cardinality);
+    static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
 
     template<typename F>
     static void foreach(
@@ -45,21 +43,10 @@ inline type::layout uinteger::get_type(){
   return type::UINTEGER;
 }
 //Copies data from input array of ints to our set data r_in
-inline size_t uinteger::build(uint8_t *r_in, const uint32_t *data, const size_t length){
+inline std::tuple<size_t,type::layout> uinteger::build(uint8_t *r_in, const uint32_t *data, const size_t length){
   uint32_t *r = (uint32_t*) r_in;
   std::copy(data,data+length,r);
-  return length*sizeof(uint32_t);
-}
-//Nothing is different about build flattened here. The number of bytes
-//can be infered from the type. This gives us back a true CSR representation.
-inline size_t uinteger::build_flattened(uint8_t *r_in, const uint32_t *data, const size_t length){
-  debug::num_uint++;
-  return build(r_in,data,length);
-}
-
-inline std::tuple<size_t,size_t,type::layout> uinteger::get_flattened_data(const uint8_t *set_data, const size_t cardinality){
-  (void) set_data;
-  return std::make_tuple(0,cardinality*sizeof(uint32_t),type::UINTEGER);
+  return std::make_pair(length*sizeof(uint32_t),type::UINTEGER);
 }
 
 //Iterates over set applying a lambda.

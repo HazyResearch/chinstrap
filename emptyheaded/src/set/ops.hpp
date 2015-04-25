@@ -5,6 +5,6 @@
 #include "ops/sse_masks.hpp"
 #include "ops/intersection.hpp"
 
-typedef bitset layout;
+typedef hybrid layout;
 
 #endif

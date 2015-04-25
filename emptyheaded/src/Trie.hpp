@@ -38,20 +38,24 @@ size_t produce_ranges(size_t start, size_t end,
 
   size_t num_distinct = 0;
   size_t i = start;
-  while((i+1) < end){
-    size_t start_range = i;
-    uint32_t cur = current->at(indicies[i]);
+  while(true){
+    const size_t start_range = i;
+    const uint32_t cur = current->at(indicies[i]);
     uint32_t prev = cur;
-
-    while(cur == prev && (i+1) < end){
-      prev = current->at(indicies[++i]);
-    }
 
     next_ranges[num_distinct] = start_range;
     data[num_distinct] = cur;
+
+    ++i;
     num_distinct++;
+    if(i == end)
+      break;
+    while(cur == prev && i < end){
+      prev = current->at(indicies[i++]);
+    }
+    --i;
   }
-  next_ranges[num_distinct] = (end-1);
+  next_ranges[num_distinct] = end;
   return num_distinct; //should be all you need.
 }
 
@@ -79,7 +83,7 @@ T* build_block(const size_t tid, allocator::memory<uint8_t> *data_allocator,
   const size_t set_alloc_size =  max_set_size*sizeof(uint64_t)+100;
   uint8_t* set_data_in = data_allocator->get_next(tid,set_alloc_size,BYTES_PER_REG);
   block->data = Set<layout>::from_array(set_data_in,set_data_buffer,set_size);
-  //std::cout << set_alloc_size << " " << block->data.number_of_bytes << std::endl;
+    
   assert(set_alloc_size > block->data.number_of_bytes);
   data_allocator->roll_back(tid,set_alloc_size-block->data.number_of_bytes);
   return block;
@@ -128,6 +132,8 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in, F f){
     size_t end = ranges.get_memory(0)[i+1];
     uint32_t data = set_data_buffer.get_memory(0)[i];
     
+    //std::cout << "s: " << start << " e: " << end << std::endl;
+
     while(cur_level < (num_levels-1)){
       std::cout << "ERROR" << std::endl;
       cur_level++;
