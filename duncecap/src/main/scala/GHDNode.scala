@@ -8,7 +8,12 @@ import argonaut.Json
 import org.apache.commons.math3.optim.linear._
 import org.apache.commons.math3.optim.nonlinear.scalar.GoalType
 
-class Relation(val attrs: List[String]) {
+class Relation(val attrs: List[String],val name: String = "") {
+  override def equals(that: Any): Boolean =
+    that match {
+      case that: Relation => that.attrs.equals(attrs) && that.name.equals(name)
+      case _ => false
+    }
 }
 
 class GHDNode(val rels: List[Relation]) {

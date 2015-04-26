@@ -2,8 +2,6 @@ package DunceCap
 
 import java.io.{FileWriter, BufferedWriter, File}
 
-import DunceCap.{GHDNode, GHDSolver, Relation}
-
 object GHDWriter {
   def main(args: Array[String]): Unit = {
     //triangle()

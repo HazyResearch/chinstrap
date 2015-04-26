@@ -4,15 +4,17 @@ import NPRRSetupUtil._
 
 class NPRRSetupUtilTest extends FunSuite {
   private  val relations = List[Relation](
-    ("R", List("a", "b", "c")),
-    ("R", List("b", "d", "c")),
-    ("S", List("c", "d")),
-    ("S", List("e", "f")))
+    new Relation(List("a", "b", "c"), "R"),
+    new Relation(List("b", "d", "c"), "R"),
+    new Relation(List("c", "d"), "S"),
+    new Relation(List("e", "f"), "S"))
 
   test("Check that we can find distinct relations") {
+    val result = getDistinctRelations(relations)
+
     assertResult(List[RWRelation](
-      ("S", List(0,1)),
-      ("R",List(0, 1, 2))))(getDistinctRelations(relations))
+      new RWRelation(List(0,1), "S"),
+      new RWRelation(List(0, 1, 2), "R")))(getDistinctRelations(relations))
   }
 
   test("Check that we can build encoding sets and finding encodings relevant to attrs") {
