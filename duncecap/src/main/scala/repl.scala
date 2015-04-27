@@ -1,9 +1,26 @@
 package DunceCap
 
-import scala.tools.nsc.interpreter.ILoop
+import java.io.{InputStreamReader, BufferedReader}
+
+import scala.tools.nsc.interpreter.{JPrintWriter, ILoop}
 import scala.tools.nsc.Settings
 
+/*class Repl {
+  private var inDunceCapMode = true
+  private val c = new Client()
+  c.init()
+
+}*/
+
 object Repl extends App {
+  val repl = new Repl(new BufferedReader(new InputStreamReader(System.in)), new JPrintWriter(System.out, true))
+  val settings = new Settings
+  settings.usejavacp.value = true
+  settings.deprecation.value = true
+  repl.repl.process(settings)
+}
+
+class Repl(in0: BufferedReader, out: JPrintWriter) {
   /**
    * Sample repl usage as of right now
    * (in :dc mode, prints AST if it parses as something in our query language, in :scala mode, runs scala code).
@@ -34,26 +51,28 @@ object Repl extends App {
   private val c = new Client()
   c.init()
 
-  def repl = new ILoop {
+  def repl = new ILoop(in0, out) {
     override def prompt = "==> "
 
     override def printWelcome() {
       echo("\n" + "Starting the DunceCap repl...\n")
     }
 
-    override  def interpretStartingWith(code: String): Option[String] = {
+    override def interpretStartingWith(code: String): Option[String] = {
       if (isInDunceCapMode) {
         DCParser.parseAll(DCParser.statement, code) match {
           case DCParser.Success(ast, _) => {
             val codeStringBuilder = new CodeStringBuilder
             CodeGen.emitHeaderAndCodeForAST(codeStringBuilder, ast)
-            if (c.send(codeStringBuilder.toString)) {
+            if (c.send(codeStringBuilder.toString, out)) {
               ast.updateEnvironment
             }
           }
-          case x => { println(x) }
+          case x => {
+            out.println(x)
+          }
         }
-        None
+        Some(code)
       } else {
         super.interpretStartingWith(code)
       }
@@ -77,11 +96,6 @@ object Repl extends App {
       nullary("dc", "dunce cap mode", dunceCapCmd))
     override def commands: List[LoopCommand] = dunceCapModeCommands ++ super.commands
   }
-
-  val settings = new Settings
-  settings.usejavacp.value = true
-  settings.deprecation.value = true
-  repl.process(settings)
 }
 
 class CodeStringBuilder {
