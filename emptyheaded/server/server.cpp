@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <dlfcn.h>
 #include <iostream>
+#include <sstream>
 #include <fstream>
 #include <unistd.h>
 #include <unordered_map>
@@ -11,16 +12,21 @@
 const size_t PATH_BUFFER_SIZE = 512;
 const char* CPP_FILE_NAME = "runnable.cpp";
 const char* OBJ_FILE_NAME = "runnable.o";
-const std::string COMPILE_COMMAND = (std::string("clang++ -O3 -dynamiclib ")
-                                     + CPP_FILE_NAME + " -o " + OBJ_FILE_NAME);
+const std::string COMPILE_COMMAND = (std::string("clang++ -O3 ") + CPP_FILE_NAME + " -o " + OBJ_FILE_NAME + std::string("-dynamiclib -std=c++11 -march=native -mtune=native -Isrc "));
 
 typedef void (*run_t)(std::unordered_map<std::string, void*>& relations);
+
+void replyToClient(const char* reply_message, zmq::socket_t& socket) {
+  zmq::message_t reply (strlen(reply_message) + 1);
+  memcpy ((void*)reply.data(), reply_message, strlen(reply_message) + 1);
+  socket.send(reply);
+}
 
 int main () {
   //  Prepare our context and socket
   zmq::context_t context (1);
   zmq::socket_t socket (context, ZMQ_REP);
-  socket.bind ("tcp://*:5555");
+  socket.bind ("tcp://*:7000");
 
   char dir_buffer[PATH_BUFFER_SIZE];
   getcwd(dir_buffer, PATH_BUFFER_SIZE);
@@ -44,7 +50,12 @@ int main () {
     outfile.close();
 
     // Compile the file.
-    std::system(COMPILE_COMMAND.c_str());
+    std::cout << COMPILE_COMMAND << std::endl;
+    int status = std::system(COMPILE_COMMAND.c_str());
+    if (status != 0) {
+      replyToClient("FAILURE: compilation errors", socket);
+      continue;
+    }
 
     // Open and run the file.
     void* handle = dlopen((dir + "/" + OBJ_FILE_NAME).c_str(), RTLD_NOW);
@@ -62,15 +73,18 @@ int main () {
       return 1;
     }
 
+    // Redirect cout while running the file
+    std::streambuf* oldCoutStreamBuf = std::cout.rdbuf();
+    std::ostringstream strCout;
+    std::cout.rdbuf( strCout.rdbuf() );
+
     run(relations);
 
-    dlclose(handle);
+    // Restore old cout
+    std::cout.rdbuf( oldCoutStreamBuf );
 
-    //  Send reply back to client
-    const char* reply_message = "executed file successfully";
-    zmq::message_t reply (strlen(reply_message) + 1);
-    memcpy ((void*)reply.data(), reply_message, strlen(reply_message) + 1);
-    socket.send(reply);
+    dlclose(handle);
+    replyToClient(("SUCCESS: executed file\n" + strCout.str()).c_str(), socket);
   }
   return 0;
 }

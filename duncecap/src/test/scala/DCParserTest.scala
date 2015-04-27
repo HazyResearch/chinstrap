@@ -14,20 +14,20 @@ class DCParserTest extends FunSuite {
   }
 
   test("Can correctly parse a simple load statement") {
-    val result1 = DCParser.parseAll(DCParser.loadStatement, "R(a:long) <- load(\"filename\", tsv)")
+    val result1 = DCParser.parseAll(DCParser.loadStatement, "R(a:uint64_t) <- load(\"filename\", tsv)")
     assert(result1.successful)
-    assertResult(new ASTLoadStatement(new ASTRelation("R", Map(("a", Some("long")))),new ASTStringLiteral("filename"),"tsv"))(result1.get)
+    assertResult(new ASTLoadStatement(new ASTRelation("R", Map(("a", Some("uint64_t")))),new ASTStringLiteral("filename"),"tsv"))(result1.get)
 
-    val result2 = DCParser.parseAll(DCParser.loadStatement, "R2(a:float,b:long, c:string) <- load (\"fil\\\"ename\",csv  )")
+    val result2 = DCParser.parseAll(DCParser.loadStatement, "R2(a:float,b:uint64_t, c:string) <- load (\"fil\\\"ename\",csv  )")
     assert(result2.successful)
-    assertResult(new ASTLoadStatement(new ASTRelation("R2", Map(("c", Some("string")), ("b", Some("long")), ("a", Some("float")))), new ASTStringLiteral("fil\"ename"),"csv"))(result2.get)
+    assertResult(new ASTLoadStatement(new ASTRelation("R2", Map(("c", Some("string")), ("b", Some("uint64_t")), ("a", Some("float")))), new ASTStringLiteral("fil\"ename"),"csv"))(result2.get)
   }
 
   test("Rejects malformed load statements") {
-    val unrecognizedFormat = DCParser.parseAll(DCParser.loadStatement, "R(a:long,b:long) <- load(\"filename\", unrecognizedFormat)")
+    val unrecognizedFormat = DCParser.parseAll(DCParser.loadStatement, "R(a:uint64_t,b:uint64_t) <- load(\"filename\", unrecognizedFormat)")
     assert(!unrecognizedFormat.successful)
 
-    val unrecognizedType = DCParser.parseAll(DCParser.loadStatement, "R(a:long,b:unrecognizedType) <- load(\"filename\", tsv)")
+    val unrecognizedType = DCParser.parseAll(DCParser.loadStatement, "R(a:uint64_t,b:unrecognizedType) <- load(\"filename\", tsv)")
     assert(!unrecognizedType.successful)
 
     val noSchema = DCParser.parseAll(DCParser.loadStatement, "R() <- load(\"filename\", tsv)")

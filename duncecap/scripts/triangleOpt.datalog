@@ -1,0 +1,2 @@
+R(a:uint64_t, b:uint64_t) <- load("small.txt", tsv)
+U(a,b,c) <- R(a,b),R(b,c),R(a,c)
