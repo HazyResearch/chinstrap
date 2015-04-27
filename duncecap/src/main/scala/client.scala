@@ -39,7 +39,7 @@ class Client{
     val request = message.getBytes
     request(request.length-1)=0 //Sets the last byte to 0
     // Send the message
-    println("Sending request...") + request.toString
+    out.println("Sending request...") + request.toString
     socket.send(request, 0)
 
     //  Get the reply, which might be

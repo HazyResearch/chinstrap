@@ -5,53 +5,45 @@ import java.io.{InputStreamReader, BufferedReader}
 import scala.tools.nsc.interpreter.{JPrintWriter, ILoop}
 import scala.tools.nsc.Settings
 
-/*class Repl {
-  private var inDunceCapMode = true
-  private val c = new Client()
-  c.init()
-
-}*/
-
+/**
+ * Sample repl usage as of right now
+ * (in :dc mode, prints AST if it parses as something in our query language, in :scala mode, runs scala code).
+ *
+ * Starting the DunceCap repl...
+ *
+ * ==> R(a:long,b:string) <- load("file.txt",csv)
+ * ASTLoadExpression(ASTRelation(Map(b -> string, a -> long)),file.txt,csv)
+ * ==> 2 * 3
+ * [1.1] failure: string matching regex `[_\p{L}][_\p{L}\p{Nd}]*' expected but `2' found
+ *
+ * 2 * 3
+ * ^^
+ * ==> :scala
+ * ==> 2 * 3
+ * res0: Int = 6
+ * ==> R(a:long,b:string) <- load("file.txt",csv)
+ * <console>:1: error: ';' expected but '<-' found.
+ *    R(a:long,b:string) <- load("file.txt",csv)
+ *                       ^^
+ * ==> :dc
+ * ==> R(a:long,b:string) <- load("file.txt",csv)
+ * ASTLoadExpression(ASTRelation(Map(b -> string, a -> long)),file.txt,csv)
+ * ==>
+ */
 object Repl extends App {
   val repl = new Repl(new BufferedReader(new InputStreamReader(System.in)), new JPrintWriter(System.out, true))
   val settings = new Settings
   settings.usejavacp.value = true
   settings.deprecation.value = true
-  repl.repl.process(settings)
+  repl.loop.process(settings)
 }
 
 class Repl(in0: BufferedReader, out: JPrintWriter) {
-  /**
-   * Sample repl usage as of right now
-   * (in :dc mode, prints AST if it parses as something in our query language, in :scala mode, runs scala code).
-   *
-   * Starting the DunceCap repl...
-   *
-   * ==> R(a:long,b:string) <- load("file.txt",csv)
-   * ASTLoadExpression(ASTRelation(Map(b -> string, a -> long)),file.txt,csv)
-   * ==> 2 * 3
-   * [1.1] failure: string matching regex `[_\p{L}][_\p{L}\p{Nd}]*' expected but `2' found
-   *
-   * 2 * 3
-   * ^^
-   * ==> :scala
-   * ==> 2 * 3
-   * res0: Int = 6
-   * ==> R(a:long,b:string) <- load("file.txt",csv)
-   * <console>:1: error: ';' expected but '<-' found.
-   *    R(a:long,b:string) <- load("file.txt",csv)
-   *                       ^^
-   * ==> :dc
-   * ==> R(a:long,b:string) <- load("file.txt",csv)
-   * ASTLoadExpression(ASTRelation(Map(b -> string, a -> long)),file.txt,csv)
-   * ==>
-   */
-
   private var inDunceCapMode = true
   private val c = new Client()
   c.init()
 
-  def repl = new ILoop(in0, out) {
+  def loop = new ILoop(in0, out) {
     override def prompt = "==> "
 
     override def printWelcome() {
