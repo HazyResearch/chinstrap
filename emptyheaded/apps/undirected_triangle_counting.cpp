@@ -1,7 +1,7 @@
 #include "main.hpp"
 
-template<class T, class R>
-class undirected_triangle_counting: public application<T,R> {
+template<class T>
+class undirected_triangle_counting: public application<T> {
   void run(){
     //create the relation (currently a column wise table)
     Relation<uint64_t,uint64_t> *R_ab = new Relation<uint64_t,uint64_t>();
@@ -46,19 +46,12 @@ class undirected_triangle_counting: public application<T,R> {
     ER_ab->push_back(a_encoding->encoded.at(1));
 
     //add some sort of lambda to do selections 
-    Trie *TR_ab = Trie::build(ER_ab,[&](size_t index){
+    Trie<T> *TR_ab = Trie<T>::build(ER_ab,[&](size_t index){
       return ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
     });
     
     debug::stop_clock("Build",bt);
 
-    /*
-    std::cout << "D: " << a_encoding->key_to_value.at(456629) << std::endl;
-    const Head H = TR_ab->head;
-    H.get_block(456629)->data.foreach([&](uint32_t data){
-      std::cout << data << " " << a_encoding->key_to_value.at(data) << std::endl;
-    });
-    */
 //////////////////////////////////////////////////////////////////////
     //Prints the relation    
     //R(a,b) join T(b,c) join S(a,c)
@@ -75,18 +68,17 @@ class undirected_triangle_counting: public application<T,R> {
     
     auto qt = debug::start_clock();
 
-    const Head H = TR_ab->head;
-    const Set<layout> A = H.data;
+    const Head<T> H = TR_ab->head;
+    const Set<T> A = H.data;
     A.par_foreach([&](size_t tid, uint32_t a_i){
-      Set<layout> B(B_buffer.get_memory(tid)); //initialize the memory
-      Set<layout> C(C_buffer.get_memory(tid));
+      Set<T> B(B_buffer.get_memory(tid)); //initialize the memory
+      Set<T> C(C_buffer.get_memory(tid));
 
-      const Set<layout> op1 = ((Tail*) H.get_block(a_i))->data;
+      const Set<T> op1 = ((Tail<T>*) H.get_block(a_i))->data;
       B = ops::set_intersect(&B,&op1,&A); //intersect the B
 
-      //assert(B.cardinality == H.get_block(a_i)->data.cardinality);
       B.foreach([&](uint32_t b_i){ //Peel off B attributes
-        const Tail* l2 = (Tail*)H.get_block(b_i);
+        const Tail<T>* l2 = (Tail<T>*)H.get_block(b_i);
         if(l2 != NULL){
           const size_t count = ops::set_intersect(&C,
             &l2->data,
@@ -104,7 +96,7 @@ class undirected_triangle_counting: public application<T,R> {
   }
 };
 
-template<class T, class R>
-application<T,R>* init_app(){
-  return new undirected_triangle_counting<T,R>(); 
+template<class T>
+application<T>* init_app(){
+  return new undirected_triangle_counting<T>(); 
 }

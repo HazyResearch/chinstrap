@@ -5,6 +5,4 @@
 #include "ops/sse_masks.hpp"
 #include "ops/intersection.hpp"
 
-typedef hybrid layout;
-
 #endif

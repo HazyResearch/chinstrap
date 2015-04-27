@@ -17,23 +17,26 @@ Data should be laid out like
 ----------------------------------
 */
 
+template<class T>
 struct Tail{
-  Set<layout> data;
+  Set<T> data;
 };
 
+template<class T>
 struct Block{
-  Set<layout> data;
-  std::unordered_map<uint32_t,Block*> map;
+  Set<T> data;
+  std::unordered_map<uint32_t,Block<T>*> map;
 };
 
+template<class T>
 struct Head{
-  Set<layout> data;
-  Block** map;
+  Set<T> data;
+  Block<T>** map;
 
-  inline Block* get_block(uint32_t index) const {
+  inline Block<T>* get_block(uint32_t index) const {
     return map[index];
   }
-  inline void set_block(uint32_t index, Block *b){
+  inline void set_block(uint32_t index, Block<T> *b){
     map[index] = b;
   }
 };
