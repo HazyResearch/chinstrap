@@ -55,9 +55,6 @@ class undirected_triangle_counting: public application<T> {
 //////////////////////////////////////////////////////////////////////
     //Prints the relation    
     //R(a,b) join T(b,c) join S(a,c)
-    //TR_ab = R(a,b) 
-    //Trie *T_bc = TR_ab; //T(b,c)
-    //Trie *S_ac = TR_ab; //S(a,c)
 
     //allocate memory
     allocator::memory<uint8_t> B_buffer(R_ab->num_rows);
@@ -75,9 +72,9 @@ class undirected_triangle_counting: public application<T> {
       Set<T> C(C_buffer.get_memory(tid));
 
       const Set<T> op1 = ((Tail<T>*) H.get_block(a_i))->data;
-      B = ops::set_intersect(&B,&op1,&A); //intersect the B
+      //B = ops::set_intersect(&B,&op1,&A); //intersect the B
 
-      B.foreach([&](uint32_t b_i){ //Peel off B attributes
+      op1.foreach([&](uint32_t b_i){ //Peel off B attributes
         const Tail<T>* l2 = (Tail<T>*)H.get_block(b_i);
         if(l2 != NULL){
           const size_t count = ops::set_intersect(&C,
