@@ -4,5 +4,5 @@
 template<class T>
 class application{
   public:
-    virtual void run() = 0;
+    virtual void run(std::string p) = 0;
 };

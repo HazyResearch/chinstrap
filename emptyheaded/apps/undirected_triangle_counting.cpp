@@ -2,7 +2,7 @@
 
 template<class T>
 class undirected_triangle_counting: public application<T> {
-  void run(){
+  void run(std::string path){
     //create the relation (currently a column wise table)
     Relation<uint64_t,uint64_t> *R_ab = new Relation<uint64_t,uint64_t>();
 
@@ -10,7 +10,7 @@ class undirected_triangle_counting: public application<T> {
     //File IO (for a tsv, csv should be roughly the same)
     auto rt = debug::start_clock();
     //tsv_reader f_reader("simple.txt");
-    tsv_reader f_reader("/dfs/scratch0/caberger/datasets/higgs/edgelist/replicated.tsv");
+    tsv_reader f_reader(path);
     char *next = f_reader.tsv_get_first();
     R_ab->num_rows = 0;
     while(next != NULL){
