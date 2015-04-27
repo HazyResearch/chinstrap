@@ -46,10 +46,9 @@ size_t produce_ranges(size_t start, size_t end,
     next_ranges[num_distinct] = start_range;
     data[num_distinct] = cur;
 
-    ++i;
-    num_distinct++;
-    if(i == end)
+    if(++i == end)
       break;
+    num_distinct++;
     while(cur == prev && i < end){
       prev = current->at(indicies[i++]);
     }
@@ -145,6 +144,7 @@ inline Trie* Trie::build(std::vector<Column<uint32_t>> *attr_in, F f){
 
     Tail *tail = build_block<Tail>(tid,&data_allocator,num_rows,(end-start),sb);
     new_head.set_block(data,(Block*)tail);
+    
     
     /*
     std::cout << "node: " << data << std::endl;

@@ -1,4 +1,3 @@
-#define WRITE_VECTOR 1
 #include "main.hpp"
 
 template<class T, class R>
@@ -82,13 +81,11 @@ class undirected_triangle_counting: public application<T,R> {
       Set<layout> B(B_buffer.get_memory(tid)); //initialize the memory
       Set<layout> C(C_buffer.get_memory(tid));
 
-      //B = ops::set_intersect(&B,&TR_ab->head->map.at(a_i)->data,&T_bc->head->data); //intersect the B
       const Set<layout> op1 = ((Tail*) H.get_block(a_i))->data;
+      B = ops::set_intersect(&B,&op1,&A); //intersect the B
 
-     // std::cout << "node: " << a_i << std::endl;
-
-      op1.foreach([&](uint32_t b_i){ //Peel off B attributes
-        //std::cout << "nbr: " << b_i << std::endl;
+      //assert(B.cardinality == H.get_block(a_i)->data.cardinality);
+      B.foreach([&](uint32_t b_i){ //Peel off B attributes
         const Tail* l2 = (Tail*)H.get_block(b_i);
         if(l2 != NULL){
           const size_t count = ops::set_intersect(&C,

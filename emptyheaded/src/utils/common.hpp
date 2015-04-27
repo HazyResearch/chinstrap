@@ -44,6 +44,7 @@
 #define COMPRESSION 0
 #define PERFORMANCE 1
 #define VECTORIZE 1
+#define WRITE_VECTOR 1
 
 // Enables/disables pruning
 #define PRUNING
@@ -60,7 +61,7 @@
 #define BYTES_PER_REG 16
 #define BYTES_PER_CACHELINE 64
 
-static size_t NUM_THREADS = 48;
+static size_t NUM_THREADS = 1;
 
 namespace common{
   static size_t bitset_length = 0;
