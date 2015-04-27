@@ -194,31 +194,31 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   def emitTrieBuilding(s: CodeStringBuilder, relsAttrs : RWRelations, equivalenceClasses: List[EquivalenceClass]) = {
     // emit code to specify the levels of the tries
     relsAttrs.map((relAttrs : RWRelation) => {
-      s.println(s"""std::vector<Column<uint32_t>> *E${relAttrs._1} = new std::vector<Column<uint32_t>>();""")
-      relAttrs._2.map((index : Int) => {
-        val equivClass = equivalenceClasses.find((klass : EquivalenceClass) => klass.contains((relAttrs._1, index)))
+      s.println(s"""std::vector<Column<uint32_t>> *E${relAttrs.name} = new std::vector<Column<uint32_t>>();""")
+      relAttrs.attrs.map((index : Int) => {
+        val equivClass = equivalenceClasses.find((klass : EquivalenceClass) => klass.contains((relAttrs.name, index)))
         assert(equivClass.isDefined)
         val equivClassName = equivClass.get.head._1 + "_" + equivClass.get.head._2
-        val encodingIndex = equivClass.get.indexOf((relAttrs._1, index))
-        s.println(s"""E${relAttrs._1}->push_back(${equivClassName}_encoding.encoded.at(${encodingIndex}));""")
+        val encodingIndex = equivClass.get.indexOf((relAttrs.name, index))
+        s.println(s"""E${relAttrs.name}->push_back(${equivClassName}_encoding.encoded.at(${encodingIndex}));""")
       })
     })
 
     // emit code to construct each of the tries
-    relsAttrs.unzip._1.map((identifier : String) => s.println(s"""Trie *T${identifier} = Trie::build(E${identifier}, [&](size_t index){return true;});""") )
+    relsAttrs.map((relAttrs : RWRelation) => relAttrs.name).map((identifier : String) => s.println(s"""Trie *T${identifier} = Trie::build(E${identifier}, [&](size_t index){return true;});""") )
   }
 
   override def code(s: CodeStringBuilder): Unit = {
     /**
      * relations is a list of tuples, where the first element is the name, and the second is the list of attributes
      */
-    val relations = rels.map((rel : ASTRelation) => (rel.identifierName, rel.attrs.keys.toList.reverse))
+    val relations = rels.map((rel : ASTRelation) => new Relation(rel.attrs.keys.toList.reverse, rel.identifierName))
 
     /**
      * We get a distinct list of them so we can look them up and have a pointer to them
      */
     val distinctRewrittenRelations = getDistinctRelations(relations)
-    emitRelationLookupAndCast(s, distinctRewrittenRelations.unzip._1)
+    emitRelationLookupAndCast(s, distinctRewrittenRelations.map((rewrittenRelation : RWRelation) => rewrittenRelation.name))
 
     /**
      * Now emit the encodings of each of the attrs
@@ -236,14 +236,14 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     /**
      * Emit the buffers that we will do intersections for each attr in
      */
-    val fullOriginalAttrList = relations.map((rel : Relation) => rel._2).flatten.distinct.sorted
+    val fullOriginalAttrList = relations.map((rel : Relation) => rel.attrs).flatten.distinct.sorted
     emitAttrIntersectionBuffers(s, fullOriginalAttrList, relations, equivalenceClasses)
 
     s.println("par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){")
     s.println("return a + b;")
     s.println("});")
     s.println("int tid = 0;")
-    val firstBlockOfTrie = relations.map(( rel: (String, List[String])) => ("T" + rel._1 + "->head", rel._2))
+    val firstBlockOfTrie = relations.map(( rel: Relation) => ("T" + rel.name + "->head", rel.attrs))
     emitNPRR(s, true, fullOriginalAttrList, firstBlockOfTrie)
     s.println("size_t result = num_triangles.evaluate(0);")
     s.println("std::cout << result << std::endl;")

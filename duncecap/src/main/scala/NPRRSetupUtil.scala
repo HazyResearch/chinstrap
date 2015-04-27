@@ -3,10 +3,17 @@ package DunceCap
 import scala.collection.mutable
 
 object NPRRSetupUtil {
-
-  type Relation = (String, List[String])
   type Relations = List[Relation]
-  type RWRelation = (String, List[Int]) // rewritten relation, i.e., attr names have been replaced by 0,1,2, etc.
+
+  // rewritten relation, i.e., attr names have been replaced by 0,1,2, etc.
+  class RWRelation(val attrs: List[Int], val name: String) {
+    override def equals(that: Any): Boolean =
+      that match {
+        case that: RWRelation => that.attrs.equals(attrs) && that.name.equals(name)
+        case _ => false
+      }
+  }
+
   type RWRelations = List[RWRelation]
 
   type RName = String
@@ -18,14 +25,14 @@ object NPRRSetupUtil {
     assert(!visited.contains(start))
     visited.add(start)
 
-    val letters = relations.filter((rel : Relation) => rel._1 == start._1).map((rel : Relation) => {
-      rel._2(start._2)
+    val letters = relations.filter((rel : Relation) => rel.name == start._1).map((rel : Relation) => {
+      rel.attrs(start._2)
     }).toSet
 
     relations.foldLeft(List[Column](start))((accum: List[Column], rel : Relation) => {
-      accum ++ rel._2.zipWithIndex.flatMap((attrAndIndex : (String, RIndex)) =>{
-        if (letters.contains(attrAndIndex._1) && !visited.contains((rel._1, attrAndIndex._2))) {
-          Some(DFS(visited, (rel._1, attrAndIndex._2), relations))
+      accum ++ rel.attrs.zipWithIndex.flatMap((attrAndIndex : (String, RIndex)) =>{
+        if (letters.contains(attrAndIndex._1) && !visited.contains((rel.name, attrAndIndex._2))) {
+          Some(DFS(visited, (rel.name, attrAndIndex._2), relations))
         } else {
           None
         }
@@ -36,9 +43,9 @@ object NPRRSetupUtil {
   def buildEncodingEquivalenceClasses(relations : Relations): List[List[(RName, RIndex)]] = {
     val visited = mutable.Set[(RName, RIndex)]()
     relations.flatMap((rel : Relation) => {
-      (0 until rel._2.size).toList.flatMap((index : RIndex) => {
-        if (!visited.contains((rel._1, index))) {
-          Some(DFS(visited, (rel._1, index), relations))
+      (0 until rel.attrs.size).toList.flatMap((index : RIndex) => {
+        if (!visited.contains((rel.name, index))) {
+          Some(DFS(visited, (rel.name, index), relations))
         } else {
           None
         }
@@ -51,11 +58,11 @@ object NPRRSetupUtil {
    */
   def getEncodingRelevantToAttr(targetAttr : String, relations : Relations, encodings : List[EquivalenceClass]) : Column = {
     val cols = relations.flatMap((rel : Relation) => {
-      rel._2.zipWithIndex.flatMap((attrAndIndex : (String, Int)) => {
+      rel.attrs.zipWithIndex.flatMap((attrAndIndex : (String, Int)) => {
         val (attr, index) = attrAndIndex
         if (attr == targetAttr) {
           Some(encodings.flatMap((klass : EquivalenceClass) => {
-            if (klass.contains((rel._1, index))) {
+            if (klass.contains((rel.name, index))) {
               Some((klass.head._1, klass.head._2))
             } else {
               None
@@ -80,9 +87,9 @@ object NPRRSetupUtil {
   }
 
   def getDistinctRelations(relations : Relations): RWRelations = {
-    val relationsGroupedByName = relations.groupBy((relation : Relation) => relation._1).toList
+    val relationsGroupedByName = relations.groupBy((relation : Relation) => relation.name).toList
     return relationsGroupedByName
-      .map((rels : (String, List[Relation])) => {rels._2.head})
-      .map((rel : Relation) => (rel._1, (0 until rel._2.size).toList))
+      .map((rels : (String, Relations)) => {rels._2.head})
+      .map((rel : Relation) => new RWRelation((0 until rel.attrs.size).toList, rel.name))
   }
 }
