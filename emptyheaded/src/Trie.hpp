@@ -23,9 +23,9 @@ struct SortColumns{
 
 template<class T>
 struct Trie{
-  Head<T> head;
+  Head<T> *head;
 
-  Trie<T>(Head<T> head_in){
+  Trie<T>(Head<T> *head_in){
     head = head_in;
   };
 
@@ -118,11 +118,11 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
     &attr_in->at(0));
 
   //Build the head set.
-  Head<T> new_head = *build_block<Head<T>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer.get_memory(0));
-  new_head.map = (Block<T>**)data_allocator.get_next(0,num_rows*sizeof(Block<T>*));
+  Head<T>* new_head = build_block<Head<T>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer.get_memory(0));
+  new_head->map = (Block<T>**)data_allocator.get_next(0,num_rows*sizeof(Block<T>*));
   par::for_range(0,num_rows,100,[&](size_t tid, size_t i){
     (void) tid;
-    new_head.map[i] = NULL;
+    new_head->map[i] = NULL;
   });
 
   size_t cur_level = 1;
@@ -144,7 +144,7 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
     encode_tail(start,end,sb,&attr_in->at(cur_level),indicies);
 
     Tail<T> *tail = build_block<Tail<T>,T>(tid,&data_allocator,num_rows,(end-start),sb);
-    new_head.set_block(data,(Block<T>*)tail);
+    new_head->set_block(data,(Block<T>*)tail);
     
     
     /*

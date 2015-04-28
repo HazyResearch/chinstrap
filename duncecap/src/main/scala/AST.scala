@@ -5,7 +5,6 @@ package DunceCap
  */
 object CodeGen {
   def emitHeaderAndCodeForAST(s: CodeStringBuilder, root: ASTNode) = {
-    s.println("#define WRITE_VECTOR 1")
     s.println("#include <iostream>")
     s.println("#include <unordered_map>")
     s.println("#include \"emptyheaded.hpp\"")
@@ -24,6 +23,7 @@ object CodeGen {
 }
 
 abstract trait ASTNode {
+  val layout = "hybrid"
   def code(s: CodeStringBuilder)
 }
 
@@ -50,19 +50,19 @@ case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, form
     assert(format == "tsv") // TODO : add in csv option
     s.println(s"""tsv_reader f_reader("${(filename.str)}");""")
     s.println("char *next = f_reader.tsv_get_first();")
-    s.println(s" ${rel.identifierName}->num_columns = 0;")
+    s.println(s" ${rel.identifierName}->num_rows = 0;")
     s.println("while(next != NULL){")
     for (i <- (0 to (rel.attrs.size-1)).toList) {
       s.println(s"${rel.identifierName}->get<${i}>().append_from_string(next);")
       s.println("next = f_reader.tsv_get_next();")
     }
-    s.println(s"${rel.identifierName}->num_columns++;")
+    s.println(s"${rel.identifierName}->num_rows++;")
     s.println("}")
 
     // make sure to add the relation and encoding we've just made to the maps the server keeps track of
     s.println(s"""relations["${rel.identifierName}"] = ${rel.identifierName};""")
 
-    s.println(s"""std::cout << ${rel.identifierName}->num_columns << " rows loaded." << std::endl;""")
+    s.println(s"""std::cout << ${rel.identifierName}->num_rows << " rows loaded." << std::endl;""")
   }
 
   override def updateEnvironment: Unit = {
@@ -83,7 +83,7 @@ case class ASTPrintStatement(expression : ASTExpression) extends ASTNode with AS
 
         val typeString = Environment.getTypes(identifierName).mkString(", ")
         s.println(s"""Relation<${typeString}> * ${identifierName}= (Relation<${typeString}> *)relations["${identifierName}"];""")
-        s.println(s"""std::cout << "${identifierName} has " << ${identifierName}->num_columns << " rows loaded." << std::endl;""")
+        s.println(s"""std::cout << "${identifierName} has " << ${identifierName}->num_rows << " rows loaded." << std::endl;""")
       }
       case _ => println(expression)
     }
@@ -119,9 +119,9 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
     if (relsAttrsWithAttr.size == 1) { // TODO: no need to intersect same col in repeated relation
       // no need to emit an intersection
-      s.println( s"""Set<uinteger> ${attr} = ${relsAttrsWithAttr.head}->data;""")
+      s.println( s"""Set<${layout}> ${attr} = ${relsAttrsWithAttr.head}->data;""")
      } else {
-      s.println(s"""Set<uinteger> ${attr}(${attr}_buffer.get_memory(tid)); //initialize the memory""")
+      s.println(s"""Set<${layout}> ${attr}(${attr}_buffer.get_memory(tid)); //initialize the memory""")
       // emit an intersection for the first two relations
       s.println(s"""${attr} = ops::set_intersect(&${attr},&${relsAttrsWithAttr.head}->data,&${relsAttrsWithAttr.tail.head}->data);""")
       val restOfRelsAttrsWithAttr = relsAttrsWithAttr.tail.tail
@@ -136,7 +136,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       // update relsAttrs by peeling attr off the attribute lists, and adding ->map.at(attr_i) to the relation name
       relsAttrs.map((rel : (String, List[String])) => {
         if (!rel._2.isEmpty && rel._2.head.contains(attr)) {
-          (rel._1 + s"->map.at(${attr}_i)", rel._2.tail)
+          (rel._1 + s"->get_block(${attr}_i)", rel._2.tail)
         } else {
           rel
         }
@@ -205,7 +205,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     })
 
     // emit code to construct each of the tries
-    relsAttrs.map((relAttrs : RWRelation) => relAttrs.name).map((identifier : String) => s.println(s"""Trie *T${identifier} = Trie::build(E${identifier}, [&](size_t index){return true;});""") )
+    relsAttrs.map((relAttrs : RWRelation) => relAttrs.name).map((identifier : String) => s.println(s"""Trie<${layout}> *T${identifier} = Trie<${layout}>::build(E${identifier}, [&](size_t index){return true;});""") )
   }
 
   override def code(s: CodeStringBuilder): Unit = {

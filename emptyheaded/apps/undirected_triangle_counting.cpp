@@ -65,7 +65,7 @@ class undirected_triangle_counting: public application<T> {
     
     auto qt = debug::start_clock();
 
-    const Head<T> H = TR_ab->head;
+    const Head<T> H = *TR_ab->head;
     const Set<T> A = H.data;
     A.par_foreach([&](size_t tid, uint32_t a_i){
       Set<T> B(B_buffer.get_memory(tid)); //initialize the memory
