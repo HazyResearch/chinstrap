@@ -66,8 +66,6 @@ server: $(OBJECTS) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=server%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -ldl -o $@ $(INCLUDE_DIRS)
 
 libs:
-	rm -rf libs/gtest*
-	rm -rf libs/tbb*
 	$(shell cd ./libs && source ./build.sh)
 
 tests: $(TESTS_EXES)
