@@ -2,6 +2,7 @@
 
 template<class T>
 class undirected_triangle_counting: public application<T> {
+  uint64_t result = 0;
   void run(std::string path){
     //create the relation (currently a column wise table)
     Relation<uint64_t,uint64_t> *R_ab = new Relation<uint64_t,uint64_t>();
@@ -85,7 +86,7 @@ class undirected_triangle_counting: public application<T> {
       });
     });
     
-    size_t result = num_triangles.evaluate(0);
+    result = num_triangles.evaluate(0);
     debug::stop_clock("Query",qt);
 
     std::cout << result << std::endl;
