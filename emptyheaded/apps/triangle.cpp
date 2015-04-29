@@ -15,7 +15,7 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
     R->num_rows++;
   }
 
-  Relation<uint64_t, uint64_t> * R= (Relation<uint64_t, uint64_t> *)relations["R"];
+  R= (Relation<uint64_t, uint64_t> *)relations["R"];
   std::vector<Column<uint64_t>> *R_0_attributes = new std::vector<Column<uint64_t>>();
   R_0_attributes->push_back(R->get<0>());
   R_0_attributes->push_back(R->get<1>());
@@ -23,7 +23,7 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
   std::vector<Column<uint32_t>> *ER = new std::vector<Column<uint32_t>>();
   ER->push_back(R_0_encoding.encoded.at(0));
   ER->push_back(R_0_encoding.encoded.at(1));
-  Trie<hybrid> *TR = Trie<hybrid>::build(ER, [&](size_t index){return true;});
+  Trie<hybrid> *TR = Trie<hybrid>::build(ER, [&](size_t index){(void) index; return true;});
   allocator::memory<uint8_t> a_buffer(R_0_encoding.key_to_value.size());
   allocator::memory<uint8_t> b_buffer(R_0_encoding.key_to_value.size());
   allocator::memory<uint8_t> c_buffer(R_0_encoding.key_to_value.size());

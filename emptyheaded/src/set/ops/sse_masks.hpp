@@ -8,7 +8,7 @@ namespace ops{
     std::cout << "reg[2]: " << _mm_extract_epi32(reg,2) << std::endl;
     std::cout << "reg[3]: " << _mm_extract_epi32(reg,3) << std::endl << std::endl;   
   }
-  static char max = char(0xff);
+  //static char max = char(0xff);
   /*
   static uint32_t difference_incrementer_32[16] = {        
     0,1,2,2,
@@ -36,9 +36,10 @@ namespace ops{
     _mm_set_epi8(15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0), //15
   }; 
     //128 = 0xf0
-  static __m128i shuffle_union_mask32 = _mm_set_epi8(15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0);
+  //static __m128i shuffle_union_mask32 = _mm_set_epi8(15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0);
  
   //128 = 0xf0
+  /*
   static __m128i shuffle_difference_mask32_a[16] = {        
     _mm_set_epi8(15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0), //0
     _mm_set_epi8(max,max,max,max,15,14,13,12,11,10,9,8,7,6,5,4), //1
@@ -57,7 +58,9 @@ namespace ops{
     _mm_set_epi8(max,max,max,max,max,max,max,max,max,max,max,max,3,2,1,0), //14
     _mm_set_epi8(max,max,max,max,max,max,max,max,max,max,max,max,max,max,max,max), //15
   }; 
+  */
   //128 = 0xf0
+  /*
   static __m128i shuffle_difference_mask32_b[16] = {        
     _mm_set_epi8(3,2,1,0,7,6,5,4,11,10,9,8,15,14,13,12), //0
     _mm_set_epi8(7,6,5,4,11,10,9,8,15,14,13,12,max,max,max,max), //1
@@ -112,6 +115,7 @@ namespace ops{
     _mm_set_epi8(max,max,max,max,max,max,max,max,max,max,max,max,max,max,max,max), //14
     _mm_set_epi8(max,max,max,max,max,max,max,max,max,max,max,max,max,max,max,max), //15
   }; 
+  */
   static __m128i shuffle_mask16[256]; // precomputed dictionary
 
   static inline int getBitSD(uint32_t value, uint32_t position) {

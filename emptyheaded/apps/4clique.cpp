@@ -3,6 +3,7 @@
 #include "emptyheaded.hpp"
 #include "utils/io.hpp"
 extern "C" void run(std::unordered_map<std::string, void*>& relations) {
+  (void) relations;
   Relation<uint64_t,uint64_t>* R = new Relation<uint64_t,uint64_t>();
   tsv_reader f_reader("data/medium.txt");
   char *next = f_reader.tsv_get_first();
@@ -22,7 +23,7 @@ extern "C" void run(std::unordered_map<std::string, void*>& relations) {
   std::vector<Column<uint32_t>> *ER = new std::vector<Column<uint32_t>>();
   ER->push_back(R_0_encoding.encoded.at(0));
   ER->push_back(R_0_encoding.encoded.at(1));
-  Trie<hybrid> *TR = Trie<hybrid>::build(ER, [&](size_t index){return true;});
+  Trie<hybrid> *TR = Trie<hybrid>::build(ER, [&](size_t index){(void)index; return true;});
   allocator::memory<uint8_t> a_buffer(1000 /*R_0_encoding.key_to_value.size()*/);
   allocator::memory<uint8_t> b_buffer(1000 /*R_0_encoding.key_to_value.size()*/);
   allocator::memory<uint8_t> c_buffer(1000 /*R_0_encoding.key_to_value.size()*/);
