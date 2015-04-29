@@ -74,3 +74,4 @@ tests: $(TESTS_EXES)
 clean:
 	rm -rf $(OBJDIR) $(EXEDIR)
 
+.PHONY: all libs tests clean
