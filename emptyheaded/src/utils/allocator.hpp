@@ -120,5 +120,5 @@ namespace allocator{
       }
     }
   };
-};
+}
 #endif

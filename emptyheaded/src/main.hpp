@@ -80,7 +80,7 @@ std::pair<std::string,std::string> parse(int argc, char* argv[]) {
   }
 
   std::string l(layout);
-  if(path == NULL){
+  if(path == NULL || help){
     printUsage();
   }
   std::string p(path);

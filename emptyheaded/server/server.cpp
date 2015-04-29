@@ -32,7 +32,8 @@ int main () {
   socket.bind ("tcp://*:7000");
 
   char dir_buffer[PATH_BUFFER_SIZE];
-  getcwd(dir_buffer, PATH_BUFFER_SIZE);
+  char* ret = getcwd(dir_buffer, PATH_BUFFER_SIZE);
+  (void) ret;
   std::string dir(dir_buffer);
 
   std::unordered_map<std::string, void*> relations;

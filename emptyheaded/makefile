@@ -3,8 +3,9 @@
 
 #CXX ?= g++-4.7
 #CXX = /dfs/scratch0/noetzli/downloads/tmp/cilkplus-install/bin/g++ -Wcast-align
-override CXX = clang++
-override CXXFLAGS += -ltbb -ldl -lpthread -mavx -std=c++11 -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
+override CXX = g++
+#override CXX = clang++
+override CXXFLAGS += -ltbb -lpthread -mavx -std=c++11 -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
 
 INCLUDE_DIRS=-Isrc
 OBJDIR=build
@@ -51,10 +52,10 @@ $(TOOLS_EXES): $(OBJECTS) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=tools%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
 
 $(SERVER_EXES): $(OBJECTS) $(EXEDIR)
-	$(CXX) $(CXXFLAGS) -lzmq $(@:bin%=server%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
+	$(CXX) $(CXXFLAGS) $(@:bin%=server%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -ldl -o $@ $(INCLUDE_DIRS)
 
 $(GENERATED_EXES): $(OBJECTS) $(EXEDIR)
-	$(CXX) $(CXXFLAGS) $(@:bin%=generated%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -o $@ $(INCLUDE_DIRS)
+	$(CXX) $(CXXFLAGS) $(@:bin%=generated%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -ldl -o $@ $(INCLUDE_DIRS)
 
 $(TESTS_EXES): $(OBJECTS) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=tests%.cpp) $(OBJECTS) ./lib/gtest-1.7.0/src/gtest_main.o ./lib/gtest-1.7.0/src/gtest-all.o $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS) -DGOOGLE_TEST -I./lib/gtest-1.7.0/include/ -I./lib/gtest-1.7.0/ -I./apps/
