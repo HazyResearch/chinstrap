@@ -66,7 +66,7 @@ server: $(OBJECTS) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=server%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -ldl -o $@ $(INCLUDE_DIRS)
 
 gtest:
-	unzip ./lib/gtest-1.7.0.zip 
+	cd ./lib/ && unzip gtest-1.7.0.zip 
 	cd ./lib/gtest-1.7.0/ && ./configure
 	make -C ./lib/gtest-1.7.0
 

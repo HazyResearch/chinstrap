@@ -2,4 +2,4 @@ language: cpp
 compiler: gcc
 
 # Change this to your needs
-script: cd emptyheaded && make clean && make gtest && make test
+script: cd ./emptyheaded && make clean && make gtest && make tests
