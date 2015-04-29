@@ -1,4 +1,4 @@
 language: cpp
 compiler: gcc
 
-script: ./script/build.sh
+script: ./emptyheaded/build.sh
