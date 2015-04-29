@@ -88,6 +88,7 @@ std::pair<std::string,std::string> parse(int argc, char* argv[]) {
   return std::make_pair(l,p);
 }
 
+#ifndef TEST
 int main (int argc, char* argv[]) {
   std::tuple<std::string,std::string> tup_in = parse(argc,argv);
   std::string l = std::get<0>(tup_in);
@@ -110,3 +111,4 @@ int main (int argc, char* argv[]) {
   }
   return 0;
 }
+#endif

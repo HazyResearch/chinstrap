@@ -1,12 +1,9 @@
-#define WRITE_VECTOR 0
-
 #include "gtest/gtest.h"
 #include "undirected_triangle_counting.cpp"
 
-TEST(TEST1, FACEBOOK_TRIANGLES_HYBRID) {
-  MutableGraph* inputGraph = MutableGraph::undirectedFromBinary("test/data/replicated.tsv");
-  Parser input_data(4,false,0,0,inputGraph,"hybrid");
-  undirected_triangle_counting<hybrid,hybrid> triangle_app(input_data);
-  triangle_app.run();
-  EXPECT_EQ(1612010, triangle_app.result);
+TEST(UNDIRECTED_TRIANGLE_COUNTING, FACEBOOK_TRIANGLES_HYBRID) {
+  NUM_THREADS = 4;
+  undirected_triangle_counting<hybrid> *myapp = new undirected_triangle_counting<hybrid>();
+  myapp->run("tests/data/replicated.tsv");
+  EXPECT_EQ((uint64_t)1612010, myapp->result);
 }
