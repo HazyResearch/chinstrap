@@ -1,5 +1,8 @@
 language: cpp
 compiler: gcc
 
-# Change this to your needs
-script: cd ./emptyheaded && make clean && make libs && make tests
+script: 
+cd ./emptyheaded && make clean && \\
+  make libs && \\
+  source ./libs/tbb43_20150424oss/bin/tbbvars.sh intel64 && \\
+  make tests
