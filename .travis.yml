@@ -1,4 +1,4 @@
 language: cpp
 compiler: gcc
 
-script: ./emptyheaded/build.sh
+script: "source ./emptyheaded/build.sh"
