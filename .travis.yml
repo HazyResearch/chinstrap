@@ -1,4 +1,4 @@
 language: cpp
 compiler: gcc
 
-script: "source ./emptyheaded/build.sh"
+script: "source ./emptyheaded/tests/test_all.sh"
