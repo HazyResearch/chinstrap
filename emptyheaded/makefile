@@ -47,7 +47,7 @@ $(APPS_EXES): $(OBJECTS) $(APP_SOURCES) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=apps%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
 
 $(TOOLS_EXES): $(OBJECTS) $(EXEDIR)
-	$(CXX) $(CXXFLAGS) $(@:bin%=tools%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
+	$(CXX) $(CXXFLAGS) -m32 $(@:bin%=tools%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
 
 $(GENERATED_EXES): $(OBJECTS) $(EXEDIR)
 

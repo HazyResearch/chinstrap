@@ -159,7 +159,7 @@ inline size_t bitset::par_foreach(
     const size_t num_data_words = ((number_of_bytes-sizeof(uint64_t))/sizeof(uint64_t));
     const uint64_t offset = ((uint64_t*)A)[0];
     const uint64_t* A64 = (uint64_t*)(A+sizeof(uint64_t));
-    return par::for_range(0, num_data_words, 512,
+    return par::for_range(0, num_data_words, 1,
            [&f, &A64, cardinality,offset](size_t tid, size_t i) {
               const uint64_t cur_word = A64[i];
               if(cur_word != 0) {

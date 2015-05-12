@@ -104,11 +104,15 @@ struct raiders_pcm {
       BeforeTime = m->getTickCount();
 
 
-      MyEvents[0].event_number = 0xC4; // architectural "branch instruction retired" event number
+      //Page 220 of the link below
+      //http://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developers-manual.pdf
+
+
+      MyEvents[0].event_number = 0x88; // architectural "branch instruction retired" event number
 
       MyEvents[0].umask_value = 0x01; // architectural "branch instruction retired" event umask
 
-      MyEvents[1].event_number = 0xC5; // architectural "branch misses retired event" number
+      MyEvents[1].event_number = 0x89; // architectural "branch misses retired event" number
 
       MyEvents[1].umask_value = 0x01; // architectural "branch misses retired" event umask
 
@@ -672,6 +676,6 @@ void calculate_bandwidth(PCM *m, const ServerUncorePowerState uncState1[], const
       std::cout << "BRANCH MISSES RETIRED: " << BRANCH_MISSES_RETIRED_events << std::endl;
 
    }
-} static rpcm;
+}; //static rpcm;
 
 #endif

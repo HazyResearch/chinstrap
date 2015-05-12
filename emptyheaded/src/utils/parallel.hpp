@@ -1,7 +1,7 @@
 #ifndef PARALLEL_H
 #define PARALLEL_H
 
-#include "common.hpp"
+#include "debug.hpp"
 #include <thread>
 #include <atomic>
 #include <cstring>
@@ -44,6 +44,7 @@ namespace par{
   template<typename F>
   static size_t for_range(const size_t from, const size_t to, const size_t block_size, F body) {
      const size_t range_len = to - from;
+     //std::cout << range_len << " " << block_size << std::endl;
      const size_t real_num_threads = std::min(range_len / block_size + 1, NUM_THREADS);
      //std::cout << "Range length: " << range_len << " Threads: " << real_num_threads << std::endl;
 
@@ -53,7 +54,7 @@ namespace par{
         }
      }
      else {
-        double t_begin = 0.0;
+        double t_begin = debug::start_clock();
         double* thread_times = NULL;
 
 #ifdef ENABLE_PRINT_THREAD_TIMES
@@ -82,8 +83,7 @@ namespace par{
 
 
 #ifdef ENABLE_PRINT_THREAD_TIMES
-              double t_end = 0.0;
-              thread_times[k] = t_end - t_begin;
+              thread_times[k] = debug::stop_clock(t_begin);
 #else
               (void) t_begin;
               (void) thread_times;
@@ -111,7 +111,7 @@ namespace par{
     std::function<void(size_t)> tear_down) {
 
     #ifdef ENABLE_PRINT_THREAD_TIMES
-    double setup1 = common::startClock();
+    double setup1 = debug::start_clock();
     #endif
 
     for(size_t i = 0; i < NUM_THREADS; i++){
@@ -119,13 +119,13 @@ namespace par{
     }
 
     #ifdef ENABLE_PRINT_THREAD_TIMES
-    common::stopClock("PARALLEL SETUP",setup1);
+    debug::stop_clock("PARALLEL SETUP",setup1);
     #endif
 
     size_t real_num_threads = for_range(from,to,block_size,body);
 
     #ifdef ENABLE_PRINT_THREAD_TIMES
-    double td = common::startClock();
+    double td = debug::start_clock();
     #endif
 
     for(size_t i = 0; i < NUM_THREADS; i++){
@@ -133,7 +133,7 @@ namespace par{
     }
 
     #ifdef ENABLE_PRINT_THREAD_TIMES
-    common::stopClock("PARALLEL TEAR DOWN",td);
+    debug::stop_clock("PARALLEL TEAR DOWN",td);
     #endif
 
     return real_num_threads;
