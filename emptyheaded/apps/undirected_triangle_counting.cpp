@@ -57,13 +57,18 @@ struct undirected_triangle_counting: public application<T> {
     //Prints the relation    
     //R(a,b) join T(b,c) join S(a,c)
 
+    //auto beg_state = rpcm.get_state();
+    //pcm_helper::system_counter_state_t before_sstate = pcm_helper::pcm_get_counter_state();
+    //pcm_helper::server_uncore_power_state_t* before_uncstate = pcm_helper::pcm_get_uncore_power_state();
+    rpcm.init_counter_states();
+
     //allocate memory
     allocator::memory<uint8_t> B_buffer(R_ab->num_rows);
     allocator::memory<uint8_t> C_buffer(R_ab->num_rows);
     par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
       return a + b;
     });
-    
+
     auto qt = debug::start_clock();
 
     const Head<T> H = *TR_ab->head;
@@ -90,6 +95,10 @@ struct undirected_triangle_counting: public application<T> {
     debug::stop_clock("Query",qt);
 
     std::cout << result << std::endl;
+
+    rpcm.end_counter_states();
+    rpcm.print_state();
+
     //////////////////////////////////////////////////////////////////////
   }
 };

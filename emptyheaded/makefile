@@ -1,11 +1,11 @@
 # Uncomment the following line to compile without PCM support
-#INTEL_PCM_HOME=/afs/cs.stanford.edu/u/noetzli/IntelPerformanceCounterMonitorV2.7
+INTEL_PCM_HOME=/dfs/scratch0/caberger/IntelPerformanceCounterMonitorV2.8
 
 #CXX ?= g++-4.7
 #CXX = /dfs/scratch0/noetzli/downloads/tmp/cilkplus-install/bin/g++ -Wcast-align
 override CXX = g++
 #override CXX = clang++
-override CXXFLAGS += -ltbb -lpthread -mavx -std=c++11 -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
+override CXXFLAGS += -mavx -std=c++0x -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
 
 INCLUDE_DIRS=-Isrc
 OBJDIR=build
@@ -32,6 +32,8 @@ TESTS=$(TESTS_SOURCES:.cpp=)
 APPS_EXES=$(APPS:%=$(EXEDIR)/%)
 TOOLS_EXES=$(TOOLS:%=$(EXEDIR)/%)
 TESTS_EXES=$(TESTS:%=$(EXEDIR)/%)
+
+LIBS=-ltbb -lpthread
 
 all: $(APPS_EXES) $(TOOLS_EXES) $(SERVER_EXES)
 
