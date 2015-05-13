@@ -1,3 +1,5 @@
+#ifndef UINTEGER_H
+#define UINTEGER_H
 /*
 
 THIS CLASS IMPLEMENTS THE FUNCTIONS ASSOCIATED WITH AN UNCOMPRESSED SET LAYOUT.
@@ -98,3 +100,5 @@ inline size_t uinteger::par_foreach(
         f(tid, data[i]);
      });
 }
+
+#endif

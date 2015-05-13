@@ -85,14 +85,10 @@ namespace type{
 
   enum layout: uint8_t {
     BITSET = 0,
-    PSHORT = 1,
-    UINTEGER = 2,
-    BITPACKED = 3,
-    VARIANT = 4,
-    HYBRID = 5,
-    KUNLE = 6,
-    BITSET_NEW = 7,
-    NEW_TYPE = 8
+    UINTEGER = 1,
+    HYBRID = 2,
+    BLOCK_BITSET = 3,
+    BLOCK = 4
   };
 
 }
