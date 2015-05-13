@@ -18,7 +18,7 @@ class blockl{
     static type::layout get_type();
     static size_t build(uint8_t *r_in, const uint32_t *data, const size_t length);
     static size_t build_flattened(uint8_t *r_in, const uint32_t *data, const size_t length);
-    static tuple<size_t,size_t,type::layout> get_flattened_data(const uint8_t *set_data, const size_t cardinality);
+    static std::tuple<size_t,size_t,type::layout> get_flattened_data(const uint8_t *set_data, const size_t cardinality);
 
     template<typename F>
     static void foreach(
@@ -77,12 +77,14 @@ inline size_t blockl::build(uint8_t *R, const uint32_t *A, const size_t s_a){
       }
     }
     size_t total_bytes_used = 0;
-    const size_t num_uint_bytes = uinteger::build(R+sizeof(size_t),uint_array,uint_i);
+    auto tup = uinteger::build(R+sizeof(size_t),uint_array,uint_i);
+    const size_t num_uint_bytes = std::get<0>(tup);
     ((size_t*)R)[0] = num_uint_bytes;
     total_bytes_used += (sizeof(size_t)+num_uint_bytes);
     R += total_bytes_used;
 
-    total_bytes_used += block_bitset::build(R,bitset_array,bs_i);
+    auto tup2 = block_bitset::build(R,bitset_array,bs_i);
+    total_bytes_used += std::get<0>(tup2);
     std::cout << "Num uints: " << num_uint_bytes / sizeof(uint) << std::endl;
     return total_bytes_used;
   }
@@ -101,12 +103,12 @@ inline size_t blockl::build_flattened(uint8_t *r_in, const uint32_t *data, const
   }
 }
 
-inline tuple<size_t,size_t,type::layout> blockl::get_flattened_data(const uint8_t *set_data, const size_t cardinality){
+inline std::tuple<size_t,size_t,type::layout> blockl::get_flattened_data(const uint8_t *set_data, const size_t cardinality){
   if(cardinality > 0){
     const uint32_t *size_ptr = (uint32_t*) set_data;
-    return make_tuple(sizeof(uint32_t),(size_t)size_ptr[0],type::BLOCK);
+    return std::make_tuple(sizeof(uint32_t),(size_t)size_ptr[0],type::BLOCK);
   } else{
-    return make_tuple(0,0,type::BLOCK);
+    return std::make_tuple(0,0,type::BLOCK);
   }
 }
 
