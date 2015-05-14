@@ -146,7 +146,6 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
     Tail<T> *tail = build_block<Tail<T>,T>(tid,&data_allocator,num_rows,(end-start),sb);
     new_head->set_block(data,(Block<T>*)tail);
     
-    
     /*
     std::cout << "node: " << data << std::endl;
     new_head.get_block(data)->data.foreach([&](uint32_t d){
