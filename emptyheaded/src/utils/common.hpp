@@ -84,7 +84,7 @@ namespace type{
   };
 
   enum layout: uint8_t {
-    BITSET = 0,
+    RANGE_BITSET = 0,
     UINTEGER = 1,
     HYBRID = 2,
     BLOCK_BITSET = 3,

@@ -785,7 +785,7 @@ namespace ops{
       return set_intersect_standard(C_in, rare, freq);
   }
 
-  inline Set<bitset>* set_intersect(Set<bitset> *C_in, const Set<bitset> *A_in, const Set<bitset> *B_in){
+  inline Set<range_bitset>* set_intersect(Set<range_bitset> *C_in, const Set<range_bitset> *A_in, const Set<range_bitset> *B_in){
     long count = 0l;
     C_in->number_of_bytes = 0;
 
@@ -796,8 +796,8 @@ namespace ops{
       uint64_t * const C = (uint64_t*)(C_in->data+sizeof(uint64_t));
       const uint64_t * const A = (uint64_t*)(A_in->data+sizeof(uint64_t));
       const uint64_t * const B = (uint64_t*)(B_in->data+sizeof(uint64_t));
-      const size_t s_a = ((A_in->number_of_bytes-sizeof(uint64_t))/sizeof(uint64_t));
-      const size_t s_b = ((B_in->number_of_bytes-sizeof(uint64_t))/sizeof(uint64_t));
+      const size_t s_a = ((A_in->number_of_bytes-sizeof(uint64_t))/(sizeof(uint64_t)+sizeof(uint32_t)));
+      const size_t s_b = ((B_in->number_of_bytes-sizeof(uint64_t))/(sizeof(uint64_t)+sizeof(uint32_t)));
 
       #if WRITE_VECTOR == 0
       (void) C;
@@ -857,15 +857,15 @@ namespace ops{
 
     C_in->cardinality = count;
     C_in->density = density;
-    C_in->type= type::BITSET;
+    C_in->type= type::RANGE_BITSET;
 
     return C_in;
   }
-  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in,const Set<uinteger> *A_in,const Set<bitset> *B_in){
+  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in,const Set<uinteger> *A_in,const Set<range_bitset> *B_in){
     uint32_t * const C = (uint32_t*)C_in->data;
     const uint32_t * const A = (uint32_t*)A_in->data;
     const size_t s_a = A_in->cardinality;
-    const size_t s_b = (B_in->number_of_bytes > 0) ? (B_in->number_of_bytes-sizeof(uint64_t))/sizeof(uint64_t):0;
+    const size_t s_b = (B_in->number_of_bytes > 0) ? (B_in->number_of_bytes-sizeof(uint64_t))/(sizeof(uint64_t)+sizeof(uint32_t)):0;
     const uint64_t start_index = (B_in->number_of_bytes > 0) ? ((uint64_t*)B_in->data)[0]:0;
 
     const uint64_t * const B = (uint64_t*)(B_in->data+sizeof(uint64_t));
@@ -877,8 +877,8 @@ namespace ops{
     size_t count = 0;
     for(size_t i = 0; i < s_a; i++){
       const uint32_t cur = A[i];
-      const size_t cur_index = bitset::word_index(cur);
-      if((cur_index < (s_b+start_index)) && (cur_index >= start_index) && bitset::is_set(cur,B,start_index)){
+      const size_t cur_index = range_bitset::word_index(cur);
+      if((cur_index < (s_b+start_index)) && (cur_index >= start_index) && range_bitset::is_set(cur,B,start_index)){
         #if WRITE_VECTOR == 1
         C[count] = cur;
         #endif
@@ -897,7 +897,7 @@ namespace ops{
 
     return C_in;
   }
-  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in,const Set<bitset> *A_in,const Set<uinteger> *B_in){
+  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in,const Set<range_bitset> *A_in,const Set<uinteger> *B_in){
     return set_intersect(C_in,B_in,A_in);
   }
   inline Set<hybrid>* set_intersect(Set<hybrid> *C_in,const Set<hybrid> *A_in,const Set<hybrid> *B_in){
@@ -916,29 +916,29 @@ namespace ops{
               #endif
               return (Set<hybrid>*)set_intersect((Set<uinteger>*)C_in,(const Set<uinteger>*)A_in,(const Set<uinteger>*)B_in);
               break;
-            case type::BITSET:
+            case type::RANGE_BITSET:
               #ifdef STATS
               type::num_uint_bs++;
               #endif
-              return (Set<hybrid>*)set_intersect((Set<uinteger>*)C_in,(const Set<uinteger>*)A_in,(const Set<bitset>*)B_in);
+              return (Set<hybrid>*)set_intersect((Set<uinteger>*)C_in,(const Set<uinteger>*)A_in,(const Set<range_bitset>*)B_in);
               break;
             default:
               break;
           }
         break;
-        case type::BITSET:
+        case type::RANGE_BITSET:
           switch (B_in->type) {
             case type::UINTEGER:
               #ifdef STATS
               debug::num_uint_bs++;
               #endif
-              return (Set<hybrid>*)set_intersect((Set<uinteger>*)C_in,(const Set<uinteger>*)B_in,(const Set<bitset>*)A_in);
+              return (Set<hybrid>*)set_intersect((Set<uinteger>*)C_in,(const Set<uinteger>*)B_in,(const Set<range_bitset>*)A_in);
             break;
-            case type::BITSET:
+            case type::RANGE_BITSET:
               #ifdef STATS
               debug::num_bs_bs++;
               #endif
-              return (Set<hybrid>*)set_intersect((Set<bitset>*)C_in,(const Set<bitset>*)A_in,(const Set<bitset>*)B_in);
+              return (Set<hybrid>*)set_intersect((Set<range_bitset>*)C_in,(const Set<range_bitset>*)A_in,(const Set<range_bitset>*)B_in);
             break;
             default:
             break;

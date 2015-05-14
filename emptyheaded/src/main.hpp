@@ -98,19 +98,23 @@ int main (int argc, char* argv[]) {
     std::cout << "LAYOUT: uinteger, # THREADS: " << NUM_THREADS << ", PATH: " << p << std::endl;
     application<uinteger>* myapp = init_app<uinteger>();
     myapp->run(p);
-  } else if(l == "bitset"){
-    std::cout << "LAYOUT: bitset, # THREADS: " << NUM_THREADS << ", PATH: " << p << std::endl;
-    application<bitset>* myapp = init_app<bitset>();
+  } else if(l == "range_bitset"){
+    std::cout << "LAYOUT: range_bitset, # THREADS: " << NUM_THREADS << ", PATH: " << p << std::endl;
+    application<range_bitset>* myapp = init_app<range_bitset>();
     myapp->run(p);
   } else if(l == "hybrid"){
     std::cout << "LAYOUT: hybrid, # THREADS: " << NUM_THREADS << ", PATH: " << p  << std::endl;
     application<hybrid>* myapp = init_app<hybrid>();
     myapp->run(p);
-  } else if(l == "block"){
+  } 
+  /*
+  else if(l == "block"){
     std::cout << "LAYOUT: block, # THREADS: " << NUM_THREADS << ", PATH: " << p  << std::endl;
     application<blockl>* myapp = init_app<blockl>();
     myapp->run(p);
-  } else{
+  } 
+  */
+  else{
     std::cout << "No valid layout entered" << std::endl;
     abort ();
   }

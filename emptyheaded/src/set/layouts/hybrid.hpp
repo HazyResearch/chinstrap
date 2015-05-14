@@ -8,7 +8,7 @@ RUN THE CORRESPONDING SET MEHTODS.
 */
 
 #include "uinteger.hpp"
-#include "bitset.hpp"
+#include "range_bitset.hpp"
 
 class hybrid{
   public:
@@ -51,7 +51,7 @@ inline type::layout hybrid::get_type(const uint32_t *data, const size_t length){
       double density = (double) length / range;
      // double c = compressibility(data, length);
       if(density > ((double)common::bitset_req) && length > common::bitset_length) {
-        return type::BITSET;
+        return type::RANGE_BITSET;
       } //else if( (length/(range/BLOCK_SIZE)  > common::pshort_requirement)) {
         //return common::BITSET_NEW;
       //}
@@ -72,8 +72,8 @@ inline std::tuple<size_t,type::layout> hybrid::build(uint8_t *r_in, const uint32
     case type::UINTEGER :
       return std::make_pair(std::get<0>(uinteger::build(r_in,data,length)),t);
     break;
-    case type::BITSET :
-      return std::make_pair(std::get<0>(bitset::build(r_in,data,length)),t);
+    case type::RANGE_BITSET :
+      return std::make_pair(std::get<0>(range_bitset::build(r_in,data,length)),t);
     break;
     /*
     case common::BITSET_NEW :
@@ -105,8 +105,8 @@ inline void hybrid::foreach_until(
     case type::UINTEGER:
       uinteger::foreach(f,data_in,cardinality,number_of_bytes,type::UINTEGER);
       break;
-    case type::BITSET:
-      bitset::foreach(f,data_in,cardinality,number_of_bytes,type::BITSET);
+    case type::RANGE_BITSET:
+      range_bitset::foreach(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
       break;
       /*
     case common::BITSET_NEW:
@@ -139,8 +139,8 @@ inline void hybrid::foreach(
     case type::UINTEGER :
       uinteger::foreach(f,data_in,cardinality,number_of_bytes,type::UINTEGER);
       break;
-    case type::BITSET :
-      bitset::foreach(f,data_in,cardinality,number_of_bytes,type::BITSET);
+    case type::RANGE_BITSET :
+      range_bitset::foreach(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
       break;
     /*
     case common::BITSET_NEW :
@@ -173,8 +173,8 @@ inline size_t hybrid::par_foreach(
     case type::UINTEGER :
       return uinteger::par_foreach(f,data_in,cardinality,number_of_bytes,type::UINTEGER);
       break;
-    case type::BITSET :
-      return bitset::par_foreach(f,data_in,cardinality,number_of_bytes,type::BITSET);
+    case type::RANGE_BITSET :
+      return range_bitset::par_foreach(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
       break;
       /*
     case common::PSHORT :
