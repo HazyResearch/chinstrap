@@ -110,6 +110,14 @@ class Set{
       T::foreach(f,data,cardinality,number_of_bytes,type);
     }
 
+    template<typename F>
+    void foreach_index(F f) const {
+      /*std::cout << number_of_bytes << std::endl;
+      std::cout << number_of_bytes << std::endl;*/
+      //std::cout << "---" << std::endl;
+      T::foreach_index(f,data,cardinality,number_of_bytes,type);
+    }
+
     // Applies a function to each element in the set until the function returns
     // true.
     //
@@ -125,6 +133,11 @@ class Set{
     template<typename F>
     size_t par_foreach(F f) const {
       return T::par_foreach(f, data, cardinality, number_of_bytes, type);
+    }
+
+    template<typename F>
+    size_t par_foreach_index(F f) const {
+      return T::par_foreach_index(f, data, cardinality, number_of_bytes, type);
     }
 
     Set<uinteger> decode(uint32_t *buffer);

@@ -23,6 +23,14 @@ class uinteger{
         const type::layout t);
 
     template<typename F>
+    static void foreach_index(
+        F f,
+        const uint8_t *data_in,
+        const size_t cardinality,
+        const size_t number_of_bytes,
+        const type::layout t);
+
+    template<typename F>
     static void foreach_until(
         F f,
         const uint8_t *data_in,
@@ -32,6 +40,14 @@ class uinteger{
 
     template<typename F>
     static size_t par_foreach(
+      F f,
+      const uint8_t *data_in,
+      const size_t cardinality,
+      const size_t number_of_bytes,
+      const type::layout t);
+
+    template<typename F>
+    static size_t par_foreach_index(
       F f,
       const uint8_t *data_in,
       const size_t cardinality,
@@ -69,6 +85,22 @@ inline void uinteger::foreach(
 
 //Iterates over set applying a lambda.
 template<typename F>
+inline void uinteger::foreach_index(
+    F f,
+    const uint8_t *data_in,
+    const size_t cardinality,
+    const size_t number_of_bytes,
+    const type::layout t) {
+ (void) number_of_bytes; (void) t;
+
+ uint32_t *data = (uint32_t*) data_in;
+ for(size_t i=0; i<cardinality;i++){
+  f(data[i],i);
+ }
+}
+
+//Iterates over set applying a lambda.
+template<typename F>
 inline void uinteger::foreach_until(
     F f,
     const uint8_t *data_in,
@@ -98,6 +130,23 @@ inline size_t uinteger::par_foreach(
    return par::for_range(0, cardinality, 128,
      [&f, &data](size_t tid, size_t i) {
         f(tid, data[i]);
+     });
+}
+
+// Iterates over set applying a lambda in parallel.
+template<typename F>
+inline size_t uinteger::par_foreach_index(
+      F f,
+      const uint8_t *data_in,
+      const size_t cardinality,
+      const size_t number_of_bytes,
+      const type::layout t) {
+   (void) number_of_bytes; (void) t;
+
+   uint32_t* data = (uint32_t*) data_in;
+   return par::for_range(0, cardinality, 128,
+     [&f, &data](size_t tid, size_t i) {
+        f(tid, data[i], (uint32_t)i);
      });
 }
 
