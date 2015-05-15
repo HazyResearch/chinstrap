@@ -70,22 +70,19 @@ struct undirected_triangle_counting: public application<T> {
 
     const TrieBlock<T> H = *TR_ab->head;
     const Set<T> A = H.set;
-    A.par_foreach_index([&](size_t tid, uint32_t a_d, uint32_t a_i){
+    A.par_foreach_index([&](size_t tid, uint32_t a_i){
       Set<T> B(B_buffer.get_memory(tid)); //initialize the memory
       Set<T> C(C_buffer.get_memory(tid));
 
       const Set<T> op1 = H.next_level[a_i]->set;
-      //B = ops::set_intersect(&B,&op1,&A); //intersect the B
+      B = ops::set_intersect(&B,&op1,&A); //intersect the B
 
-      op1.foreach_index([&](uint32_t b_d, uint32_t b_i){ //Peel off B attributes
-        (void) b_d;
+      B.foreach_index([&](uint32_t b_i){ //Peel off B attributes
         const TrieBlock<T>* l2 = (TrieBlock<T>*)H.next_level[b_i];
-        if(l2 != NULL){
-          const size_t count = ops::set_intersect(&C,
-            &l2->set,
-            &op1)->cardinality;
-          num_triangles.update(tid,count);
-        }
+        const size_t count = ops::set_intersect(&C,
+          &l2->set,
+          &op1)->cardinality;
+        num_triangles.update(tid,count);
       });
     });
     
