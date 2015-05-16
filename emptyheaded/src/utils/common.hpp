@@ -1,4 +1,3 @@
-#define WRITE_VECTOR 1
 #ifndef COMMON_H
 #define COMMON_H
 
@@ -39,16 +38,11 @@
 #define PADDING 300
 #define MAX_THREADS 512
 
-//#define ATTRIBUTES
-#define WRITE_TABLE 0
-
-#define COMPRESSION 0
-#define PERFORMANCE 1
 #define VECTORIZE 1
 #define WRITE_VECTOR 1
+//#define NO_ALGORITHM
 
 // Enables/disables pruning
-#define PRUNING
 //#define NEW_BITSET
 
 // Enables/disables hybrid that always chooses U-Int

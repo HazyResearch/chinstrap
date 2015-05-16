@@ -770,13 +770,15 @@ namespace ops{
   inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in) {
     const Set<uinteger> *rare = (A_in->cardinality > B_in->cardinality) ? B_in:A_in;
     const Set<uinteger> *freq = (A_in->cardinality > B_in->cardinality) ? A_in:B_in;
-    const unsigned long min_size = 1;
 
     //return set_intersect_standard(C_in, rare, freq);
 
+    #ifndef NO_ALGORITHM
+    const unsigned long min_size = 1;
     if(std::max(A_in->cardinality,B_in->cardinality) / std::max(min_size, std::min(A_in->cardinality,B_in->cardinality)) > 32)
       return set_intersect_galloping(C_in, rare, freq);
     else
+    #endif
       return set_intersect_shuffle(C_in, rare, freq);
   }
 
@@ -833,19 +835,19 @@ namespace ops{
         count += _mm_popcnt_u64(tmp[0]);
 
         #if WRITE_VECTOR == 1
-        //index_write[i+1] = count;
+        index_write[i+1] = count;
         #endif
 
         count += _mm_popcnt_u64(tmp[1]);
 
         #if WRITE_VECTOR == 1
-        //index_write[i+2] = count;
+        index_write[i+2] = count;
         #endif
 
         count += _mm_popcnt_u64(tmp[2]);
 
         #if WRITE_VECTOR == 1
-        //index_write[i+3] = count;
+        index_write[i+3] = count;
         #endif
 
         count += _mm_popcnt_u64(tmp[3]);
@@ -858,6 +860,7 @@ namespace ops{
         const uint64_t result = A[i+a_start_index] & B[i+b_start_index];
         #if WRITE_VECTOR == 1
         C[i] = result;
+        index_write[i] = count;
         #endif
 
         count += _mm_popcnt_u64(result);
