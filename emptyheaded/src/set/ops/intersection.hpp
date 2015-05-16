@@ -812,7 +812,8 @@ namespace ops{
       size_t i = 0;
 
       #if WRITE_VECTOR == 1
-      uint64_t *c_index = (uint64_t*) C_in->data;
+      uint32_t * const index_write = (uint32_t*)(total_size+C);
+      uint64_t * const c_index = (uint64_t*) C_in->data;
       c_index[0] = start_index;
       #endif
 
@@ -825,12 +826,28 @@ namespace ops{
 
         #if WRITE_VECTOR == 1
         _mm256_storeu_ps((float*)(C + i), r);
+        index_write[i] = count;
         #endif
 
         _mm256_storeu_ps((float*)tmp, r);
         count += _mm_popcnt_u64(tmp[0]);
+
+        #if WRITE_VECTOR == 1
+        //index_write[i+1] = count;
+        #endif
+
         count += _mm_popcnt_u64(tmp[1]);
+
+        #if WRITE_VECTOR == 1
+        //index_write[i+2] = count;
+        #endif
+
         count += _mm_popcnt_u64(tmp[2]);
+
+        #if WRITE_VECTOR == 1
+        //index_write[i+3] = count;
+        #endif
+
         count += _mm_popcnt_u64(tmp[3]);
 
         i += 4;
@@ -839,14 +856,13 @@ namespace ops{
 
       for(; i < total_size; i++){
         const uint64_t result = A[i+a_start_index] & B[i+b_start_index];
-
         #if WRITE_VECTOR == 1
         C[i] = result;
         #endif
 
         count += _mm_popcnt_u64(result);
       }
-      C_in->number_of_bytes = total_size*sizeof(uint64_t)+sizeof(uint64_t);
+      C_in->number_of_bytes = total_size*(sizeof(uint64_t)+sizeof(uint32_t))+sizeof(uint64_t);
     }
     const double density = 0.0;//(count > 0) ? (double)count/(8*small_length) : 0.0;
 

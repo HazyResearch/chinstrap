@@ -60,8 +60,8 @@ struct undirected_triangle_counting: public application<T> {
     //rpcm.init_counter_states();
 
     //allocate memory
-    allocator::memory<uint8_t> B_buffer(R_ab->num_rows);
-    allocator::memory<uint8_t> C_buffer(R_ab->num_rows);
+    allocator::memory<uint8_t> B_buffer(R_ab->num_rows*sizeof(uint64_t));
+    allocator::memory<uint8_t> C_buffer(R_ab->num_rows*sizeof(uint64_t));
     par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
       return a + b;
     });
@@ -75,8 +75,8 @@ struct undirected_triangle_counting: public application<T> {
       Set<T> C(C_buffer.get_memory(tid));
 
       const Set<T> op1 = H.get_block(a_i)->set;
+
       B = ops::set_intersect(&B,&op1,&A); //intersect the B
-      
       B.foreach([&](uint32_t b_i){ //Peel off B attributes
         const TrieBlock<T>* l2 = H.get_block(b_i);
         const size_t count = ops::set_intersect(&C,
