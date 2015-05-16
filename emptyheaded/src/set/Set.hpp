@@ -96,6 +96,14 @@ class Set{
       type = in->type;
     }
 
+    void find(uint32_t key) const {
+      /*std::cout << number_of_bytes << std::endl;
+      std::cout << number_of_bytes << std::endl;*/
+      //std::cout << "---" << std::endl;
+      T::find(key,data,number_of_bytes,type);
+    }
+
+
     // Applies a function to each element in the set.
     //
     // Note: We use templates here to allow the compiler to inline the

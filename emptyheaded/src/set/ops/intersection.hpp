@@ -738,7 +738,7 @@ namespace ops{
       //[ copy out common elements
       #if WRITE_VECTOR == 1
       //std::cout << "mask: " << mask << std::endl;
-      __m128i p = _mm_shuffle_epi8(v_a, shuffle_mask32[mask]);
+      __m128i p = _mm_shuffle_epi8(v_a, masks::shuffle_mask32[mask]);
       _mm_storeu_si128((__m128i*)&C[count], p);
       //std::cout << "C[" << count << "]: " << C[count] << std::endl;
 

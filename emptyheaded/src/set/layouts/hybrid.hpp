@@ -16,6 +16,8 @@ class hybrid{
     static type::layout get_type(const uint32_t *data, const size_t length);
     static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
 
+    static long find(uint32_t key, const uint8_t *data_in, const size_t number_of_bytes, const type::layout t);
+
     template<typename F>
     static void foreach(
         F f,
@@ -196,5 +198,24 @@ inline size_t hybrid::par_foreach_index(
       break;
   }
 }
+
+static long find(uint32_t key, 
+  const uint8_t *data_in, 
+  const size_t number_of_bytes, 
+  const type::layout t){
+
+  switch(t){
+  case type::UINTEGER :
+    return uinteger::find(key,data_in,number_of_bytes,type::UINTEGER);
+    break;
+  case type::RANGE_BITSET :
+    return range_bitset::find(key,data_in,number_of_bytes,type::UINTEGER);
+    break;
+  default:
+    return -1;
+    break;
+  }
+}
+
 
 #endif

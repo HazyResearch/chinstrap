@@ -5,6 +5,7 @@ THIS CLASS IMPLEMENTS THE FUNCTIONS ASSOCIATED WITH THE range_bitset LAYOUT.
 */
 
 #include "utils/utils.hpp"
+#include "../ops/sse_masks.hpp"
 
 #define BITS_PER_WORD 64
 #define ADDRESS_BITS_PER_WORD 6
@@ -15,6 +16,8 @@ class range_bitset{
     static size_t word_index(const uint32_t bit_index);
     static bool is_set(const uint32_t index, const uint64_t *in_array, const uint64_t start_index);
     static void set(const uint32_t index, uint64_t *in_array, const uint64_t start_index);
+
+    static long find(uint32_t key, const uint8_t *data_in, const size_t number_of_bytes, const type::layout t);
 
     static type::layout get_type();
     static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
@@ -208,7 +211,7 @@ inline size_t range_bitset::par_foreach(
       const size_t cardinality,
       const size_t number_of_bytes,
       const type::layout t) {
-   (void) number_of_bytes; (void) t; (void) cardinality;
+   (void) t; (void) cardinality;
 
   if(number_of_bytes > 0){
     const size_t num_data_words = get_number_of_words(number_of_bytes);
@@ -239,7 +242,7 @@ inline size_t range_bitset::par_foreach_index(
       const size_t cardinality,
       const size_t number_of_bytes,
       const type::layout t) {
-   (void) number_of_bytes; (void) t; (void) cardinality;
+   (void) t; (void) cardinality;
 
   if(number_of_bytes > 0){
     const size_t num_data_words = get_number_of_words(number_of_bytes);
@@ -264,5 +267,26 @@ inline size_t range_bitset::par_foreach_index(
 
   return 1;
 }
+
+inline long range_bitset::find(uint32_t key, const uint8_t *A, const size_t number_of_bytes, const type::layout t){
+  (void) t;
+  if(number_of_bytes > 0){
+    const size_t num_data_words = get_number_of_words(number_of_bytes);
+    const uint64_t offset = ((uint64_t*)A)[0];
+    const uint64_t* A64 = (uint64_t*)(A+sizeof(uint64_t));
+    const uint32_t* A32_index = (uint32_t*)(A64+num_data_words);
+
+    size_t word = word_index(key);
+    if(word > offset && word < (offset+num_data_words)){
+      if(is_set(key,A64,offset)){
+        //figure out how many in word set before one we want, then add up index
+        const uint64_t masked_word = ((A64)[word-offset]) & (masks::find_mask[(key%BITS_PER_WORD)]);
+        return _mm_popcnt_u64(masked_word) + A32_index[word-offset];
+      }
+    }
+  }
+  return -1;
+}
+
 
 #endif

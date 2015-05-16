@@ -1,7 +1,7 @@
 #ifndef _SSE_MASKS_H_
 #define _SSE_MASKS_H_
 
-namespace ops{
+namespace masks{
   inline void print_sse_register(__m128i reg){
     std::cout << "reg[0]: " << _mm_extract_epi32(reg,0) << std::endl;
     std::cout << "reg[1]: " << _mm_extract_epi32(reg,1) << std::endl;
@@ -9,6 +9,16 @@ namespace ops{
     std::cout << "reg[3]: " << _mm_extract_epi32(reg,3) << std::endl << std::endl;   
   }
   
+  static uint64_t find_mask[64];
+  static inline void init_masks(){
+
+    find_mask[0] = 1;
+    for(size_t i = 1; i < 64; i++){
+      find_mask[i] = (1 << i) || find_mask[i-1];
+    }
+
+  }
+
   static __m128i shuffle_mask32[16] = {        
     _mm_set_epi8(15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0), //0
     _mm_set_epi8(15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0), //1
