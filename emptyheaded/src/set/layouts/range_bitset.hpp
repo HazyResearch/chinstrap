@@ -151,6 +151,7 @@ inline void range_bitset::foreach_index(
 
   if(number_of_bytes > 0){
     const size_t num_data_words = get_number_of_words(number_of_bytes);
+    const uint64_t offset = ((uint64_t*)A)[0];
     const uint64_t* A64_data = (uint64_t*)(A+sizeof(uint64_t));
     const uint32_t* A32_index = (uint32_t*)(A64_data+num_data_words);
 
@@ -160,7 +161,7 @@ inline void range_bitset::foreach_index(
       if(cur_word != 0) {
         for(size_t j = 0; j < BITS_PER_WORD; j++){
           if((cur_word >> j) % 2) {
-            f(index++);
+            f(index++,BITS_PER_WORD *(i+offset) + j);
           }
         }
       }
@@ -242,6 +243,7 @@ inline size_t range_bitset::par_foreach_index(
 
   if(number_of_bytes > 0){
     const size_t num_data_words = get_number_of_words(number_of_bytes);
+    const uint64_t offset = ((uint64_t*)A)[0];
     const uint64_t* A64 = (uint64_t*)(A+sizeof(uint64_t));
     const uint32_t* A32_index = (uint32_t*)(A64+num_data_words);
 
@@ -251,8 +253,9 @@ inline size_t range_bitset::par_foreach_index(
               uint32_t index = A32_index[i];
               if(cur_word != 0) {
                 for(size_t j = 0; j < BITS_PER_WORD; j++){
+                  const uint32_t curr_nb = BITS_PER_WORD*(i+offset) + j;
                   if((cur_word >> j) % 2) {
-                    f(tid,index++);
+                    f(tid,index++,curr_nb);
                   }
                 }
               }

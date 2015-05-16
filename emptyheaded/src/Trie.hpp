@@ -1,16 +1,10 @@
 #ifndef _TRIE_H_
 #define _TRIE_H_
 
-#include "set/ops.hpp"
+#include "TrieBlock.hpp"
 #include "Encoding.hpp"
 #include "tbb/parallel_sort.h"
 #include "tbb/task_scheduler_init.h"
-
-template<class T>
-struct TrieBlock{
-  Set<T> set;
-  TrieBlock<T>** next_level;
-};
 
 struct SortColumns{
   std::vector<Column<uint32_t>> *columns; 
@@ -125,8 +119,9 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
 
   //Build the head set.
   TrieBlock<T>* new_head = build_block<TrieBlock<T>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer.get_memory(0));
-  new_head->next_level = (TrieBlock<T>**)data_allocator.get_next(0,new_head->set.cardinality*sizeof(TrieBlock<T>*));
-  par::for_range(0,new_head->set.cardinality,100,[&](size_t tid, size_t i){
+  new_head->is_sparse = false;
+  new_head->next_level = (TrieBlock<T>**)data_allocator.get_next(0,num_rows*sizeof(TrieBlock<T>*));
+  par::for_range(0,num_rows,100,[&](size_t tid, size_t i){
     (void) tid;
     new_head->next_level[i] = NULL;
   });
@@ -134,9 +129,10 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
   size_t cur_level = 1;
   par::for_range(0,head_size,100,[&](size_t tid, size_t i){
     //some sort of recursion here
-    size_t start = ranges.get_memory(0)[i];
-    size_t end = ranges.get_memory(0)[i+1];
-    
+    const size_t start = ranges.get_memory(0)[i];
+    const size_t end = ranges.get_memory(0)[i+1];
+    const uint32_t data = set_data_buffer.get_memory(0)[i];    
+
     //std::cout << "s: " << start << " e: " << end << std::endl;
 
     while(cur_level < (num_levels-1)){
@@ -149,7 +145,7 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
     encode_tail(start,end,sb,&attr_in->at(cur_level),indicies);
 
     TrieBlock<T> *tail = build_block<TrieBlock<T>,T>(tid,&data_allocator,num_rows,(end-start),sb);
-    new_head->next_level[i] = (TrieBlock<T>*)tail;
+    new_head->set_block(i,data,tail);
     /*
     std::cout << "node: " << data << std::endl;
     new_head.get_block(data)->data.foreach([&](uint32_t d){

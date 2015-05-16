@@ -106,7 +106,7 @@ int main (int argc, char* argv[]) {
     std::cout << "LAYOUT: hybrid, # THREADS: " << NUM_THREADS << ", PATH: " << p  << std::endl;
     application<hybrid>* myapp = init_app<hybrid>();
     myapp->run(p);
-  } 
+  }
   /*
   else if(l == "block"){
     std::cout << "LAYOUT: block, # THREADS: " << NUM_THREADS << ", PATH: " << p  << std::endl;

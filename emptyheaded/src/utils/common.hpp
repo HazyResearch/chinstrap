@@ -28,7 +28,7 @@
 //static size_t BLOCK_SIZE = 128;
 //static double BITSET_THRESHOLD = 1.0 / 16.0;
 
-// Experts only! Proceed wih caution!
+// Experts only! Proceed with caution!
 #define ENABLE_PCM
 //#define ENABLE_PRINT_THREAD_TIMES
 //#define ENABLE_ATOMIC_UNION

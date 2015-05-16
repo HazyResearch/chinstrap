@@ -93,8 +93,9 @@ inline void uinteger::foreach_index(
     const type::layout t) {
  (void) number_of_bytes; (void) t; (void) data_in;
 
+  const uint32_t * const data = (uint32_t*) data_in;
  for(size_t i=0; i<cardinality;i++){
-  f(i);
+  f(i,data[i]);
  }
 }
 
@@ -108,7 +109,7 @@ inline void uinteger::foreach_until(
     const type::layout t) {
  (void) number_of_bytes; (void) t;
 
-  uint32_t *data = (uint32_t*) data_in;
+  const uint32_t * const data = (uint32_t*) data_in;
   for(size_t i=0; i<cardinality;i++){
     if(f(data[i]))
       break;
@@ -125,9 +126,9 @@ inline size_t uinteger::par_foreach(
       const type::layout t) {
    (void) number_of_bytes; (void) t;
 
-   uint32_t* data = (uint32_t*) data_in;
+   const uint32_t * const data = (uint32_t*) data_in;
    return par::for_range(0, cardinality, 128,
-     [&f, &data](size_t tid, size_t i) {
+     [&](size_t tid, size_t i) {
         f(tid, data[i]);
      });
 }
@@ -142,9 +143,10 @@ inline size_t uinteger::par_foreach_index(
       const type::layout t) {
    (void) number_of_bytes; (void) t; (void) data_in;
 
+   const uint32_t * const data = (uint32_t*) data_in;
    return par::for_range(0, cardinality, 128,
-     [&f](size_t tid, size_t i) {
-        f(tid, (uint32_t)i);
+     [&](size_t tid, size_t i) {
+        f(tid, (uint32_t)i, data[i]);
      });
 }
 

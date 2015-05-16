@@ -43,6 +43,7 @@ namespace ops{
   /**
    * Fast scalar scheme designed by N. Kurz.
    */
+
   inline size_t scalar(const uint32_t *A, const size_t lenA,
                 const uint32_t *B, const size_t lenB, uint32_t *out) {
       const uint32_t *const initout(out);
@@ -106,6 +107,7 @@ namespace ops{
   FINISH:
       return (out - initout);
   }
+
   /**
    * Intersections scheme designed by N. Kurz that works very
    * well when intersecting an array with another where the density
@@ -230,7 +232,6 @@ namespace ops{
 
     return C_in;  
   }
-
 
   /**
    * This intersection function is similar to v1, but is faster when
@@ -374,7 +375,6 @@ namespace ops{
     return C_in;
   }
 
-
   /**
    * This is the SIMD galloping function. This intersection function works well
    * when lenRare and lenFreq have vastly different values.
@@ -389,7 +389,6 @@ namespace ops{
    *
    * This function DOES NOT use assembly. It only relies on intrinsics.
    */
-
   inline Set<uinteger>* set_intersect_galloping(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
       const uint32_t *rare = (uint32_t*)A_in->data;
       const size_t lenRare = A_in->cardinality;
@@ -601,11 +600,6 @@ namespace ops{
       const __m128i v_a_1_32 = _mm_loadu_si128((__m128i*)&A[i_a]);
       const __m128i v_a_2_32 = _mm_loadu_si128((__m128i*)&A[i_a+(SHORTS_PER_REG/2)]);
 
-      /*std::cout << std::endl;
-      std::cout << "ORIGINAL DATA" << std::endl;
-      type::_mm128i_print(v_a_1_32);
-      type::_mm128i_print(v_a_2_32);*/
-
 
       //shuffle to std::get lower 16 bits only in one register
       const __m128i v_a_l1 = _mm_shuffle_epi8(v_a_1_32,_mm_set_epi8(uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x80),uint8_t(0x0D),uint8_t(0x0C),uint8_t(0x09),uint8_t(0x08),uint8_t(0x05),uint8_t(0x04),uint8_t(0x01),uint8_t(0x0)));
@@ -692,8 +686,8 @@ namespace ops{
 
     return C_in;
   }
-
-  inline Set<uinteger>* set_intersect_standard(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
+  
+  inline Set<uinteger>* set_intersect_shuffle(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
     uint32_t * const C = (uint32_t*) C_in->data; 
     const uint32_t * const A = (uint32_t*) A_in->data;
     const uint32_t * const B = (uint32_t*) B_in->data;
@@ -772,6 +766,7 @@ namespace ops{
 
     return C_in;  
   }
+
   inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in) {
     const Set<uinteger> *rare = (A_in->cardinality > B_in->cardinality) ? B_in:A_in;
     const Set<uinteger> *freq = (A_in->cardinality > B_in->cardinality) ? A_in:B_in;
@@ -782,7 +777,7 @@ namespace ops{
     if(std::max(A_in->cardinality,B_in->cardinality) / std::max(min_size, std::min(A_in->cardinality,B_in->cardinality)) > 32)
       return set_intersect_galloping(C_in, rare, freq);
     else
-      return set_intersect_standard(C_in, rare, freq);
+      return set_intersect_shuffle(C_in, rare, freq);
   }
 
   inline Set<range_bitset>* set_intersect(Set<range_bitset> *C_in, const Set<range_bitset> *A_in, const Set<range_bitset> *B_in){
