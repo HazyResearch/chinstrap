@@ -16,9 +16,7 @@ class block{
     static void set(const uint32_t index, uint64_t *in_array, const uint64_t start_index);
 
     static type::layout get_type();
-    static size_t build(uint8_t *r_in, const uint32_t *data, const size_t length);
-    static size_t build_flattened(uint8_t *r_in, const uint32_t *data, const size_t length);
-    static std::tuple<size_t,size_t,type::layout> get_flattened_data(const uint8_t *set_data, const size_t cardinality);
+    static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
 
     template<typename F>
     static void foreach(
@@ -48,7 +46,7 @@ inline type::layout block::get_type(){
   return type::BLOCK;
 }
 //Copies data from input array of ints to our set data r_in
-inline size_t block::build(uint8_t *R, const uint32_t *A, const size_t s_a){
+inline std::tuple<size_t,type::layout> block::build(uint8_t *R, const uint32_t *A, const size_t s_a){
   if(s_a > 0){
     size_t i = 0;
     uint32_t *uint_array = new uint32_t[s_a];
@@ -85,31 +83,11 @@ inline size_t block::build(uint8_t *R, const uint32_t *A, const size_t s_a){
     auto tup2 = block_bitset::build(R,bitset_array,bs_i);
     total_bytes_used += std::get<0>(tup2);
     std::cout << "Num uints: " << num_uint_bytes / sizeof(uint) << std::endl;
-    return total_bytes_used;
+    return std::make_pair(total_bytes_used,type::BLOCK);
   }
-  return 0;
-}
-//Nothing is different about build flattened here. The number of bytes
-//can be infered from the type. This gives us back a true CSR representation.
-inline size_t block::build_flattened(uint8_t *r_in, const uint32_t *data, const size_t length){
-  if(length > 0){
-    uint32_t *size_ptr = (uint32_t*) r_in;
-    size_t num_bytes = build(r_in+sizeof(uint32_t),data,length);
-    size_ptr[0] = (uint32_t)num_bytes;
-    return num_bytes+sizeof(uint32_t);
-  } else{
-    return 0;
-  }
+  return std::make_pair(0,type::BLOCK);
 }
 
-inline std::tuple<size_t,size_t,type::layout> block::get_flattened_data(const uint8_t *set_data, const size_t cardinality){
-  if(cardinality > 0){
-    const uint32_t *size_ptr = (uint32_t*) set_data;
-    return std::make_tuple(sizeof(uint32_t),(size_t)size_ptr[0],type::BLOCK);
-  } else{
-    return std::make_tuple(0,0,type::BLOCK);
-  }
-}
 
 //Iterates over set applying a lambda.
 template<typename F>

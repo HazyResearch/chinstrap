@@ -61,6 +61,19 @@ static size_t NUM_THREADS = 48;
 namespace common{
   static size_t bitset_length = 0;
   static double bitset_req = (1.0/256.0);
+
+  //HACK
+  static uint8_t **scratch_space = new uint8_t*[MAX_THREADS];
+  static uint8_t **scratch_space1 = new uint8_t*[MAX_THREADS];
+
+  static void alloc_scratch_space(size_t alloc_size, size_t num_threads){
+    for(size_t i = 0; i < num_threads; i++){
+      scratch_space[i] = new uint8_t[alloc_size];
+      scratch_space1[i] = new uint8_t[alloc_size];
+
+    }
+  }
+
 }
 
 namespace type{
