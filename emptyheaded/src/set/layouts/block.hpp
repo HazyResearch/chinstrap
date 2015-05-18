@@ -1,5 +1,5 @@
-#ifndef _BLOCKL_H_
-#define _BLOCKL_H_
+#ifndef _BLOCK_H_
+#define _BLOCK_H_
 /*
 THIS CLASS IMPLEMENTS THE FUNCTIONS ASSOCIATED WITH THE BITSET LAYOUT.
 */
@@ -9,7 +9,7 @@ THIS CLASS IMPLEMENTS THE FUNCTIONS ASSOCIATED WITH THE BITSET LAYOUT.
 #include "block_bitset.hpp"
 #include "uinteger.hpp"
 
-class blockl{
+class block{
   public:
     static size_t word_index(const uint32_t bit_index);
     static bool is_set(const uint32_t index, const uint64_t *in_array, const uint64_t start_index);
@@ -39,17 +39,16 @@ class blockl{
     template<typename F>
     static size_t par_foreach(
       F f,
-      const size_t num_threads,
       const uint8_t* A,
       const size_t cardinality,
       const size_t number_of_bytes,
       const type::layout t);
 };
-inline type::layout blockl::get_type(){
+inline type::layout block::get_type(){
   return type::BLOCK;
 }
 //Copies data from input array of ints to our set data r_in
-inline size_t blockl::build(uint8_t *R, const uint32_t *A, const size_t s_a){
+inline size_t block::build(uint8_t *R, const uint32_t *A, const size_t s_a){
   if(s_a > 0){
     size_t i = 0;
     uint32_t *uint_array = new uint32_t[s_a];
@@ -92,7 +91,7 @@ inline size_t blockl::build(uint8_t *R, const uint32_t *A, const size_t s_a){
 }
 //Nothing is different about build flattened here. The number of bytes
 //can be infered from the type. This gives us back a true CSR representation.
-inline size_t blockl::build_flattened(uint8_t *r_in, const uint32_t *data, const size_t length){
+inline size_t block::build_flattened(uint8_t *r_in, const uint32_t *data, const size_t length){
   if(length > 0){
     uint32_t *size_ptr = (uint32_t*) r_in;
     size_t num_bytes = build(r_in+sizeof(uint32_t),data,length);
@@ -103,7 +102,7 @@ inline size_t blockl::build_flattened(uint8_t *r_in, const uint32_t *data, const
   }
 }
 
-inline std::tuple<size_t,size_t,type::layout> blockl::get_flattened_data(const uint8_t *set_data, const size_t cardinality){
+inline std::tuple<size_t,size_t,type::layout> block::get_flattened_data(const uint8_t *set_data, const size_t cardinality){
   if(cardinality > 0){
     const uint32_t *size_ptr = (uint32_t*) set_data;
     return std::make_tuple(sizeof(uint32_t),(size_t)size_ptr[0],type::BLOCK);
@@ -114,7 +113,7 @@ inline std::tuple<size_t,size_t,type::layout> blockl::get_flattened_data(const u
 
 //Iterates over set applying a lambda.
 template<typename F>
-inline void blockl::foreach_until(
+inline void block::foreach_until(
     F f,
     const uint8_t *A,
     const size_t cardinality,
@@ -140,7 +139,7 @@ inline void blockl::foreach_until(
 
 //Iterates over set applying a lambda.
 template<typename F>
-inline void blockl::foreach(
+inline void block::foreach(
     F f,
     const uint8_t * const A,
     const size_t cardinality,
@@ -162,9 +161,8 @@ inline void blockl::foreach(
 
 // Iterates over set applying a lambda in parallel.
 template<typename F>
-inline size_t blockl::par_foreach(
+inline size_t block::par_foreach(
       F f,
-      const size_t num_threads,
       const uint8_t* A,
       const size_t cardinality,
       const size_t number_of_bytes,

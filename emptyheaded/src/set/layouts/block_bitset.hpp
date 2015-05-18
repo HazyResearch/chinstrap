@@ -19,8 +19,7 @@ class block_bitset{
     static void set(const uint32_t index, uint64_t *in_array, const uint64_t start_index);
 
     static type::layout get_type();
-    static size_t build(uint8_t *r_in, const uint32_t *data, const size_t length);
-    static size_t build_flattened(uint8_t *r_in, const uint32_t *data, const size_t length);
+    static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
     static std::tuple<size_t,size_t,type::layout> get_flattened_data(const uint8_t *set_data, const size_t cardinality);
 
     template<typename F>
@@ -42,7 +41,6 @@ class block_bitset{
     template<typename F>
     static size_t par_foreach(
       F f,
-      const size_t num_threads,
       const uint8_t* A,
       const size_t cardinality,
       const size_t number_of_bytes,
@@ -79,7 +77,7 @@ inline bool in_range(const uint32_t value, const size_t block_id){
         (value < ((block_id+1)*BLOCK_SIZE));
 }
 //Copies data from input array of ints to our set data r_in
-inline size_t block_bitset::build(uint8_t *R, const uint32_t *A, const size_t s_a){
+inline std::tuple<size_t,type::layout> block_bitset::build(uint8_t *R, const uint32_t *A, const size_t s_a){
   if(s_a > 0){
     size_t i = 0;
     uint32_t *R32 = (uint32_t*)R;
@@ -105,9 +103,9 @@ inline size_t block_bitset::build(uint8_t *R, const uint32_t *A, const size_t s_
       pack_block(&R64[physical_block_id*words_per_block],&A[block_start_index],(i-block_start_index));
       physical_block_id++;
     }
-    return sizeof(uint32_t)*num_blocks+(BLOCK_SIZE/8)*num_blocks;
+    return std::make_pair(sizeof(uint32_t)*num_blocks+(BLOCK_SIZE/8)*num_blocks,type::BLOCK_BITSET);
   }
-  return 0;
+  return std::make_pair(0,type::BLOCK_BITSET);
 }
 
 //Iterates over set applying a lambda.
@@ -118,8 +116,9 @@ inline void block_bitset::foreach_until(
     const size_t cardinality,
     const size_t number_of_bytes,
     const type::layout type) {
-  (void) cardinality; (void) type;
-
+  (void) cardinality; (void) type; (void) f; (void) number_of_bytes; (void) A;
+  std::cout << "ERROR: NOT IMPLEMENTED" << std::endl;
+  abort();
 }
 
 template<typename F>
@@ -163,13 +162,13 @@ inline void block_bitset::foreach(
 template<typename F>
 inline size_t block_bitset::par_foreach(
       F f,
-      const size_t num_threads,
       const uint8_t* A,
       const size_t cardinality,
       const size_t number_of_bytes,
       const type::layout t) {
-   (void) number_of_bytes; (void) t; (void) cardinality;
-
+  (void) cardinality; (void) t; (void) f; (void) number_of_bytes; (void) A;
+  std::cout << "ERROR: NOT IMPLEMENTED" << std::endl;
+  abort();
 }
 
 #endif
