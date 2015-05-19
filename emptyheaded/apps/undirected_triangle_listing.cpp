@@ -69,7 +69,7 @@ struct undirected_triangle_counting: public application<T> {
     const TrieBlock<T> H = *TR_ab->head;
     const Set<T> A = H.set;
     TrieBlock<T>* a_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T>))) TrieBlock<T>(H);
-    a_block->init_pointers(0,&output_buffer,TR_ab->ranges->at(0)); //you were overwriting 
+    a_block->init_pointers(0,&output_buffer,TR_ab->ranges->at(0)); 
 
     par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
       return a + b;
