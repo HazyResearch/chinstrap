@@ -97,7 +97,6 @@ inline void uinteger::foreach_index(
  (void) number_of_bytes; (void) t; (void) data_in;
 
   const uint32_t * const data = (uint32_t*) data_in;
-  std::cout << "cardinality: " << cardinality << std::endl;
   for(size_t i=0; i<cardinality;i++){
     f(i,data[i]);
   }

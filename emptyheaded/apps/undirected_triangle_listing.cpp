@@ -91,7 +91,6 @@ struct undirected_triangle_counting: public application<T> {
       a_block->set_block(a_d,a_d,b_block); //FIXME: THE OUTPUT OF A is not necessarily dense
 
       //Next attribute to peel off
-      std::cout << "B card: " << b_block->set.cardinality << std::endl;
       b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d){ // Peel off B attributes
         const TrieBlock<T>* matching_c = H.get_block(b_d);
         // Placement new!!

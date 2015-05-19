@@ -30,7 +30,6 @@ struct TrieBlock{
   void set_block(uint32_t index, uint32_t data, TrieBlock<T> *block){
     if(!is_sparse){
       (void) index;
-      std::cout << block->set.cardinality;
       next_level[data] = block;
     } else{
       (void) data;
