@@ -276,8 +276,8 @@ inline long range_bitset::find(uint32_t key, const uint8_t *A, const size_t numb
     const uint64_t* A64 = (uint64_t*)(A+sizeof(uint64_t));
     const uint32_t* A32_index = (uint32_t*)(A64+num_data_words);
 
-    size_t word = word_index(key);
-    if(word > offset && word < (offset+num_data_words)){
+    const size_t word = word_index(key);
+    if(word >= offset && word < (offset+num_data_words)){
       if(is_set(key,A64,offset)){
         //figure out how many in word set before one we want, then add up index
         const uint64_t masked_word = ((A64)[word-offset]) & (masks::find_mask[(key%BITS_PER_WORD)]);

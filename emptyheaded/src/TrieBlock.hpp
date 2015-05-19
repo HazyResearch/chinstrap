@@ -42,9 +42,9 @@ struct TrieBlock{
       return next_level[data];
     } else{
       //something like get the index from the set then move forward.
-      long index = set.find(data);
-      assert(index != -1);
-      return next_level[index];
+      const long index = set.find(data);
+      if(index != -1)
+        return next_level[index];
     }
     return NULL;
   }

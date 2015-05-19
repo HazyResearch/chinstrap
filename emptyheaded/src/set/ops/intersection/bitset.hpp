@@ -146,7 +146,7 @@ namespace ops{
       i += 256;
     }
     #endif
-  
+
     //64 bits per word
     for(; i < b_size; i+=64){
       const size_t vector_index = (i/64);

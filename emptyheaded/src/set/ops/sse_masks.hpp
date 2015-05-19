@@ -12,9 +12,9 @@ namespace masks{
   static uint64_t find_mask[64];
   static inline void init_masks(){
 
-    find_mask[0] = 1;
+    find_mask[0] = 0;
     for(size_t i = 1; i < 64; i++){
-      find_mask[i] = (1 << i) || find_mask[i-1];
+      find_mask[i] = ((uint64_t)1 << (i-(uint64_t)1)) | find_mask[i-1];
     }
 
   }

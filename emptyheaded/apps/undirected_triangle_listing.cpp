@@ -77,10 +77,9 @@ struct undirected_triangle_counting: public application<T> {
 
     A.par_foreach([&](size_t tid, uint32_t a_d){
       const Set<T> matching_b = H.get_block(a_d)->set;
-
       //build output B block
       TrieBlock<T>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
-      const size_t alloc_size = sizeof(uint64_t)*R_ab->num_rows;
+      const size_t alloc_size = sizeof(uint64_t)*TR_ab->ranges->at(0)*2;
 
       Set<T> B(output_buffer.get_next(tid, alloc_size));
       b_block->set = ops::set_intersect(&B, &matching_b, &A); //intersect the B
@@ -88,7 +87,7 @@ struct undirected_triangle_counting: public application<T> {
       b_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1)); //find out the range of level 1
 
       //Set a block pointer to new b block
-      a_block->set_block(a_d,a_d,b_block); //FIXME: THE OUTPUT OF A is not necessarily dense
+      a_block->set_block(a_d,a_d,b_block); 
 
       //Next attribute to peel off
       b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d){ // Peel off B attributes
@@ -102,6 +101,7 @@ struct undirected_triangle_counting: public application<T> {
 
         output_buffer.roll_back(tid, alloc_size - c_block->set.number_of_bytes);
         b_block->set_block(b_i,b_d,c_block);
+        //assert(count == b_block->get_block(b_d)->set.cardinality);
       });
     });
 
