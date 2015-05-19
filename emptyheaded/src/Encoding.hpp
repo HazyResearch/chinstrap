@@ -24,6 +24,7 @@ struct Encoding{
   std::vector<Column<uint32_t>> encoded;
   std::unordered_map<T,uint32_t> value_to_key;
   std::vector<T> key_to_value;
+  size_t num_distinct;
 
   Encoding(std::vector<Column<T>> *attr_in){
     const size_t num_attributes = attr_in->size();
@@ -90,6 +91,8 @@ struct Encoding{
       encoded.push_back(output);
     }
     //debug::stop_clock("parallel",a);
+
+    num_distinct = key_to_value.size();
   };
 };
 

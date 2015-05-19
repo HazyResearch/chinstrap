@@ -1,3 +1,5 @@
+#ifndef UINTEGER_H
+#define UINTEGER_H
 /*
 
 THIS CLASS IMPLEMENTS THE FUNCTIONS ASSOCIATED WITH AN UNCOMPRESSED SET LAYOUT.
@@ -12,8 +14,19 @@ class uinteger{
     static type::layout get_type();
     static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
 
+    static long find(uint32_t key, const uint8_t *data_in, const size_t number_of_bytes, const type::layout t);
+    static long binary_search(const uint32_t * const data, size_t first, size_t last, uint32_t search_key);
+
     template<typename F>
     static void foreach(
+        F f,
+        const uint8_t *data_in,
+        const size_t cardinality,
+        const size_t number_of_bytes,
+        const type::layout t);
+
+    template<typename F>
+    static void foreach_index(
         F f,
         const uint8_t *data_in,
         const size_t cardinality,
@@ -30,6 +43,14 @@ class uinteger{
 
     template<typename F>
     static size_t par_foreach(
+      F f,
+      const uint8_t *data_in,
+      const size_t cardinality,
+      const size_t number_of_bytes,
+      const type::layout t);
+
+    template<typename F>
+    static size_t par_foreach_index(
       F f,
       const uint8_t *data_in,
       const size_t cardinality,
@@ -67,6 +88,22 @@ inline void uinteger::foreach(
 
 //Iterates over set applying a lambda.
 template<typename F>
+inline void uinteger::foreach_index(
+    F f,
+    const uint8_t *data_in,
+    const size_t cardinality,
+    const size_t number_of_bytes,
+    const type::layout t) {
+ (void) number_of_bytes; (void) t; (void) data_in;
+
+  const uint32_t * const data = (uint32_t*) data_in;
+  for(size_t i=0; i<cardinality;i++){
+    f(i,data[i]);
+  }
+}
+
+//Iterates over set applying a lambda.
+template<typename F>
 inline void uinteger::foreach_until(
     F f,
     const uint8_t *data_in,
@@ -75,7 +112,7 @@ inline void uinteger::foreach_until(
     const type::layout t) {
  (void) number_of_bytes; (void) t;
 
-  uint32_t *data = (uint32_t*) data_in;
+  const uint32_t * const data = (uint32_t*) data_in;
   for(size_t i=0; i<cardinality;i++){
     if(f(data[i]))
       break;
@@ -92,9 +129,58 @@ inline size_t uinteger::par_foreach(
       const type::layout t) {
    (void) number_of_bytes; (void) t;
 
-   uint32_t* data = (uint32_t*) data_in;
+   const uint32_t * const data = (uint32_t*) data_in;
    return par::for_range(0, cardinality, 128,
-     [&f, &data](size_t tid, size_t i) {
+     [&](size_t tid, size_t i) {
         f(tid, data[i]);
      });
 }
+
+// Iterates over set applying a lambda in parallel.
+template<typename F>
+inline size_t uinteger::par_foreach_index(
+      F f,
+      const uint8_t *data_in,
+      const size_t cardinality,
+      const size_t number_of_bytes,
+      const type::layout t) {
+   (void) number_of_bytes; (void) t; (void) data_in;
+
+   const uint32_t * const data = (uint32_t*) data_in;
+   return par::for_range(0, cardinality, 128,
+     [&](size_t tid, size_t i) {
+        f(tid, (uint32_t)i, data[i]);
+     });
+}
+
+long uinteger::binary_search(const uint32_t * const data, size_t first, size_t last, uint32_t search_key){
+ long index;
+
+
+ if (first > last)
+  index = -1;
+ 
+ else{
+  size_t mid = (last+first)/2;
+  if (search_key == data[mid])
+    index = mid;
+  else{
+    if (search_key < data[mid])
+      index = binary_search(data,first, mid-1,search_key);
+    else
+      index = binary_search(data,mid+1,last,search_key);
+  }
+ } // end if
+ return index;
+}// end binarySearch
+
+inline long uinteger::find(uint32_t key, 
+  const uint8_t *data_in, 
+  const size_t number_of_bytes,
+  const type::layout t){
+  (void) t;
+
+  return binary_search((uint32_t*)data_in,0,(number_of_bytes/sizeof(uint32_t)),key);
+}
+
+#endif

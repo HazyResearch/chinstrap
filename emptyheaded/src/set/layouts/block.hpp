@@ -1,20 +1,21 @@
-#ifndef _BITSET_H_
-#define _BITSET_H_
+#ifndef _BLOCK_H_
+#define _BLOCK_H_
 /*
 THIS CLASS IMPLEMENTS THE FUNCTIONS ASSOCIATED WITH THE BITSET LAYOUT.
 */
 
 #include "utils/utils.hpp"
 
-#define BITS_PER_WORD 64
-#define ADDRESS_BITS_PER_WORD 6
-#define BYTES_PER_WORD 8
+#include "block_bitset.hpp"
+#include "uinteger.hpp"
 
-class bitset{
+class block{
   public:
     static size_t word_index(const uint32_t bit_index);
     static bool is_set(const uint32_t index, const uint64_t *in_array, const uint64_t start_index);
     static void set(const uint32_t index, uint64_t *in_array, const uint64_t start_index);
+
+    static long find(uint32_t key, const uint8_t *data_in, const size_t number_of_bytes,const type::layout t);
 
     static type::layout get_type();
     static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
@@ -36,6 +37,15 @@ class bitset{
         const type::layout t);
 
     template<typename F>
+    static void foreach_index(
+        F f,
+        const uint8_t *data_in,
+        const size_t cardinality,
+        const size_t number_of_bytes,
+        const type::layout t);
+
+
+    template<typename F>
     static size_t par_foreach(
       F f,
       const uint8_t* A,
@@ -43,56 +53,56 @@ class bitset{
       const size_t number_of_bytes,
       const type::layout t);
 };
-//compute word of data
-inline size_t bitset::word_index(const uint32_t bit_index){
-  return bit_index >> ADDRESS_BITS_PER_WORD;
-}
-//check if a bit is set
-inline bool bitset::is_set(const uint32_t index, const uint64_t * const in_array, const uint64_t start_index){
-  return (in_array)[word_index(index)-start_index] & ((uint64_t) 1 << (index%BITS_PER_WORD));
-}
-//check if a bit is set
-inline void bitset::set(const uint32_t index, uint64_t * const in_array, const uint64_t start_index){
-  *(in_array + ((index >> ADDRESS_BITS_PER_WORD)-start_index)) |= ((uint64_t)1 << (index & 0x3F));
-}
-inline type::layout bitset::get_type(){
-  return type::BITSET;
+inline type::layout block::get_type(){
+  return type::BLOCK;
 }
 //Copies data from input array of ints to our set data r_in
-inline std::tuple<size_t,type::layout> bitset::build(uint8_t *R, const uint32_t *A, const size_t s_a){
+inline std::tuple<size_t,type::layout> block::build(uint8_t *R, const uint32_t *A, const size_t s_a){
   if(s_a > 0){
-    const uint64_t offset = word_index(A[0]);
-    ((uint64_t*)R)[0] = offset; 
-
-    uint64_t* R64 = (uint64_t*)(R+sizeof(uint64_t));
-    size_t word = word_index(A[0]);
     size_t i = 0;
-    size_t num_words_to_clear = word_index(A[s_a-1])-offset;
-    memset(R64,(uint8_t)0,num_words_to_clear*sizeof(uint64_t));
+    uint32_t *uint_array = new uint32_t[s_a];
+    size_t uint_i = 0;
+    uint32_t *bitset_array = new uint32_t[s_a];
+    size_t bs_i = 0;
 
     while(i < s_a){
-      uint32_t cur = A[i];
-      word = word_index(cur);
-      uint64_t set_value = (uint64_t) 1 << (cur % BITS_PER_WORD);
-      bool same_word = true;
-      ++i;
-      while(i<s_a && same_word){
-        if(word_index(A[i])==word){
-          cur = A[i];
-          set_value |= ((uint64_t) 1 << (cur%BITS_PER_WORD));
-          ++i;
-        } else same_word = false;
+      const size_t block_id = A[i] / BLOCK_SIZE;
+      const size_t block_start_index = i;
+      while(i < s_a && in_range(A[i],block_id)) {
+        i++;
       }
-      R64[word-offset] = set_value;
+
+      double density = ((i-block_start_index) < 2) ? 0.0:(double)(i-block_start_index)/BLOCK_SIZE;
+
+      if(density > BITSET_THRESHOLD){
+        for(size_t j = block_start_index; j < i; j++){
+          bitset_array[bs_i++] = A[j];
+        }
+      } else{
+        for(size_t j = block_start_index; j < i; j++){
+          uint_array[uint_i++] = A[j];
+        }
+      }
     }
-    const size_t num_bytes = ((word-offset+1) * BYTES_PER_WORD) + sizeof(uint64_t);
-    return std::make_pair(num_bytes,type::BITSET);
+    size_t total_bytes_used = 0;
+    auto tup = uinteger::build(R+sizeof(size_t),uint_array,uint_i);
+    const size_t num_uint_bytes = std::get<0>(tup);
+    ((size_t*)R)[0] = num_uint_bytes;
+    total_bytes_used += (sizeof(size_t)+num_uint_bytes);
+    R += total_bytes_used;
+
+    auto tup2 = block_bitset::build(R,bitset_array,bs_i);
+    total_bytes_used += std::get<0>(tup2);
+    std::cout << "Num uints: " << num_uint_bytes / sizeof(uint) << std::endl;
+    return std::make_pair(total_bytes_used,type::BLOCK);
   }
-  return std::make_pair(0,type::BITSET);
+  return std::make_pair(0,type::BLOCK);
 }
+
+
 //Iterates over set applying a lambda.
 template<typename F>
-inline void bitset::foreach_until(
+inline void block::foreach_until(
     F f,
     const uint8_t *A,
     const size_t cardinality,
@@ -118,7 +128,7 @@ inline void bitset::foreach_until(
 
 //Iterates over set applying a lambda.
 template<typename F>
-inline void bitset::foreach(
+inline void block::foreach(
     F f,
     const uint8_t * const A,
     const size_t cardinality,
@@ -127,27 +137,20 @@ inline void bitset::foreach(
   (void) cardinality; (void) type;
 
   if(number_of_bytes > 0){
-    const size_t num_data_words = ((number_of_bytes-sizeof(uint64_t))/sizeof(uint64_t));
-    const uint64_t offset = ((uint64_t*)A)[0];
-    const uint64_t* A64 = (uint64_t*)(A+sizeof(uint64_t));
+    const size_t num_uint_bytes = ((size_t*)A)[0];
+    const uint8_t * const uinteger_data = A+sizeof(size_t);
+    const uint8_t * const new_bs_data = A+sizeof(size_t)+num_uint_bytes;
+    const size_t num_bs_bytes = number_of_bytes-(sizeof(size_t)+num_uint_bytes);
+    const size_t uint_card = num_uint_bytes/sizeof(uint32_t);
 
-    for(size_t i = 0; i < num_data_words; i++){
-      const uint64_t cur_word = *A64;
-      if(cur_word != 0) {
-        for(size_t j = 0; j < BITS_PER_WORD; j++){
-          if((cur_word >> j) % 2) {
-            f(BITS_PER_WORD *(i+offset) + j);
-          }
-        }
-      }
-      A64++;
-    }
+    uinteger::foreach(f,uinteger_data,uint_card,num_uint_bytes,type::UINTEGER);
+    block_bitset::foreach(f,new_bs_data,cardinality-uint_card,num_bs_bytes,type::BLOCK_BITSET);
   }
 }
 
 // Iterates over set applying a lambda in parallel.
 template<typename F>
-inline size_t bitset::par_foreach(
+inline size_t block::par_foreach(
       F f,
       const uint8_t* A,
       const size_t cardinality,
@@ -174,6 +177,27 @@ inline size_t bitset::par_foreach(
   }
 
   return 1;
+}
+
+template<typename F>
+inline void block::foreach_index(
+  F f,
+  const uint8_t *data_in,
+  const size_t cardinality,
+  const size_t number_of_bytes,
+  const type::layout t){
+  (void) cardinality; (void) data_in; (void) number_of_bytes; (void) t;
+
+  abort();
+}
+
+
+inline long block::find(uint32_t key, 
+  const uint8_t *data_in, 
+  const size_t number_of_bytes,
+  const type::layout t){
+  (void) data_in; (void) number_of_bytes; (void) t; (void) key;
+  return -1;
 }
 
 #endif

@@ -1,7 +1,7 @@
 #ifndef _TRIE_H_
 #define _TRIE_H_
 
-#include "Block.hpp"
+#include "TrieBlock.hpp"
 #include "Encoding.hpp"
 #include "tbb/parallel_sort.h"
 #include "tbb/task_scheduler_init.h"
@@ -23,14 +23,16 @@ struct SortColumns{
 
 template<class T>
 struct Trie{
-  Head<T> *head;
+  std::vector<size_t> *ranges; //indexed by level
+  TrieBlock<T> *head;
 
-  Trie<T>(Head<T> *head_in){
+  Trie<T>(TrieBlock<T> *head_in, std::vector<size_t> *ranges_in){
     head = head_in;
+    ranges = ranges_in;
   };
 
   template<typename F>
-  static Trie<T>* build(std::vector<Column<uint32_t>> *attr_in, F f);
+  static Trie<T>* build(std::vector<Column<uint32_t>> *attr_in, std::vector<size_t> *ranges_in, F f);
 };
 
 size_t produce_ranges(size_t start, size_t end, 
@@ -82,15 +84,15 @@ B* build_block(const size_t tid, allocator::memory<uint8_t> *data_allocator,
   B *block = (B*)data_allocator->get_next(tid,sizeof(B),BYTES_PER_CACHELINE);
   const size_t set_alloc_size =  max_set_size*sizeof(uint64_t)+100;
   uint8_t* set_data_in = data_allocator->get_next(tid,set_alloc_size,BYTES_PER_REG);
-  block->data = Set<T>::from_array(set_data_in,set_data_buffer,set_size);
+  block->set = Set<T>::from_array(set_data_in,set_data_buffer,set_size);
     
-  assert(set_alloc_size > block->data.number_of_bytes);
-  data_allocator->roll_back(tid,set_alloc_size-block->data.number_of_bytes);
+  assert(set_alloc_size > block->set.number_of_bytes);
+  data_allocator->roll_back(tid,set_alloc_size-block->set.number_of_bytes);
   return block;
 }
 
 template<class T> template <typename F>
-inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
+inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, std::vector<size_t> *ranges_in, F f){
   const size_t num_levels = attr_in->size();
   const size_t num_rows = attr_in->at(0).size();
 
@@ -102,7 +104,7 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
   tbb::parallel_sort(indicies,iterator,SortColumns(attr_in));
 
   //Where all real data goes
-  allocator::memory<uint8_t> data_allocator((num_rows*num_levels*sizeof(uint64_t)*sizeof(Block<T>))/NUM_THREADS);
+  allocator::memory<uint8_t> data_allocator((num_rows*num_levels*sizeof(uint64_t)*sizeof(TrieBlock<T>))/NUM_THREADS);
   //always just need two buffers(that swap)
   allocator::memory<size_t> ranges(num_rows_post_filter);
   allocator::memory<size_t> next_ranges(num_rows_post_filter);
@@ -118,20 +120,21 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
     &attr_in->at(0));
 
   //Build the head set.
-  Head<T>* new_head = build_block<Head<T>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer.get_memory(0));
-  new_head->map = (Block<T>**)data_allocator.get_next(0,num_rows*sizeof(Block<T>*));
+  TrieBlock<T>* new_head = build_block<TrieBlock<T>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer.get_memory(0));
+  new_head->is_sparse = false;
+  new_head->next_level = (TrieBlock<T>**)data_allocator.get_next(0,num_rows*sizeof(TrieBlock<T>*));
   par::for_range(0,num_rows,100,[&](size_t tid, size_t i){
     (void) tid;
-    new_head->map[i] = NULL;
+    new_head->next_level[i] = NULL;
   });
 
   size_t cur_level = 1;
   par::for_range(0,head_size,100,[&](size_t tid, size_t i){
     //some sort of recursion here
-    size_t start = ranges.get_memory(0)[i];
-    size_t end = ranges.get_memory(0)[i+1];
-    uint32_t data = set_data_buffer.get_memory(0)[i];
-    
+    const size_t start = ranges.get_memory(0)[i];
+    const size_t end = ranges.get_memory(0)[i+1];
+    const uint32_t data = set_data_buffer.get_memory(0)[i];    
+
     //std::cout << "s: " << start << " e: " << end << std::endl;
 
     while(cur_level < (num_levels-1)){
@@ -143,10 +146,8 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
     uint32_t *sb = new_set_data_buffer.get_memory(tid);
     encode_tail(start,end,sb,&attr_in->at(cur_level),indicies);
 
-    Tail<T> *tail = build_block<Tail<T>,T>(tid,&data_allocator,num_rows,(end-start),sb);
-    new_head->set_block(data,(Block<T>*)tail);
-    
-    
+    TrieBlock<T> *tail = build_block<TrieBlock<T>,T>(tid,&data_allocator,num_rows,(end-start),sb);
+    new_head->set_block(i,data,tail);
     /*
     std::cout << "node: " << data << std::endl;
     new_head.get_block(data)->data.foreach([&](uint32_t d){
@@ -165,6 +166,6 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
   //should be a 1-1 between pointers in block and next ranges
   //also a 1-1 between blocks and numbers of next ranges
 
-  return new Trie(new_head);
+  return new Trie(new_head,ranges_in);
 }
 #endif

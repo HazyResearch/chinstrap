@@ -1,4 +1,3 @@
-#define WRITE_VECTOR 1
 #ifndef COMMON_H
 #define COMMON_H
 
@@ -28,8 +27,8 @@
 //static size_t BLOCK_SIZE = 128;
 //static double BITSET_THRESHOLD = 1.0 / 16.0;
 
-// Experts only! Proceed wih caution!
-//#define ENABLE_PCM
+// Experts only! Proceed with caution!
+#define ENABLE_PCM
 //#define ENABLE_PRINT_THREAD_TIMES
 //#define ENABLE_ATOMIC_UNION
 
@@ -39,16 +38,11 @@
 #define PADDING 300
 #define MAX_THREADS 512
 
-//#define ATTRIBUTES
-#define WRITE_TABLE 0
-
-#define COMPRESSION 0
-#define PERFORMANCE 1
 #define VECTORIZE 1
 #define WRITE_VECTOR 1
+//#define NO_ALGORITHM
 
 // Enables/disables pruning
-#define PRUNING
 //#define NEW_BITSET
 
 // Enables/disables hybrid that always chooses U-Int
@@ -67,6 +61,19 @@ static size_t NUM_THREADS = 48;
 namespace common{
   static size_t bitset_length = 0;
   static double bitset_req = (1.0/256.0);
+
+  //HACK
+  static uint8_t **scratch_space = new uint8_t*[MAX_THREADS];
+  static uint8_t **scratch_space1 = new uint8_t*[MAX_THREADS];
+
+  static void alloc_scratch_space(size_t alloc_size, size_t num_threads){
+    for(size_t i = 0; i < num_threads; i++){
+      scratch_space[i] = new uint8_t[alloc_size];
+      scratch_space1[i] = new uint8_t[alloc_size];
+
+    }
+  }
+
 }
 
 namespace type{
@@ -84,15 +91,11 @@ namespace type{
   };
 
   enum layout: uint8_t {
-    BITSET = 0,
-    PSHORT = 1,
-    UINTEGER = 2,
-    BITPACKED = 3,
-    VARIANT = 4,
-    HYBRID = 5,
-    KUNLE = 6,
-    BITSET_NEW = 7,
-    NEW_TYPE = 8
+    RANGE_BITSET = 0,
+    UINTEGER = 1,
+    HYBRID = 2,
+    BLOCK_BITSET = 3,
+    BLOCK = 4
   };
 
 }

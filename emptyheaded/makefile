@@ -1,11 +1,11 @@
 # Uncomment the following line to compile without PCM support
-#INTEL_PCM_HOME=/afs/cs.stanford.edu/u/noetzli/IntelPerformanceCounterMonitorV2.7
+INTEL_PCM_HOME=/dfs/scratch0/caberger/IntelPerformanceCounterMonitorV2.8
 
 CXX ?= g++-4.9
 #CXX = /dfs/scratch0/noetzli/downloads/tmp/cilkplus-install/bin/g++ -Wcast-align
 #override CXX = g++
-#override CXX = clang++
-override CXXFLAGS += -ltbb -lpthread -mavx -std=c++0x -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
+override CXX = clang++
+override CXXFLAGS += -mavx -std=c++0x -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
 
 INCLUDE_DIRS=-Isrc
 OBJDIR=build
@@ -32,7 +32,8 @@ TESTS=$(TESTS_SOURCES:.cpp=)
 APPS_EXES=$(APPS:%=$(EXEDIR)/%)
 TOOLS_EXES=$(TOOLS:%=$(EXEDIR)/%)
 TESTS_EXES=$(TESTS:%=$(EXEDIR)/%)
-LIBS=
+
+LIBS=-ltbb -lpthread
 
 all: $(APPS_EXES) $(TOOLS_EXES) $(SERVER_EXES)
 
@@ -46,7 +47,7 @@ $(APPS_EXES): $(OBJECTS) $(APP_SOURCES) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=apps%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
 
 $(TOOLS_EXES): $(OBJECTS) $(EXEDIR)
-	$(CXX) $(CXXFLAGS) $(@:bin%=tools%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
+	$(CXX) $(CXXFLAGS) -m32 $(@:bin%=tools%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
 
 $(GENERATED_EXES): $(OBJECTS) $(EXEDIR)
 

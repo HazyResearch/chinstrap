@@ -45,6 +45,9 @@ namespace allocator{
     inline void roll_back(size_t num){
       cur -= sizeof(T)*num;
     }
+    inline void adjust(long num){
+      cur += long(sizeof(T))*num;
+    }
     inline void deallocate(){
       free(ptr);
     }
@@ -110,6 +113,9 @@ namespace allocator{
     }
     inline void roll_back(size_t tid, size_t num){
       elements.at(tid).at(indicies.at(tid)).roll_back(num);
+    }
+    inline void adjust(size_t tid, long num){
+      elements.at(tid).at(indicies.at(tid)).adjust(num);
     }
     inline void free(){
       for(size_t i = 0; i < NUM_THREADS; i++){

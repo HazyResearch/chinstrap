@@ -10,6 +10,7 @@ FOUND IN STATIC CLASSES IN THE LAYOUT FOLDER.
 */
 
 #include "layouts/hybrid.hpp"
+#include "layouts/block.hpp"
 
 template <class T>
 class Set{ 
@@ -24,6 +25,14 @@ class Set{
       number_of_bytes = 0;
       cardinality = 0;
     };
+
+    //All values passed in
+    Set(const Set &obj):
+      data(obj.data),
+      cardinality(obj.cardinality),
+      number_of_bytes(obj.number_of_bytes),
+      density(obj.density),
+      type(obj.type){}    
     //All values passed in
     Set(uint8_t *data_in, 
       size_t cardinality_in, 
@@ -95,6 +104,14 @@ class Set{
       type = in->type;
     }
 
+    long find(uint32_t key) const {
+      /*std::cout << number_of_bytes << std::endl;
+      std::cout << number_of_bytes << std::endl;*/
+      //std::cout << "---" << std::endl;
+      return T::find(key,data,number_of_bytes,type);
+    }
+
+
     // Applies a function to each element in the set.
     //
     // Note: We use templates here to allow the compiler to inline the
@@ -107,6 +124,14 @@ class Set{
       std::cout << number_of_bytes << std::endl;*/
       //std::cout << "---" << std::endl;
       T::foreach(f,data,cardinality,number_of_bytes,type);
+    }
+
+    template<typename F>
+    void foreach_index(F f) const {
+      /*std::cout << number_of_bytes << std::endl;
+      std::cout << number_of_bytes << std::endl;*/
+      //std::cout << "---" << std::endl;
+      T::foreach_index(f,data,cardinality,number_of_bytes,type);
     }
 
     // Applies a function to each element in the set until the function returns
@@ -124,6 +149,11 @@ class Set{
     template<typename F>
     size_t par_foreach(F f) const {
       return T::par_foreach(f, data, cardinality, number_of_bytes, type);
+    }
+
+    template<typename F>
+    size_t par_foreach_index(F f) const {
+      return T::par_foreach_index(f, data, cardinality, number_of_bytes, type);
     }
 
     Set<uinteger> decode(uint32_t *buffer);

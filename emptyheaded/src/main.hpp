@@ -90,6 +90,8 @@ std::pair<std::string,std::string> parse(int argc, char* argv[]) {
 
 #ifndef TEST
 int main (int argc, char* argv[]) {
+  masks::init_masks();
+
   std::tuple<std::string,std::string> tup_in = parse(argc,argv);
   std::string l = std::get<0>(tup_in);
   std::string p = std::get<1>(tup_in);
@@ -98,15 +100,22 @@ int main (int argc, char* argv[]) {
     std::cout << "LAYOUT: uinteger, # THREADS: " << NUM_THREADS << ", PATH: " << p << std::endl;
     application<uinteger>* myapp = init_app<uinteger>();
     myapp->run(p);
-  } else if(l == "bitset"){
-    std::cout << "LAYOUT: bitset, # THREADS: " << NUM_THREADS << ", PATH: " << p << std::endl;
-    application<bitset>* myapp = init_app<bitset>();
+  } else if(l == "range_bitset"){
+    std::cout << "LAYOUT: range_bitset, # THREADS: " << NUM_THREADS << ", PATH: " << p << std::endl;
+    application<range_bitset>* myapp = init_app<range_bitset>();
     myapp->run(p);
   } else if(l == "hybrid"){
     std::cout << "LAYOUT: hybrid, # THREADS: " << NUM_THREADS << ", PATH: " << p  << std::endl;
     application<hybrid>* myapp = init_app<hybrid>();
     myapp->run(p);
-  } else{
+  }
+  else if(l == "block"){
+    std::cout << "LAYOUT: block, # THREADS: " << NUM_THREADS << ", PATH: " << p  << std::endl;
+    application<block>* myapp = init_app<block>();
+    myapp->run(p);
+  } 
+  else{
+    std::cout << "No valid layout entered" << std::endl;
     abort ();
   }
   return 0;

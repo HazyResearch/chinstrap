@@ -42,9 +42,8 @@ struct undirected_triangle_counting: public application<T> {
     //encoding each level in the Trie should map to.
     
     auto bt = debug::start_clock();
-    std::vector<Column<uint32_t>> *ER_ab = new std::vector<Column<uint32_t>>();
     std::vector<size_t> *ranges_ab = new std::vector<size_t>();
-
+    std::vector<Column<uint32_t>> *ER_ab = new std::vector<Column<uint32_t>>();
     ER_ab->push_back(a_encoding->encoded.at(0)); //perform filter, selection
     ranges_ab->push_back(a_encoding->num_distinct);
     ER_ab->push_back(a_encoding->encoded.at(1));
@@ -57,49 +56,73 @@ struct undirected_triangle_counting: public application<T> {
     
     debug::stop_clock("Build",bt);
 
+
 //////////////////////////////////////////////////////////////////////
-    //Prints the relation    
+    //Prints the relation
     //R(a,b) join T(b,c) join S(a,c)
 
-    //rpcm.init_counter_states();
-
     //allocate memory
-    allocator::memory<uint8_t> B_buffer(R_ab->num_rows*sizeof(uint64_t));
-    allocator::memory<uint8_t> C_buffer(R_ab->num_rows*sizeof(uint64_t));
-    par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
-      return a + b;
-    });
+    allocator::memory<uint8_t> output_buffer(R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
 
     auto qt = debug::start_clock();
 
     const TrieBlock<T> H = *TR_ab->head;
     const Set<T> A = H.set;
-    A.par_foreach([&](size_t tid, uint32_t a_i){
-      Set<T> B(B_buffer.get_memory(tid)); //initialize the memory
-      Set<T> C(C_buffer.get_memory(tid));
+    TrieBlock<T>* a_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T>))) TrieBlock<T>(H);
+    a_block->init_pointers(0,&output_buffer,TR_ab->ranges->at(0)); 
 
-      const Set<T> op1 = H.get_block(a_i)->set;
- 
-      B = ops::set_intersect(&B,&op1,&A); //intersect the B
-      B.foreach([&](uint32_t b_i){ //Peel off B attributes
-        const TrieBlock<T>* l2 = H.get_block(b_i);
-        const size_t count = ops::set_intersect(&C,
-          &l2->set,
-          &op1)->cardinality;
+    par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
+      return a + b;
+    });
+
+    A.par_foreach([&](size_t tid, uint32_t a_d){
+      const Set<T> matching_b = H.get_block(a_d)->set;
+      //build output B block
+      TrieBlock<T>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
+      const size_t alloc_size = sizeof(uint64_t)*TR_ab->ranges->at(0)*2;
+
+      Set<T> B(output_buffer.get_next(tid, alloc_size));
+      b_block->set = ops::set_intersect(&B, &matching_b, &A); //intersect the B
+      output_buffer.roll_back(tid, alloc_size - b_block->set.number_of_bytes);
+      b_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1)); //find out the range of level 1
+
+      //Set a block pointer to new b block
+      a_block->set_block(a_d,a_d,b_block); 
+
+      //Next attribute to peel off
+      b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d){ // Peel off B attributes
+        const TrieBlock<T>* matching_c = H.get_block(b_d);
+        // Placement new!!
+        TrieBlock<T>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
+        c_block->set = Set<T>(output_buffer.get_next(tid, alloc_size));
+
+        const size_t count = ops::set_intersect(&c_block->set, &matching_c->set, &matching_b)->cardinality;
         num_triangles.update(tid,count);
+
+        output_buffer.roll_back(tid, alloc_size - c_block->set.number_of_bytes);
+        b_block->set_block(b_i,b_d,c_block);
+        //assert(count == b_block->get_block(b_d)->set.cardinality);
       });
     });
-    
-    result = num_triangles.evaluate(0);
+
+    std::cout << num_triangles.evaluate(0) << std::endl;
     debug::stop_clock("Query",qt);
 
-    std::cout << result << std::endl;
-    /*
-    rpcm.end_counter_states();
-    rpcm.print_state();
-    */
+    unsigned long size = 0;
+    a_block->set.foreach([&](uint32_t a_d) {
+        TrieBlock<T>* b_block = a_block->get_block(a_d);
+        if (b_block) {
+          b_block->set.foreach([&](uint32_t b_d) {
+              TrieBlock<T>* c_block = b_block->get_block(b_d);
+              if (c_block) {
+                size += c_block->set.cardinality;
+              }
+          });
+        }
+      });
 
-    //////////////////////////////////////////////////////////////////////
+    std::cout << size << std::endl;
+   //////////////////////////////////////////////////////////////////////
   }
 };
 
