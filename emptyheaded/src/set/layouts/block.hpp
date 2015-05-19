@@ -15,6 +15,8 @@ class block{
     static bool is_set(const uint32_t index, const uint64_t *in_array, const uint64_t start_index);
     static void set(const uint32_t index, uint64_t *in_array, const uint64_t start_index);
 
+    static long find(uint32_t key, const uint8_t *data_in, const size_t number_of_bytes,const type::layout t);
+
     static type::layout get_type();
     static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
 
@@ -33,6 +35,15 @@ class block{
         const size_t cardinality,
         const size_t number_of_bytes,
         const type::layout t);
+
+    template<typename F>
+    static void foreach_index(
+        F f,
+        const uint8_t *data_in,
+        const size_t cardinality,
+        const size_t number_of_bytes,
+        const type::layout t);
+
 
     template<typename F>
     static size_t par_foreach(
@@ -166,6 +177,27 @@ inline size_t block::par_foreach(
   }
 
   return 1;
+}
+
+template<typename F>
+inline void block::foreach_index(
+  F f,
+  const uint8_t *data_in,
+  const size_t cardinality,
+  const size_t number_of_bytes,
+  const type::layout t){
+  (void) cardinality; (void) data_in; (void) number_of_bytes; (void) t;
+
+  abort();
+}
+
+
+inline long block::find(uint32_t key, 
+  const uint8_t *data_in, 
+  const size_t number_of_bytes,
+  const type::layout t){
+  (void) data_in; (void) number_of_bytes; (void) t; (void) key;
+  return -1;
 }
 
 #endif

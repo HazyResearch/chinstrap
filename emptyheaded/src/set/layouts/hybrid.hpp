@@ -199,7 +199,7 @@ inline size_t hybrid::par_foreach_index(
   }
 }
 
-static long find(uint32_t key, 
+inline long hybrid::find(uint32_t key, 
   const uint8_t *data_in, 
   const size_t number_of_bytes, 
   const type::layout t){
@@ -209,7 +209,7 @@ static long find(uint32_t key,
     return uinteger::find(key,data_in,number_of_bytes,type::UINTEGER);
     break;
   case type::RANGE_BITSET :
-    return range_bitset::find(key,data_in,number_of_bytes,type::UINTEGER);
+    return range_bitset::find(key,data_in,number_of_bytes,type::RANGE_BITSET);
     break;
   default:
     return -1;
