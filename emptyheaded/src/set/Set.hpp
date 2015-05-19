@@ -25,6 +25,14 @@ class Set{
       number_of_bytes = 0;
       cardinality = 0;
     };
+
+    //All values passed in
+    Set(const Set &obj):
+      data(obj.data),
+      cardinality(obj.cardinality),
+      number_of_bytes(obj.number_of_bytes),
+      density(obj.density),
+      type(obj.type){}    
     //All values passed in
     Set(uint8_t *data_in, 
       size_t cardinality_in, 

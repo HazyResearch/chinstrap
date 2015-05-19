@@ -97,9 +97,10 @@ inline void uinteger::foreach_index(
  (void) number_of_bytes; (void) t; (void) data_in;
 
   const uint32_t * const data = (uint32_t*) data_in;
- for(size_t i=0; i<cardinality;i++){
-  f(i,data[i]);
- }
+  std::cout << "cardinality: " << cardinality << std::endl;
+  for(size_t i=0; i<cardinality;i++){
+    f(i,data[i]);
+  }
 }
 
 //Iterates over set applying a lambda.

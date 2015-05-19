@@ -68,46 +68,53 @@ struct undirected_triangle_counting: public application<T> {
 
     const TrieBlock<T> H = *TR_ab->head;
     const Set<T> A = H.set;
-    TrieBlock<T>* a_block = (TrieBlock<T>*)output_buffer.get_next(0, sizeof(TrieBlock<T>));
-    new(a_block) TrieBlock<T>(H);
+    TrieBlock<T>* a_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T>))) TrieBlock<T>(H);
+    a_block->init_pointers(0,&output_buffer,TR_ab->ranges->at(0)); //you were overwriting 
 
-    A.par_foreach([&](size_t tid, uint32_t a_i){
-      const Set<T> matching_b = H.get_block(a_i)->set;
+    par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
+      return a + b;
+    });
+
+    A.par_foreach([&](size_t tid, uint32_t a_d){
+      const Set<T> matching_b = H.get_block(a_d)->set;
 
       //build output B block
-      uint8_t* b_block_mem = output_buffer.get_next(tid, sizeof(TrieBlock<T>));
-      TrieBlock<T>* b_block = new(b_block_mem) TrieBlock<T>(true); //true this is sparse
+      TrieBlock<T>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
       const size_t alloc_size = sizeof(uint64_t)*R_ab->num_rows;
-      b_block->set = output_buffer.get_next(tid, alloc_size);
-      ops::set_intersect(&b_block->set, &matching_b, &A); //intersect the B
+
+      Set<T> B(output_buffer.get_next(tid, alloc_size));
+      b_block->set = ops::set_intersect(&B, &matching_b, &A); //intersect the B
       output_buffer.roll_back(tid, alloc_size - b_block->set.number_of_bytes);
-      b_block->init_pointers(tid, output_buffer, TR_ab->ranges->at(1)); //find out the range of level 1
+      b_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1)); //find out the range of level 1
 
       //Set a block pointer to new b block
-      a_block->set_block(a_i,a_i,b_block); //FIXME: THE OUTPUT OF A is not necessarily dense
+      a_block->set_block(a_d,a_d,b_block); //FIXME: THE OUTPUT OF A is not necessarily dense
 
       //Next attribute to peel off
-      b_block->set.foreach_index([&](uint32_t b_i,uint32_t b_d){ // Peel off B attributes
-        const TrieBlock<T>* matching_c = H.get_block(b_i);
-        
+      std::cout << "B card: " << b_block->set.cardinality << std::endl;
+      b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d){ // Peel off B attributes
+        const TrieBlock<T>* matching_c = H.get_block(b_d);
         // Placement new!!
-        TrieBlock<T>* C_block_ptr = (TrieBlock<T>*)output_buffer.get_next(tid, sizeof(TrieBlock<T>));
-        C_block_ptr->set = Set<T>(output_buffer.get_next(tid, alloc_size));
+        TrieBlock<T>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
+        c_block->set = Set<T>(output_buffer.get_next(tid, alloc_size));
 
-        ops::set_intersect(&C_block_ptr->set, &matching_c->set, &matching_b);
-        output_buffer.roll_back(tid, alloc_size - C_block_ptr->set.number_of_bytes);
-        b_block->set_block(b_i,b_d,C_block_ptr);
+        const size_t count = ops::set_intersect(&c_block->set, &matching_c->set, &matching_b)->cardinality;
+        num_triangles.update(tid,count);
+
+        output_buffer.roll_back(tid, alloc_size - c_block->set.number_of_bytes);
+        b_block->set_block(b_i,b_d,c_block);
       });
     });
 
+    std::cout << num_triangles.evaluate(0) << std::endl;
     debug::stop_clock("Query",qt);
 
     unsigned long size = 0;
-    a_block->set.foreach([&](uint32_t a_i) {
-        TrieBlock<T>* b_block = a_block->get_block(a_i);
+    a_block->set.foreach([&](uint32_t a_d) {
+        TrieBlock<T>* b_block = a_block->get_block(a_d);
         if (b_block) {
-          b_block->set.foreach([&](uint32_t b_i) {
-              TrieBlock<T>* c_block = b_block->get_block(b_i);
+          b_block->set.foreach([&](uint32_t b_d) {
+              TrieBlock<T>* c_block = b_block->get_block(b_d);
               if (c_block) {
                 size += c_block->set.cardinality;
               }
