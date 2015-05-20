@@ -1,14 +1,13 @@
 #include "main.hpp"
 
 template<class T>
-struct undirected_triangle_counting: public application<T> {
+struct barbell_listing: public application<T> {
   uint64_t result = 0;
   void run(std::string path){
     //create the relation (currently a column wise table)
     Relation<uint64_t,uint64_t> *R_ab = new Relation<uint64_t,uint64_t>();
 
 //////////////////////////////////////////////////////////////////////
-  std::cout << "Checking answer now" << std::endl;
     //File IO (for a tsv, csv should be roughly the same)
     auto rt = debug::start_clock();
     //tsv_reader f_reader("simple.txt");
@@ -52,8 +51,8 @@ struct undirected_triangle_counting: public application<T> {
 
     //add some sort of lambda to do selections 
     Trie<T> *TR_ab = Trie<T>::build(ER_ab,ranges_ab,[&](size_t index){
+      (void) index;
       return true;
-      // return ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
     });
     
     debug::stop_clock("Build",bt);
@@ -63,7 +62,7 @@ struct undirected_triangle_counting: public application<T> {
     //Prints the relation
     //R(a,b) join T(b,c) join S(a,c)
 
-  TrieBlock<T>* a1_block;
+  TrieBlock<T>* a1_block; // bag BCD
   {
       //allocate memory
       allocator::memory<uint8_t> output_buffer(R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
@@ -111,19 +110,9 @@ struct undirected_triangle_counting: public application<T> {
 
       std::cout << num_triangles.evaluate(0) << std::endl;
       debug::stop_clock("Query",qt);
-      std::cout << "bag BCD" << std::endl;
-      a1_block->set.foreach_index([&](uint32_t a_i, uint32_t a_d){
-        TrieBlock<T>* b_block = a1_block->get_block(a_d);
-        b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d){
-          TrieBlock<T>* c_block = b_block->get_block(b_d);
-          c_block->set.foreach_index([&](uint32_t c_i, uint32_t c_d){
-            std::cout << a_d << " " << b_d << " " << c_d << std::endl;
-          });
-        });
-      });
   }
 
-  TrieBlock<T>* a2_block;
+  TrieBlock<T>* a2_block; // bag AEF
   {
       //allocate memory
       allocator::memory<uint8_t> output_buffer(R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
@@ -171,17 +160,6 @@ struct undirected_triangle_counting: public application<T> {
 
       std::cout << num_triangles.evaluate(0) << std::endl;
       debug::stop_clock("Query",qt);
-
-      std::cout << "bag AEF" << std::endl;
-      a2_block->set.foreach_index([&](uint32_t a_i, uint32_t a_d){
-        TrieBlock<T>* b_block = a2_block->get_block(a_d);
-        b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d){
-          TrieBlock<T>* c_block = b_block->get_block(b_d);
-          c_block->set.foreach_index([&](uint32_t c_i, uint32_t c_d){
-            std::cout << a_d << " " << b_d << " " << c_d << std::endl;
-          });
-        });
-      });
   }
   
   TrieBlock<T>* a3_block; // this is the edgelist R(A,B) joined with the projection of the previous 2 bags on A and B
@@ -204,48 +182,36 @@ struct undirected_triangle_counting: public application<T> {
       output_buffer.roll_back(tid, alloc_size - b_block->set.number_of_bytes);
       a3_block->set_block(a3_i, a3_d, b_block); 
     });
-
-      // checking the contents of this bag
-    a3_block->set.foreach_index([&](uint32_t a_i, uint32_t a_d){
-      TrieBlock<T>* b_block = a3_block->get_block(a_d);
-      b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d){
-        std::cout << a_d << " " << b_d << std::endl;
-      });
-    });
   }
 
   // now do the topdown pass of yannakakis
-  allocator::memory<uint8_t> output_buffer(20 * 6 * R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
+  allocator::memory<uint8_t> output_buffer(100 * R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
   TrieBlock<T>* a_block = a3_block;
-  a_block->set.par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d) {
+  a_block->set.par_foreach([&](size_t tid, uint32_t a_d) {
     TrieBlock<T>* b_block = a_block->get_block(a_d);
     TrieBlock<T>* e_block = a1_block->get_block(a_d);
     if (b_block && e_block) {
       b_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
       b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d) {
         TrieBlock<T>* old_c_block = a2_block->get_block(b_d);
-        std::cout << "here: " << a_d << " " << b_d << " " << old_c_block << std::endl;
         if (old_c_block) {
           TrieBlock<T>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(old_c_block);
           c_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
           b_block->set_block(b_i, b_d, c_block);
-          std::cout << "b_d: " << b_d << std::endl;
           c_block->set.foreach_index([&](uint32_t c_i, uint32_t c_d) {
             TrieBlock<T>* d_block = old_c_block->get_block(c_d);
             if (d_block) {
-              std::cout << "here2: " << a_d << " " << b_d << " " << d_block << std::endl;
               c_block->set_block(c_i, c_d, d_block);
               d_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
               d_block->set.foreach_index([&](uint32_t d_i, uint32_t d_d) {
-                std::cout << "here3: " << a_d << " " << b_d << " " << d_d << std::endl;
                 d_block->set_block(d_i, d_d, e_block);
                 // e_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
-                e_block->set.foreach_index([&](uint32_t e_i, uint32_t e_d) {
-                  TrieBlock<T>* f_block = e_block->get_block(e_d);
-                  f_block->set.foreach_index([&](uint32_t f_i, uint32_t f_d) {
-                    std::cout << a_d << " " << b_d << " " << c_d << " " << d_d << " " << e_d << " " << f_d << std::endl;
-                  });
-                });
+                // e_block->set.foreach_index([&](uint32_t e_i, uint32_t e_d) {
+                //  TrieBlock<T>* f_block = e_block->get_block(e_d);
+                //  f_block->set.foreach_index([&](uint32_t f_i, uint32_t f_d) {
+                //    std::cout << a_d << " " << b_d << " " << c_d << " " << d_d << " " << e_d << " " << f_d << std::endl;
+                //  });
+                // });
               });
             }
           });
@@ -255,34 +221,24 @@ struct undirected_triangle_counting: public application<T> {
   });
 
   std::cout << "Checking answer now" << std::endl;
-  std::cout << a_block->get_block(0)->get_block(1) << std::endl;
   unsigned long size = 0;
   a_block->set.foreach([&](uint32_t a_d) {
       // std::cout << a_d << std::endl;
       TrieBlock<T>* b_block = a_block->get_block(a_d);
       if (b_block) {
         b_block->set.foreach([&](uint32_t b_d) {
-            std::cout << "A: " << a_d << "B: " << b_d << std::endl;
             TrieBlock<T>* c_block = b_block->get_block(b_d);
             if (c_block) {
-                std::cout << "C block exists" << std::endl;
                 c_block->set.foreach([&](uint32_t c_d) {
-                std::cout << "A: " << a_d << "B: " << b_d << "C: " << c_d << std::endl;
-                // std::cout << "C: " << c_d << std::endl;
                 TrieBlock<T>* d_block = c_block->get_block(c_d);
                   if (d_block) {
                     d_block->set.foreach([&](uint32_t d_d){
-                      // std::cout << "D: " << d_d << std::endl;
                       TrieBlock<T>* e_block = d_block->get_block(d_d);
                         if (e_block) {
                           e_block->set.foreach([&](uint32_t e_d){
-                            // std::cout << "E: " << e_d << std::endl;
                             TrieBlock<T>* f_block = e_block->get_block(e_d);
                             if (f_block) {
                               size += f_block->set.cardinality;
-                              f_block->set.foreach([&](uint32_t f_d) {
-                                std::cout << a_d << " " << b_d << " " << c_d << " " << d_d << " " << e_d << " " << f_d << std::endl;
-                              });
                             }
                           });
                         }
@@ -301,5 +257,5 @@ struct undirected_triangle_counting: public application<T> {
 
 template<class T>
 application<T>* init_app(){
-  return new undirected_triangle_counting<T>(); 
+  return new barbell_listing<T>(); 
 }
