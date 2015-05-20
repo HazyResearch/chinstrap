@@ -188,18 +188,22 @@ struct undirected_triangle_counting: public application<T> {
   TrieBlock<T>* a_block = a3_block;
   a_block->set.par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d) {
     TrieBlock<T>* b_block = a_block->get_block(a_d);
+    if (!b_block) std::cout << "b_block null" << std::endl;
     TrieBlock<T>* e_block = a1_block->get_block(a_d);
+    if (!e_block) std::cout << "e_block null" << std::endl;
     b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d) {
       b_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
       TrieBlock<T>* c_block = a2_block->get_block(b_d);
+      if (!c_block) std::cout << "c_block null" << std::endl;
       b_block->set_block(b_i, b_d, c_block);
       c_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
       c_block->set.foreach_index([&](uint32_t c_i, uint32_t c_d) {
         TrieBlock<T>* d_block = c_block->get_block(c_d);
+        if (!d_block) std::cout << "d_block null" << std::endl;
         c_block->set_block(c_i, c_d, d_block);
         d_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
         d_block->set.foreach_index([&](uint32_t d_i, uint32_t d_d) {
-          d_block->set_block(d_i, d_d, e_block);
+        d_block->set_block(d_i, d_d, e_block);
        /* e_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
           e_block->set.foreach_index([&](size_t tid, uint32_t e_i, uint32_t e_d) {
             const TrieBlock<T>* f_block = e_block->get_block(e_d);
@@ -209,6 +213,8 @@ struct undirected_triangle_counting: public application<T> {
       });
     });
   });
+  
+  std::cout << "Checking answer now" << std::endl;
 
   unsigned long size = 0;
   a_block->set.foreach([&](uint32_t a_d) {
