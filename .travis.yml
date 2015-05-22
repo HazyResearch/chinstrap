@@ -11,4 +11,4 @@ script: "cd ./emptyheaded && make clean && make tests"
 
 branches:
   only:
-    - develop
+    - master 
