@@ -133,20 +133,6 @@ inline void block_bitset::foreach_until(
   abort();
 }
 
-template<typename F>
-inline void decode_block(
-  F f,
-  uint32_t offset,
-  uint64_t* data){
-  for(size_t i = 0; i < BLOCK_SIZE; i++){
-    const size_t word = i / BITS_PER_WORD;
-    const size_t bit = i % BITS_PER_WORD;
-    if((data[word] >> bit) % 2) {
-      f(offset*BLOCK_SIZE + i);
-    }
-  }
-} 
-
 //Iterates over set applying a lambda.
 template<typename F>
 inline void block_bitset::foreach(
@@ -161,7 +147,15 @@ inline void block_bitset::foreach(
   if(number_of_bytes > 0){
     const size_t A_num_blocks = number_of_bytes/(2*sizeof(uint32_t)+(BLOCK_SIZE/8));
     for(size_t i = 0; i < A_num_blocks; i++){
-      decode_block(f,*(uint32_t*)A_ptr,(uint64_t*)(A_ptr+2*sizeof(uint32_t)));
+      const uint64_t * const data = (uint64_t*)(A_ptr+2*sizeof(uint32_t));
+      const uint32_t offset = *(uint32_t*)A_ptr;
+      for(size_t j = 0; j < BLOCK_SIZE; j++){
+        const size_t word = j / BITS_PER_WORD;
+        const size_t bit = j % BITS_PER_WORD;
+        if((data[word] >> bit) % 2) {
+          f(offset*BLOCK_SIZE + j);
+        }
+      }
       A_ptr += 2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t);
     }
   }
@@ -178,9 +172,22 @@ inline void block_bitset::foreach_index(
   (void) cardinality; (void) type;
   (void) f; (void) number_of_bytes; (void) A;
 
+  uint8_t *A_ptr = const_cast<uint8_t*>(A); 
   if(number_of_bytes > 0){
-    std::cout << "NOT IMPLEMENTED" << std::endl; 
-    abort();
+    const size_t A_num_blocks = number_of_bytes/(2*sizeof(uint32_t)+(BLOCK_SIZE/8));
+    for(size_t i = 0; i < A_num_blocks; i++){
+      const uint64_t * const data = (uint64_t*)(A_ptr+2*sizeof(uint32_t));
+      const uint32_t offset = *(uint32_t*)A_ptr;
+      uint32_t index = *(uint32_t*)(A_ptr+sizeof(uint32_t));
+      for(size_t j = 0; j < BLOCK_SIZE; j++){
+        const size_t word = j / BITS_PER_WORD;
+        const size_t bit = j % BITS_PER_WORD;
+        if((data[word] >> bit) % 2) {
+          f(index++,offset*BLOCK_SIZE + j);
+        }
+      }
+      A_ptr += 2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t);
+    }
   }
 }
 
@@ -221,16 +228,54 @@ inline size_t block_bitset::par_foreach_index(
       const size_t cardinality,
       const size_t number_of_bytes,
       const type::layout t) {
-  (void) cardinality; (void) t; (void) f; (void) number_of_bytes; (void) A;
-  std::cout << "ERROR: NOT IMPLEMENTED2" << std::endl;
-  abort();
+  (void) cardinality; (void) t;
+
+  const uint32_t data_offset = 2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t);
+  if(number_of_bytes > 0){
+    const size_t A_num_blocks = number_of_bytes/(2*sizeof(uint32_t)+(BLOCK_SIZE/8));
+    return par::for_range(0, A_num_blocks, 1,
+     [&](size_t tid, size_t i) {
+        const uint32_t offset = *(uint32_t*)(A+i*data_offset);
+        uint64_t * const data = (uint64_t*)(A+2*sizeof(uint32_t)+i*data_offset);
+        uint32_t index = *(uint32_t*)(A+i*data_offset+sizeof(uint32_t));
+        for(size_t j = 0; j < BLOCK_SIZE; j++){
+          const size_t word = j / BITS_PER_WORD;
+          const size_t bit = j % BITS_PER_WORD;
+          if((data[word] >> bit) % 2) {
+            f(tid,index++,offset*BLOCK_SIZE + j);
+          }
+        }
+    });
+  }
+  return 0;
 }
 
 inline long block_bitset::find(uint32_t key, 
   const uint8_t *data_in, 
   const size_t number_of_bytes,
   const type::layout t){
-  (void) data_in; (void) number_of_bytes; (void) t; (void) key;
+  (void) t;
+
+  const uint32_t data_offset = 2+(WORDS_PER_BLOCK*2);
+  if(number_of_bytes > 0){
+    const size_t A_num_blocks = number_of_bytes/(2*sizeof(uint32_t)+(BLOCK_SIZE/8));
+    long block_index = binary_search((uint32_t*)data_in,0,A_num_blocks,key/BLOCK_SIZE,[&](uint32_t d){return d*data_offset;});
+    if(block_index != -1){
+      uint8_t *A_BLOCK = const_cast<uint8_t*>(data_in)+block_index*(2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t));
+      uint64_t *A64 = (uint64_t*)(A_BLOCK+2*sizeof(uint32_t));
+      size_t block_bit = key % BLOCK_SIZE;
+      size_t word = block_bit/BITS_PER_WORD;
+      size_t bit = block_bit % BITS_PER_WORD;
+      if((A64[word] >> bit) % 2) {
+        size_t index = *(uint32_t*)(A_BLOCK+sizeof(uint32_t));
+        for(size_t i = 0 ; i < word; i++){
+          index += _mm_popcnt_u64(A64[i]);
+        }
+        uint64_t masked_word = A64[word] & masks::find_mask[bit];
+        return index+_mm_popcnt_u64(masked_word);
+      }
+    }
+  }
   return -1;
 }
 

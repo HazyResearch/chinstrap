@@ -101,7 +101,7 @@ struct undirected_triangle_counting: public application<T> {
 
         output_buffer.roll_back(tid, alloc_size - c_block->set.number_of_bytes);
         b_block->set_block(b_i,b_d,c_block);
-        //assert(count == b_block->get_block(b_d)->set.cardinality);
+        //assert(b_block->get_block(b_d)->set.cardinality == c_block->set.cardinality);        
       });
     });
 
