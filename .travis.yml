@@ -2,8 +2,8 @@ language: cpp
 compiler: gcc
 
 before_install:
-  - sudo apt-get install g++-4.9
   - sudo apt-get update
+  - sudo apt-get install g++-4.9
   - sudo apt-get install libtbb2
   - sudo apt-get install libgtest-dev
   - "cd /usr/src/gtest && sudo cmake . && sudo cmake --build . && sudo mv libg* /usr/local/lib/ ; cd -"
