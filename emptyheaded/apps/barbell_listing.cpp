@@ -164,6 +164,7 @@ struct barbell_listing: public application<T> {
   
   TrieBlock<T>* a3_block; // this is the edgelist R(A,B) joined with the projection of the previous 2 bags on A and B
   {      
+    auto qt = debug::start_clock();
     allocator::memory<uint8_t> output_buffer(R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
     const size_t alloc_size = sizeof(uint64_t)*TR_ab->ranges->at(0)*2; // why this magic number ?
     const TrieBlock<T> H = *TR_ab->head;
@@ -182,8 +183,10 @@ struct barbell_listing: public application<T> {
       output_buffer.roll_back(tid, alloc_size - b_block->set.number_of_bytes);
       a3_block->set_block(a3_i, a3_d, b_block); 
     });
+    debug::stop_clock("Query",qt);
   }
 
+  auto qt = debug::start_clock();
   // now do the topdown pass of yannakakis
   allocator::memory<uint8_t> output_buffer(100 * R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
   TrieBlock<T>* a_block = a3_block;
@@ -199,8 +202,9 @@ struct barbell_listing: public application<T> {
           c_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
           b_block->set_block(b_i, b_d, c_block);
           c_block->set.foreach_index([&](uint32_t c_i, uint32_t c_d) {
-            TrieBlock<T>* d_block = old_c_block->get_block(c_d);
-            if (d_block) {
+            TrieBlock<T>* old_d_block = old_c_block->get_block(c_d);
+            if (old_d_block) {
+              TrieBlock<T>* d_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(old_d_block);
               c_block->set_block(c_i, c_d, d_block);
               d_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
               d_block->set.foreach_index([&](uint32_t d_i, uint32_t d_d) {
@@ -219,6 +223,7 @@ struct barbell_listing: public application<T> {
       });
     }
   });
+  debug::stop_clock("topdown pass of yannakakis",qt);
 
   std::cout << "Checking answer now" << std::endl;
   unsigned long size = 0;
@@ -239,6 +244,9 @@ struct barbell_listing: public application<T> {
                             TrieBlock<T>* f_block = e_block->get_block(e_d);
                             if (f_block) {
                               size += f_block->set.cardinality;
+                              //f_block->set.foreach([&](uint32_t f_d) {
+                              //  std::cout << a_d << " " << b_d << " " << c_d << " " << d_d << " " << e_d << " " << f_d << std::endl;
+                              //});
                             }
                           });
                         }
