@@ -88,7 +88,7 @@ std::pair<std::string,std::string> parse(int argc, char* argv[]) {
   return std::make_pair(l,p);
 }
 
-#ifndef TEST
+#ifndef GOOGLE_TEST
 int main (int argc, char* argv[]) {
   masks::init_masks();
 
