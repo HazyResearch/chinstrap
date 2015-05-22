@@ -52,6 +52,14 @@ class block{
       const size_t cardinality,
       const size_t number_of_bytes,
       const type::layout t);
+
+    template<typename F>
+    static size_t par_foreach_index(
+      F f,
+      const uint8_t *data_in,
+      const size_t cardinality,
+      const size_t number_of_bytes,
+      const type::layout t);
 };
 inline type::layout block::get_type(){
   return type::BLOCK;
@@ -111,18 +119,7 @@ inline void block::foreach_until(
   (void) cardinality; (void) type;
 
   if(number_of_bytes > 0){
-    const size_t num_data_words = ((number_of_bytes-sizeof(uint64_t))/sizeof(uint64_t));
-    const uint64_t offset = ((uint64_t*)A)[0];
-    const uint64_t* A64 = (uint64_t*)(A+sizeof(uint64_t));
-    for(size_t i = 0; i < num_data_words; i++){
-      const uint64_t cur_word = A64[i];
-      for(size_t j = 0; j < BITS_PER_WORD; j++){
-        if((cur_word >> j) % 2){
-          if(f(BITS_PER_WORD*(i+offset) + j))
-            break;
-        }
-      }
-    }
+    abort();
   }
 }
 
@@ -191,6 +188,15 @@ inline void block::foreach_index(
   abort();
 }
 
+template<typename F>
+inline size_t block::par_foreach_index(
+  F f,
+  const uint8_t *data_in,
+  const size_t cardinality,
+  const size_t number_of_bytes,
+  const type::layout t){
+  abort();
+}
 
 inline long block::find(uint32_t key, 
   const uint8_t *data_in, 

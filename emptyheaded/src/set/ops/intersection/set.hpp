@@ -1,8 +1,8 @@
 #ifndef _SET_INTERSECTION_H_
 #define _SET_INTERSECTION_H_
 
-#include "bitset.hpp"
 #include "uinteger.hpp"
+#include "bitset.hpp"
 #include "hetero.hpp"
 
 namespace ops{

@@ -66,11 +66,10 @@ namespace common{
   static uint8_t **scratch_space = new uint8_t*[MAX_THREADS];
   static uint8_t **scratch_space1 = new uint8_t*[MAX_THREADS];
 
-  static void alloc_scratch_space(size_t alloc_size, size_t num_threads){
-    for(size_t i = 0; i < num_threads; i++){
+  static void alloc_scratch_space(size_t alloc_size){
+    for(size_t i = 0; i < NUM_THREADS; i++){
       scratch_space[i] = new uint8_t[alloc_size];
       scratch_space1[i] = new uint8_t[alloc_size];
-
     }
   }
 
