@@ -1,4 +1,8 @@
 language: cpp
 compiler: gcc
 
-script: "source ./emptyheaded/build.sh"
+before_install:
+  - sudo apt-get install libtbb2
+  - sudo apt-get install libgtest-dev
+
+script: "cd ./emptyhead && make clean && make tests"
