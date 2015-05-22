@@ -1,41 +1,7 @@
 #ifndef _HETERO_INTERSECTION_H_
 #define _HETERO_INTERSECTION_H_
 
-#define ADDRESS_BITS_PER_BLOCK 6
-
 namespace ops{
-  inline size_t hetero_intersect_offsets(
-    uint32_t *A_positions, 
-    uint32_t *B_position_data, 
-    uint32_t *A, 
-    size_t s_a,
-    uint32_t *B, 
-    size_t s_b,
-    uint64_t *B_data){
-
-    const size_t bytes_per_block = (BLOCK_SIZE/8);
-    const size_t words_per_block = bytes_per_block/sizeof(uint64_t);
-
-    size_t count = 0;
-    size_t i_a = 0;
-    size_t i_b = 0;
-    bool notFinished = i_a < s_a  && i_b < s_b;
-    while(notFinished){
-      while(notFinished && B[i_b] < (A[i_a] >> ADDRESS_BITS_PER_BLOCK)){
-        ++i_b;
-        notFinished = i_b < s_b;
-      }
-      if(notFinished && (A[i_a] >> ADDRESS_BITS_PER_BLOCK) == B[i_b]){
-        A_positions[count] = i_a;
-        B_position_data[count] = i_b;
-        _mm_prefetch(&B_data[i_b*words_per_block],_MM_HINT_T1);
-        ++count;
-      }
-      ++i_a;
-      notFinished = notFinished && i_a < s_a;
-    }
-    return count;
-  }
   inline size_t probe_block(
     uint32_t *result,
     uint32_t value,
@@ -103,33 +69,32 @@ namespace ops{
       return C_in;
     }
 
-    size_t B_num_blocks = B_in->number_of_bytes/(sizeof(uint32_t)+(BLOCK_SIZE/8));
-    uint64_t *B_data = (uint64_t*)(B_in->data+(B_num_blocks*sizeof(uint32_t)));
-    uint32_t *B_offset_pointer = (uint32_t*)B_in->data;
-
-    uint32_t *A_data = (uint32_t*)A_in->data;
-
-    size_t A_scratch_space = A_in->cardinality*sizeof(uint32_t);
-    //size_t scratch_space = A_scratch_space + B_scratch_space;
-
-    //need to move alloc outsize
-    uint32_t *A_positions = (uint32_t*)common::scratch_space[0];
-    uint32_t *B_offset_positions = (uint32_t*)(common::scratch_space[0]+A_scratch_space);
-    //C_in->data += scratch_space;
-
-    size_t offset_count = hetero_intersect_offsets(
-      A_positions,B_offset_positions,A_data,
-      A_in->cardinality,B_offset_pointer,B_num_blocks,B_data);
+    const size_t B_num_blocks = B_in->number_of_bytes/(2*sizeof(uint32_t)+(BLOCK_SIZE/8));
 
     size_t count = 0;
-    const size_t bytes_per_block = (BLOCK_SIZE/8);
-    const size_t words_per_block = bytes_per_block/sizeof(uint64_t);
-    uint32_t *result = (uint32_t*)C_in->data;
-    for(size_t i = 0; i < offset_count; i++){
-      const size_t B_offset = B_offset_positions[i] * words_per_block;
-      count += probe_block(result+count,A_data[A_positions[i]],B_data+B_offset);
-    }
-  
+    uint32_t *C = (uint32_t*)C_in->data;
+
+    const uint32_t * const A_data = (uint32_t*)A_in->data;
+    const uint8_t * const B_data = B_in->data+2*sizeof(uint32_t);
+    const uint32_t offset = 2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t);
+    
+    find_matching_offsets(A_in->data,A_in->cardinality,sizeof(uint32_t),[&](uint32_t a){return a >> ADDRESS_BITS_PER_BLOCK;},
+        B_in->data,B_num_blocks,offset,[&](uint32_t b){return b;}, 
+        
+        //the uinteger value is returned in data->not the best interface 
+        [&](uint32_t a_index, uint32_t b_index, uint32_t data){    
+          const uint32_t start_a_index = a_index;
+          count += probe_block(&C[count],data,(uint64_t*)(B_data+offset*b_index));
+          ++a_index;
+          while( ( &A_data[a_index] < (A_data+A_in->cardinality) ) &&
+            (A_data[a_index] >> ADDRESS_BITS_PER_BLOCK) == (data >> ADDRESS_BITS_PER_BLOCK)){
+            count += probe_block(&C[count],A_data[a_index],(uint64_t*)(B_data+offset*b_index));
+            ++a_index;
+          }
+          return std::make_pair(a_index-start_a_index,1);
+        }
+    );   
+
     C_in->cardinality = count;
     C_in->number_of_bytes = count*sizeof(uint32_t);
     C_in->density = 0.0;

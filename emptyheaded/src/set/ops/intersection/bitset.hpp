@@ -2,38 +2,46 @@
 #define _BITSET_INTERSECTION_H_
 
 namespace ops{
-  template<typename F>
+  template<typename F, typename FA, typename FB>
   inline void find_matching_offsets(const uint8_t *A, 
-    const size_t lenA, 
-    const uint8_t *B, 
+    const size_t lenA,
+    const size_t increment_a, 
+    FA fa,
+    const uint8_t *B,
     const size_t lenB, 
+    const size_t increment_b,
+    FB fb, 
     F f){
 
 
       if (lenA == 0 || lenB == 0)
           return;
 
-      size_t count = 0;
-      const size_t increment_value = 2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t);
-      const uint8_t *endA = A + lenA*increment_value;
-      const uint8_t *endB = B + lenB*increment_value;
+      uint32_t a_index = 0;
+      uint32_t b_index = 0;
+      const uint8_t *endA = A + lenA*increment_a;
+      const uint8_t *endB = B + lenB*increment_b;
 
       while (1) {
-          while (*((uint32_t*)A) < *((uint32_t*)B)) {
+          while (fa(*((uint32_t*)A)) < fb(*((uint32_t*)B))) {
   SKIP_FIRST_COMPARE:
-              A += increment_value;
+              A += increment_a;
+              ++a_index;
               if (A == endA)
                   return;
           }
-          while (*((uint32_t*)A) > *((uint32_t*)B)) {
-              B += increment_value;
+          while (fa(*((uint32_t*)A)) > fb(*((uint32_t*)B)) ) {
+              B += increment_b;
+              ++b_index;
               if (B == endB)
                   return;
           }
-          if (*((uint32_t*)A) == *((uint32_t*)B)) {
-              f(count++,*(uint32_t*)A);
-              A += increment_value;
-              B += increment_value;
+          if (fa(*((uint32_t*)A)) == fb(*((uint32_t*)B))) {
+              auto pair = f(a_index,b_index,*(uint32_t*)A);
+              A += increment_a*std::get<0>(pair);
+              a_index += std::get<0>(pair);
+              B += increment_b*std::get<1>(pair);
+              b_index += std::get<1>(pair);
               if (A == endA || B == endB)
                   return;
           } else {
@@ -43,6 +51,7 @@ namespace ops{
 
       return; // NOTREACHED
   }
+
   inline size_t intersect_range_block(
     uint64_t * const result_data, 
     uint32_t * const index_data, 
@@ -187,16 +196,22 @@ namespace ops{
     const uint8_t * const A_data = A_in->data+2*sizeof(uint32_t);
     const uint8_t * const B_data = B_in->data+2*sizeof(uint32_t);
     const uint32_t offset = 2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t);
-    find_matching_offsets(A_in->data,A_num_blocks,B_in->data,A_num_blocks, [&](uint32_t index, uint32_t data){
-      *((uint32_t*)C) = data/BLOCK_SIZE;
-      *((uint32_t*)(C+sizeof(uint32_t))) = count; 
-      const size_t old_count = count;
-      count += intersect_block((uint64_t*)(C+2*sizeof(uint32_t)),(uint64_t*)(A_data+index*offset),(uint64_t*)(B_data+index*offset),BLOCK_SIZE);
-      if(old_count != count){
-        C += 2*sizeof(uint32_t)+bytes_per_block;
-        num_bytes += 2*sizeof(uint32_t)+bytes_per_block;
-      } 
-    });   
+    
+    find_matching_offsets(A_in->data,A_num_blocks,offset,[&](uint32_t a){return a;},
+        B_in->data,B_num_blocks,offset,[&](uint32_t b){return b;}, 
+        
+        [&](uint32_t a_index, uint32_t b_index, uint32_t data){    
+          *((uint32_t*)C) = data;
+          *((uint32_t*)(C+sizeof(uint32_t))) = count; 
+          const size_t old_count = count;
+          count += intersect_block((uint64_t*)(C+2*sizeof(uint32_t)),(uint64_t*)(A_data+a_index*offset),(uint64_t*)(B_data+b_index*offset),BLOCK_SIZE);
+          if(old_count != count){
+            C += 2*sizeof(uint32_t)+bytes_per_block;
+            num_bytes += 2*sizeof(uint32_t)+bytes_per_block;
+          }
+          return std::make_pair(1,1); 
+        }
+    );   
 
     C_in->cardinality = count;
     C_in->number_of_bytes = num_bytes;

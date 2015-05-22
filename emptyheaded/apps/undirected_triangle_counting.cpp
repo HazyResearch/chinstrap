@@ -81,7 +81,6 @@ struct undirected_triangle_counting: public application<T> {
       Set<T> C(C_buffer.get_memory(tid));
 
       const Set<T> op1 = H.get_block(a_i)->set;
-  
       B = ops::set_intersect(&B,&op1,&A); //intersect the B
       B.foreach([&](uint32_t b_i){ //Peel off B attributes
         const TrieBlock<T>* l2 = H.get_block(b_i);

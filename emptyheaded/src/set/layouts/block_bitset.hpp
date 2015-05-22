@@ -9,9 +9,12 @@ THIS CLASS IMPLEMENTS THE FUNCTIONS ASSOCIATED WITH THE BITSET LAYOUT.
 #define BITS_PER_WORD 64
 #define ADDRESS_BITS_PER_WORD 6
 #define BYTES_PER_WORD 8
+
 #define BLOCK_SIZE 256
-#define BITSET_THRESHOLD 0.11
+#define ADDRESS_BITS_PER_BLOCK 8
 #define WORDS_PER_BLOCK 4
+
+#define BITSET_THRESHOLD 0.11
 
 class block_bitset{
   public:
@@ -99,7 +102,6 @@ inline bool in_range(const uint32_t value, const size_t block_id){
 inline std::tuple<size_t,type::layout> block_bitset::build(uint8_t *R, const uint32_t *A, const size_t s_a){
   if(s_a > 0){
     size_t i = 0;
-    size_t num_blocks = 0;
     const uint8_t * const R_start = R;
     while(i < s_a){
       const size_t block_id = A[i] / BLOCK_SIZE;
@@ -136,7 +138,6 @@ inline void decode_block(
   F f,
   uint32_t offset,
   uint64_t* data){
-
   for(size_t i = 0; i < BLOCK_SIZE; i++){
     const size_t word = i / BITS_PER_WORD;
     const size_t bit = i % BITS_PER_WORD;
@@ -193,21 +194,20 @@ inline size_t block_bitset::par_foreach(
       const type::layout t) {
   (void) cardinality; (void) t;
 
-  uint8_t *A_ptr = const_cast<uint8_t*>(A); 
+  const uint32_t data_offset = 2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t);
   if(number_of_bytes > 0){
     const size_t A_num_blocks = number_of_bytes/(2*sizeof(uint32_t)+(BLOCK_SIZE/8));
     return par::for_range(0, A_num_blocks, 1,
      [&](size_t tid, size_t i) {
-        const uint32_t offset = *(uint32_t*)(A_ptr);
-        uint64_t * const data = (uint64_t*)(A_ptr+2*sizeof(uint32_t));
-        for(size_t i = 0; i < BLOCK_SIZE; i++){
-          const size_t word = i / BITS_PER_WORD;
-          const size_t bit = i % BITS_PER_WORD;
+        const uint32_t offset = *(uint32_t*)(A+i*data_offset);
+        uint64_t * const data = (uint64_t*)(A+2*sizeof(uint32_t)+i*data_offset);
+        for(size_t j = 0; j < BLOCK_SIZE; j++){
+          const size_t word = j / BITS_PER_WORD;
+          const size_t bit = j % BITS_PER_WORD;
           if((data[word] >> bit) % 2) {
-            f(tid,offset*BLOCK_SIZE + i);
+            f(tid,offset*BLOCK_SIZE + j);
           }
         }
-      A_ptr += 2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t);
     });
   }
   return 0;
