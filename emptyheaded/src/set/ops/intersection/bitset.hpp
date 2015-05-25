@@ -2,15 +2,19 @@
 #define _BITSET_INTERSECTION_H_
 
 namespace ops{
-  template<typename F, typename FA, typename FB>
+  template<typename F, typename FA, typename FB, typename FCA, typename FCB, typename FEA, typename FEB>
   inline void find_matching_offsets(const uint8_t *A, 
     const size_t lenA,
     const size_t increment_a, 
     FA fa,
+    FCA fca,
+    FEA fea,
     const uint8_t *B,
     const size_t lenB, 
     const size_t increment_b,
-    FB fb, 
+    FB fb,
+    FCB fcb,
+    FEB feb, 
     F f){
 
 
@@ -25,16 +29,22 @@ namespace ops{
       while (1) {
           while (fa(*((uint32_t*)A)) < fb(*((uint32_t*)B))) {
   SKIP_FIRST_COMPARE:
+              fca(*(uint32_t*)A);
               A += increment_a;
               ++a_index;
-              if (A == endA)
-                  return;
+              if (A == endA){
+                fea(A,endA,increment_a);
+                return;
+              }
           }
           while (fa(*((uint32_t*)A)) > fb(*((uint32_t*)B)) ) {
               B += increment_b;
+              fcb(*(uint32_t*)B);
               ++b_index;
-              if (B == endB)
-                  return;
+              if (B == endB){
+                feb(B,endB,increment_b);
+                return;
+              }
           }
           if (fa(*((uint32_t*)A)) == fb(*((uint32_t*)B))) {
               auto pair = f(a_index,b_index,*(uint32_t*)A);
@@ -42,8 +52,13 @@ namespace ops{
               a_index += std::get<0>(pair);
               B += increment_b*std::get<1>(pair);
               b_index += std::get<1>(pair);
-              if (A == endA || B == endB)
-                  return;
+              if (A == endA){
+                feb(B,endB,increment_b);
+                return;
+              } else if (B == endB){
+                fea(A,endA,increment_a);
+                return;
+              }
           } else {
               goto SKIP_FIRST_COMPARE;
           }
@@ -197,8 +212,13 @@ namespace ops{
     const uint8_t * const B_data = B_in->data+2*sizeof(uint32_t);
     const uint32_t offset = 2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t);
     
-    find_matching_offsets(A_in->data,A_num_blocks,offset,[&](uint32_t a){return a;},
-        B_in->data,B_num_blocks,offset,[&](uint32_t b){return b;}, 
+    auto check_f = [&](uint32_t d){(void) d; return;};
+    auto finish_f = [&](const uint8_t *start, const uint8_t *end, size_t increment){
+      (void) start, (void) end; (void) increment;
+      return;};
+
+    find_matching_offsets(A_in->data,A_num_blocks,offset,[&](uint32_t a){return a;},check_f,finish_f,
+        B_in->data,B_num_blocks,offset,[&](uint32_t b){return b;},check_f,finish_f, 
         
         [&](uint32_t a_index, uint32_t b_index, uint32_t data){    
           *((uint32_t*)C) = data;

@@ -78,8 +78,12 @@ namespace ops{
     const uint8_t * const B_data = B_in->data+2*sizeof(uint32_t);
     const uint32_t offset = 2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t);
     
-    find_matching_offsets(A_in->data,A_in->cardinality,sizeof(uint32_t),[&](uint32_t a){return a >> ADDRESS_BITS_PER_BLOCK;},
-        B_in->data,B_num_blocks,offset,[&](uint32_t b){return b;}, 
+    auto check_f = [&](uint32_t d){(void) d; return;};
+    auto finish_f = [&](const uint8_t *start, const uint8_t *end, size_t increment){
+      (void) start, (void) end; (void) increment;
+      return;};
+    find_matching_offsets(A_in->data,A_in->cardinality,sizeof(uint32_t),[&](uint32_t a){return a >> ADDRESS_BITS_PER_BLOCK;},check_f,finish_f,
+        B_in->data,B_num_blocks,offset,[&](uint32_t b){return b;},check_f,finish_f,
         
         //the uinteger value is returned in data->not the best interface 
         [&](uint32_t a_index, uint32_t b_index, uint32_t data){    

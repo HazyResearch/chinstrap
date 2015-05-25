@@ -70,7 +70,7 @@ inline type::layout hybrid::get_type(const uint32_t *data, const size_t length){
       double density = (double) length / range;
      // double c = compressibility(data, length);
       if(density > ((double)common::bitset_req) && length > common::bitset_length) {
-        return type::BLOCK_BITSET;
+        return type::RANGE_BITSET;
       } //else if( (length/(range/BLOCK_SIZE)  > common::pshort_requirement)) {
         //return common::BITSET_NEW;
       //}

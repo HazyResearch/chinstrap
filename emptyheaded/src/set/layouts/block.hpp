@@ -101,7 +101,6 @@ inline std::tuple<size_t,type::layout> block::build(uint8_t *R, const uint32_t *
 
     auto tup2 = block_bitset::build(R,bitset_array,bs_i);
     total_bytes_used += std::get<0>(tup2);
-    std::cout << "Num uints: " << num_uint_bytes / sizeof(uint) << std::endl;
     return std::make_pair(total_bytes_used,type::BLOCK);
   }
   return std::make_pair(0,type::BLOCK);
@@ -116,11 +115,10 @@ inline void block::foreach_until(
     const size_t cardinality,
     const size_t number_of_bytes,
     const type::layout type) {
-  (void) cardinality; (void) type;
+  (void) cardinality; (void) type; (void) f; (void) A; (void) number_of_bytes;
 
-  if(number_of_bytes > 0){
-    abort();
-  }
+  std::cout <<" ERROR not implemented" << std::endl;
+  abort();
 }
 
 //Iterates over set applying a lambda.
@@ -156,21 +154,14 @@ inline size_t block::par_foreach(
    (void) number_of_bytes; (void) t; (void) cardinality;
 
   if(number_of_bytes > 0){
-    const size_t num_data_words = ((number_of_bytes-sizeof(uint64_t))/sizeof(uint64_t));
-    const uint64_t offset = ((uint64_t*)A)[0];
-    const uint64_t* A64 = (uint64_t*)(A+sizeof(uint64_t));
-    return par::for_range(0, num_data_words, 512,
-           [&f, &A64, cardinality,offset](size_t tid, size_t i) {
-              const uint64_t cur_word = A64[i];
-              if(cur_word != 0) {
-                for(size_t j = 0; j < BITS_PER_WORD; j++){
-                  const uint32_t curr_nb = BITS_PER_WORD*(i+offset) + j;
-                  if((cur_word >> j) % 2) {
-                    f(tid, curr_nb);
-                  }
-                }
-              }
-           });
+    const size_t num_uint_bytes = ((size_t*)A)[0];
+    const uint8_t * const uinteger_data = A+sizeof(size_t);
+    const uint8_t * const new_bs_data = A+sizeof(size_t)+num_uint_bytes;
+    const size_t num_bs_bytes = number_of_bytes-(sizeof(size_t)+num_uint_bytes);
+    const size_t uint_card = num_uint_bytes/sizeof(uint32_t);
+
+    uinteger::par_foreach(f,uinteger_data,uint_card,num_uint_bytes,type::UINTEGER);
+    block_bitset::par_foreach(f,new_bs_data,cardinality-uint_card,num_bs_bytes,type::BLOCK_BITSET);
   }
 
   return 1;
@@ -179,31 +170,66 @@ inline size_t block::par_foreach(
 template<typename F>
 inline void block::foreach_index(
   F f,
-  const uint8_t *data_in,
+  const uint8_t *A,
   const size_t cardinality,
   const size_t number_of_bytes,
   const type::layout t){
-  (void) cardinality; (void) data_in; (void) number_of_bytes; (void) t;
+  (void) cardinality; (void) number_of_bytes; (void) t;
 
-  abort();
+  if(number_of_bytes > 0){
+    const size_t num_uint_bytes = ((size_t*)A)[0];
+    const uint8_t * const uinteger_data = A+sizeof(size_t);
+    const uint8_t * const new_bs_data = A+sizeof(size_t)+num_uint_bytes;
+    const size_t num_bs_bytes = number_of_bytes-(sizeof(size_t)+num_uint_bytes);
+    const size_t uint_card = num_uint_bytes/sizeof(uint32_t);
+
+    uinteger::foreach_index(f,uinteger_data,uint_card,num_uint_bytes,type::UINTEGER);
+    block_bitset::foreach_index(f,new_bs_data,cardinality-uint_card,num_bs_bytes,type::BLOCK_BITSET);
+  }
 }
 
 template<typename F>
 inline size_t block::par_foreach_index(
   F f,
-  const uint8_t *data_in,
+  const uint8_t *A,
   const size_t cardinality,
   const size_t number_of_bytes,
   const type::layout t){
-  abort();
+  (void) t;
+
+  if(number_of_bytes > 0){
+    const size_t num_uint_bytes = ((size_t*)A)[0];
+    const uint8_t * const uinteger_data = A+sizeof(size_t);
+    const uint8_t * const new_bs_data = A+sizeof(size_t)+num_uint_bytes;
+    const size_t num_bs_bytes = number_of_bytes-(sizeof(size_t)+num_uint_bytes);
+    const size_t uint_card = num_uint_bytes/sizeof(uint32_t);
+
+    uinteger::par_foreach_index(f,uinteger_data,uint_card,num_uint_bytes,type::UINTEGER);
+    block_bitset::par_foreach_index(f,new_bs_data,cardinality-uint_card,num_bs_bytes,type::BLOCK_BITSET);
+  }
+
 }
 
 inline long block::find(uint32_t key, 
-  const uint8_t *data_in, 
+  const uint8_t *A, 
   const size_t number_of_bytes,
   const type::layout t){
-  (void) data_in; (void) number_of_bytes; (void) t; (void) key;
-  return -1;
+  (void) t;
+
+  long index = -1;
+  if(number_of_bytes > 0){
+    const size_t num_uint_bytes = ((size_t*)A)[0];
+    const uint8_t * const uinteger_data = A+sizeof(size_t);
+    const uint8_t * const new_bs_data = A+sizeof(size_t)+num_uint_bytes;
+    const size_t num_bs_bytes = number_of_bytes-(sizeof(size_t)+num_uint_bytes);
+
+    index = uinteger::find(key,uinteger_data,num_uint_bytes,type::UINTEGER);
+    if(index != -1) return index;
+    index = block_bitset::find(key,new_bs_data,num_bs_bytes,type::BLOCK_BITSET);
+
+  }
+
+  return index;
 }
 
 #endif

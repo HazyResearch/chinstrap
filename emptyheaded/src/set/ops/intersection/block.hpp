@@ -6,52 +6,7 @@
 #include "hetero.hpp"
 
 namespace ops{
-  inline void distinct_merge_three_way(
-    const size_t count,
-    uint32_t *result, 
-    const uint32_t *A, const size_t lenA, 
-    const uint32_t *B, const size_t lenB,
-    const uint32_t *C, const size_t lenC){
 
-    size_t i_a = 0;
-    size_t i_b = 0;
-    size_t i_c = 0;
-    for(size_t i=0; i < count; i++){
-      if(i_a < lenA && i_b < lenB && i_c < lenC){
-        if(A[i_a] <= B[i_b] && A[i_a] <= C[i_c]){
-          result[i] = A[i_a++];
-        } else if(B[i_b] <= A[i_a] && B[i_b] <= C[i_c]){
-          result[i] = B[i_b++];
-        } else{
-          result[i] = C[i_c++];
-        }
-      } else if(i_b < lenB && i_c < lenC){
-        if(B[i_b] <= C[i_c]){
-          result[i] = B[i_b++];
-        } else{
-          result[i] = C[i_c++];
-        }
-      } else if(i_a < lenA && i_c < lenC){
-        if(A[i_a] <= C[i_c]){
-          result[i] = A[i_a++];
-        } else{
-          result[i] = C[i_c++];
-        }
-      } else if(i_a < lenA && i_b < lenB){
-        if(A[i_a] <= B[i_b]){
-          result[i] = A[i_a++];
-        } else{
-          result[i] = B[i_b++];
-        }
-      } else if(i_a < lenA){
-        result[i] = A[i_a++];
-      } else if(i_b < lenB){
-        result[i] = B[i_b++];
-      } else{
-        result[i] = C[i_c++];
-      }
-    }
-  }
   inline Set<block>* set_intersect(Set<block> *C_in,const Set<block> *A_in,const Set<block> *B_in){
     if(A_in->number_of_bytes == 0 || B_in->number_of_bytes == 0){
       C_in->cardinality = 0;
@@ -73,13 +28,6 @@ namespace ops{
     const size_t B_num_bs_bytes = B_in->number_of_bytes-(sizeof(size_t)+B_num_uint_bytes);
     const size_t B_uint_card = B_num_uint_bytes/sizeof(uint32_t);
 
-    //do all three uintegers then merge then intersect the bs
-    const size_t scratch1_space = A_num_uint_bytes;
-    uint8_t *scratch1 = new uint8_t[sizeof(uint64_t)*(A_in->cardinality+B_in->cardinality)]; //FIXME
-    const size_t scratch2_space = A_num_uint_bytes;
-    uint8_t *scratch2 = scratch1+scratch1_space;    
-    uint8_t *scratch3 = scratch2+scratch2_space; 
-    //C_in->data += (scratch1_space+scratch2_space+scratch3_space);  
 
     const Set<uinteger>A_I(A_uinteger_data,A_uint_card,A_num_uint_bytes,type::UINTEGER);
     const Set<uinteger>B_I(B_uinteger_data,B_uint_card,B_num_uint_bytes,type::UINTEGER);
@@ -89,45 +37,51 @@ namespace ops{
 
     size_t count = 0;
     
+    //const uint32_t offset = 2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t);
     uint8_t *C_pointer = C_in->data+sizeof(size_t);
-    if( (A_I.number_of_bytes != 0 || B_I.number_of_bytes != 0) &&
-      (A_BS.number_of_bytes != 0 || B_BS.number_of_bytes != 0)){
-      
-      Set<uinteger>UU(scratch1);
-      Set<uinteger>UBS(scratch2);
-      Set<uinteger>BSU(scratch3);
+    uint32_t *C_data = (uint32_t*)C_pointer;
 
-      UU = ops::set_intersect(&UU,&A_I,&B_I);
-      count += UU.cardinality;
+    ////////////////////////////////////////////////////////
+    //Functions applied for A and B during the intersection
+    auto data_functor = [&](uint32_t d){return d;};
+    //For each value of A probe the B bitset
+    auto check_a = [&](uint32_t a_d){
+      if(B_BS.find(a_d) != -1){
+        C_data[count++] = a_d;
+      }
+      return;
+    };
+    //At the end if we have remaining A elements we must check them
+    auto finish_a = [&](const uint8_t *start, const uint8_t *end, size_t increment){
+     while(start < end){
+      check_a(*(uint32_t*)start);
+      start += increment;
+     } 
+     return;
+    };
+    auto check_b = [&](uint32_t a_d){
+      if(A_BS.find(a_d) != -1){
+        C_data[count++] = a_d;
+      }
+      return;
+    };
+    auto finish_b = [&](const uint8_t *start, const uint8_t *end, size_t increment){
+     while(start < end){
+      check_b(*(uint32_t*)start);
+      start += increment;
+     }
+     return;
+    };
+    auto match = [&](uint32_t a_index, uint32_t b_index, uint32_t d){
+      (void) a_index; (void) b_index;
+      C_data[count++] = d;
+      return std::make_pair<uint32_t,uint32_t>(1,1);
+    };
+    ////////////////////////////////////////////////////////
 
-      UBS = ops::set_intersect(&UBS,&A_I,&B_BS);
-      count += UBS.cardinality;
+    find_matching_offsets(A_uinteger_data,A_uint_card,sizeof(uint32_t),data_functor,check_a,finish_a,
+      B_uinteger_data,B_uint_card,sizeof(uint32_t),data_functor,check_b,finish_b,match);
 
-      BSU = ops::set_intersect(&BSU,&B_I,&A_BS);
-      count += BSU.cardinality;
-
-      #if WRITE_VECTOR == 1
-      distinct_merge_three_way(
-        count,
-        (uint32_t*)(C_pointer),
-        (uint32_t*)UU.data,UU.cardinality, 
-        (uint32_t*)UBS.data,UBS.cardinality,
-        (uint32_t*)BSU.data,BSU.cardinality);
-      #endif
-    } else if(A_BS.number_of_bytes == 0 && B_BS.number_of_bytes == 0){
-      Set<uinteger>UU(C_pointer);
-      UU = ops::set_intersect(&UU,&A_I,&B_I);
-      count += UU.cardinality;
-
-      ((size_t*)C_in->data)[0] = (count*sizeof(uint32_t));
-      C_in->cardinality = count;
-      C_in->number_of_bytes = sizeof(size_t)+(count*sizeof(uint32_t));
-      C_in->density = 0.0;
-      C_in->type= type::BLOCK;
-
-      return C_in;
-    }
-    
     const size_t num_uint = count;
     ((size_t*)C_in->data)[0] = (num_uint*sizeof(uint32_t));
     C_pointer += (num_uint*sizeof(uint32_t));
