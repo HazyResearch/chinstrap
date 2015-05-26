@@ -46,6 +46,7 @@ namespace ops{
     auto data_functor = [&](uint32_t d){return d;};
     //For each value of A probe the B bitset
     auto check_a = [&](uint32_t a_d){
+      //std::cout << "checking a: " << a_d  << std::endl;
       if(B_BS.find(a_d) != -1){
         C_data[count++] = a_d;
       }
@@ -86,8 +87,11 @@ namespace ops{
     ((size_t*)C_in->data)[0] = (num_uint*sizeof(uint32_t));
     C_pointer += (num_uint*sizeof(uint32_t));
 
+    //std::cout << "Num uint: " << num_uint << std::endl;
+
     Set<block_bitset>BSBS(C_pointer);
     BSBS = ops::set_intersect(&BSBS,&A_BS,&B_BS);
+    //std::cout << "BS BS count: " << BSBS.cardinality << std::endl;
     count += BSBS.cardinality;
 
     C_in->cardinality = count;

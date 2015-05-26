@@ -17,14 +17,18 @@ namespace ops{
     FEB feb, 
     F f){
 
-
-      if (lenA == 0 || lenB == 0)
-          return;
-
       uint32_t a_index = 0;
       uint32_t b_index = 0;
       const uint8_t *endA = A + lenA*increment_a;
       const uint8_t *endB = B + lenB*increment_b;
+
+      if (lenA == 0){
+        feb(B,endB,increment_b);
+        return;
+      } else if(lenB == 0){
+        fea(A,endA,increment_a);
+        return;
+      }
 
       while (1) {
           while (fa(*((uint32_t*)A)) < fb(*((uint32_t*)B))) {
@@ -33,16 +37,16 @@ namespace ops{
               A += increment_a;
               ++a_index;
               if (A == endA){
-                fea(A,endA,increment_a);
+                feb(B,endB,increment_b);
                 return;
               }
           }
           while (fa(*((uint32_t*)A)) > fb(*((uint32_t*)B)) ) {
-              B += increment_b;
               fcb(*(uint32_t*)B);
+              B += increment_b;
               ++b_index;
               if (B == endB){
-                feb(B,endB,increment_b);
+                fea(A,endA,increment_a);
                 return;
               }
           }
@@ -63,7 +67,6 @@ namespace ops{
               goto SKIP_FIRST_COMPARE;
           }
       }
-
       return; // NOTREACHED
   }
 
