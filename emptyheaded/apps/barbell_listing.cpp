@@ -186,25 +186,46 @@ struct barbell_listing: public application<T> {
     debug::stop_clock("Query",qt);
   }
 
-  auto qt = debug::start_clock();
   // now do the topdown pass of yannakakis
-  allocator::memory<uint8_t> output_buffer(100 * R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
+  unsigned long num_d_blocks = 0 ;
+  par::reducer<double>  max_time_on_d_blocks(0,[](double a, double b){
+    return a > b ? a : b;
+  });
+
+  par::reducer<double>  time_get_block(0,[](double a, double b){
+    return a + b;
+  });
+
+  allocator::memory<uint8_t> output_buffer(200 * R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
+  auto qt = debug::start_clock();
   TrieBlock<T>* a_block = a3_block;
   a_block->set.par_foreach([&](size_t tid, uint32_t a_d) {
+    double time_on_d_blocks = 0;
+    auto find_b_e_block = debug::start_clock();
     TrieBlock<T>* b_block = a_block->get_block(a_d);
     TrieBlock<T>* e_block = a1_block->get_block(a_d);
+    time_get_block.update(tid, debug::stop_clock(find_b_e_block));
     if (b_block && e_block) {
       b_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
       b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d) {
+        auto find_c_block = debug::start_clock();
         TrieBlock<T>* old_c_block = a2_block->get_block(b_d);
+        time_get_block.update(tid, debug::stop_clock(find_c_block));
         if (old_c_block) {
           TrieBlock<T>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(old_c_block);
           c_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
           b_block->set_block(b_i, b_d, c_block);
           c_block->set.foreach_index([&](uint32_t c_i, uint32_t c_d) {
+            auto find_d_block = debug::start_clock();
             TrieBlock<T>* old_d_block = old_c_block->get_block(c_d);
+            double time_find_d_block =  debug::stop_clock(find_d_block);
+            time_on_d_blocks += time_find_d_block;
+            time_get_block.update(tid, time_find_d_block);
             if (old_d_block) {
+              auto copy_d_block = debug::start_clock();
               TrieBlock<T>* d_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(old_d_block);
+              time_on_d_blocks += debug::stop_clock(copy_d_block);
+              num_d_blocks++;
               c_block->set_block(c_i, c_d, d_block);
               d_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
               d_block->set.foreach_index([&](uint32_t d_i, uint32_t d_d) {
@@ -222,12 +243,20 @@ struct barbell_listing: public application<T> {
         }
       });
     }
+    max_time_on_d_blocks.update(tid, time_on_d_blocks);
   });
-  debug::stop_clock("topdown pass of yannakakis",qt);
 
-  std::cout << "Checking answer now" << std::endl;
-  unsigned long size = 0;
-  a_block->set.foreach([&](uint32_t a_d) {
+  debug::stop_clock("topdown pass of yannakakis",qt);
+  std::cout << "Number of d blocks that were found and copied: " << num_d_blocks << std::endl;
+  std::cout << "Time spent on d blocks: " << max_time_on_d_blocks.evaluate(0) << std::endl;
+  std::cout << "Time spent on get_blocks: " << time_get_block.evaluate(0) << std::endl;
+  std::cout << "Checking answer now: " << std::endl;
+  par::reducer<size_t> total_count(0,[](size_t a, size_t b){
+    return a + b;
+  });
+
+  auto count_time = debug::start_clock();
+  a_block->set.par_foreach([&](size_t tid, uint32_t a_d) {
       // std::cout << a_d << std::endl;
       TrieBlock<T>* b_block = a_block->get_block(a_d);
       if (b_block) {
@@ -243,10 +272,10 @@ struct barbell_listing: public application<T> {
                           e_block->set.foreach([&](uint32_t e_d){
                             TrieBlock<T>* f_block = e_block->get_block(e_d);
                             if (f_block) {
-                              size += f_block->set.cardinality;
-                              //f_block->set.foreach([&](uint32_t f_d) {
-                              //  std::cout << a_d << " " << b_d << " " << c_d << " " << d_d << " " << e_d << " " << f_d << std::endl;
-                              //});
+                              total_count.update(tid, f_block->set.cardinality);
+                              // f_block->set.foreach([&](uint32_t f_d) {
+                              //   std::cout << a_d << " " << b_d << " " << c_d << " " << d_d << " " << e_d << " " << f_d << std::endl;
+                              // });
                             }
                           });
                         }
@@ -258,7 +287,8 @@ struct barbell_listing: public application<T> {
       }
     });
 
-    std::cout << size << std::endl;
+    std::cout << total_count.evaluate(0) << std::endl;
+    debug::stop_clock("time to count all the tuples",count_time);
    //////////////////////////////////////////////////////////////////////
   }
 };
