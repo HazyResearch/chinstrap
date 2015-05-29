@@ -62,9 +62,6 @@ struct undirected_triangle_counting: public application<T> {
     //R(a,b) join T(b,c) join S(a,c)
 
     //rpcm.init_counter_states();
-
-    common::alloc_scratch_space(R_ab->num_rows*sizeof(uint32_t));
-
     //allocate memory
     allocator::memory<uint8_t> B_buffer(R_ab->num_rows*sizeof(uint64_t));
     allocator::memory<uint8_t> C_buffer(R_ab->num_rows*sizeof(uint64_t));

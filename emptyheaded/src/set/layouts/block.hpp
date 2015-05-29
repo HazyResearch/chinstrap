@@ -184,7 +184,7 @@ inline void block::foreach_index(
     const size_t uint_card = num_uint_bytes/sizeof(uint32_t);
 
     uinteger::foreach_index(f,uinteger_data,uint_card,num_uint_bytes,type::UINTEGER);
-    block_bitset::foreach_index(f,new_bs_data,cardinality-uint_card,num_bs_bytes,type::BLOCK_BITSET);
+    block_bitset::foreach_index(f,new_bs_data,cardinality-uint_card,num_bs_bytes,type::BLOCK_BITSET,uint_card);
   }
 }
 
@@ -205,7 +205,7 @@ inline size_t block::par_foreach_index(
     const size_t uint_card = num_uint_bytes/sizeof(uint32_t);
 
     uinteger::par_foreach_index(f,uinteger_data,uint_card,num_uint_bytes,type::UINTEGER);
-    block_bitset::par_foreach_index(f,new_bs_data,cardinality-uint_card,num_bs_bytes,type::BLOCK_BITSET);
+    block_bitset::par_foreach_index(f,new_bs_data,cardinality-uint_card,num_bs_bytes,type::BLOCK_BITSET,uint_card);
   }
 
 }
@@ -222,11 +222,12 @@ inline long block::find(uint32_t key,
     const uint8_t * const uinteger_data = A+sizeof(size_t);
     const uint8_t * const new_bs_data = A+sizeof(size_t)+num_uint_bytes;
     const size_t num_bs_bytes = number_of_bytes-(sizeof(size_t)+num_uint_bytes);
+    const size_t uint_card = num_uint_bytes/sizeof(uint32_t);
 
     index = uinteger::find(key,uinteger_data,num_uint_bytes,type::UINTEGER);
     if(index != -1) return index;
     index = block_bitset::find(key,new_bs_data,num_bs_bytes,type::BLOCK_BITSET);
-
+    if(index != -1) return index+uint_card;
   }
 
   return index;

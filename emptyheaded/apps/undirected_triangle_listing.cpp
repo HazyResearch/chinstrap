@@ -101,6 +101,7 @@ struct undirected_triangle_counting: public application<T> {
 
         output_buffer.roll_back(tid, alloc_size - c_block->set.number_of_bytes);
         b_block->set_block(b_i,b_d,c_block);
+
         //assert(b_block->get_block(b_d)->set.cardinality == c_block->set.cardinality);        
       });
     });
@@ -115,6 +116,7 @@ struct undirected_triangle_counting: public application<T> {
           b_block->set.foreach([&](uint32_t b_d) {
               TrieBlock<T>* c_block = b_block->get_block(b_d);
               if (c_block) {
+                //std::cout << "A: " << a_d << " B: " << b_d << " Count: " << c_block->set.cardinality << std::endl;
                 size += c_block->set.cardinality;
               }
           });
