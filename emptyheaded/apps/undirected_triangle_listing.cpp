@@ -123,6 +123,7 @@ struct undirected_triangle_counting: public application<T> {
         }
       });
 
+    result = size;
     std::cout << size << std::endl;
    //////////////////////////////////////////////////////////////////////
   }
