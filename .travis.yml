@@ -12,6 +12,10 @@ before_install:
 
 script: "cd ./emptyheaded && make clean && make tests"
 
+notifications:
+  email:
+    - craberger@gmail.com
+
 branches:
   only:
     - master
