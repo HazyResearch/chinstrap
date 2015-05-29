@@ -90,8 +90,6 @@ std::pair<std::string,std::string> parse(int argc, char* argv[]) {
 
 #ifndef GOOGLE_TEST
 int main (int argc, char* argv[]) {
-  masks::init_masks();
-
   std::tuple<std::string,std::string> tup_in = parse(argc,argv);
   std::string l = std::get<0>(tup_in);
   std::string p = std::get<1>(tup_in);
