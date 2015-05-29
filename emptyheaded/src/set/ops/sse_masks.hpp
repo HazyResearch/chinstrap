@@ -10,14 +10,15 @@ namespace masks{
   }
   
   static uint64_t find_mask[64];
-  static inline void init_masks(){
-
+  static inline int init_masks(){
     find_mask[0] = 0;
     for(size_t i = 1; i < 64; i++){
       find_mask[i] = ((uint64_t)1 << (i-(uint64_t)1)) | find_mask[i-1];
     }
-
+    return 0;
   }
+  //force init_masks to run before main
+  static int m = init_masks();
 
   static __m128i shuffle_mask32[16] = {        
     _mm_set_epi8(15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0), //0

@@ -1,7 +1,7 @@
 #include "main.hpp"
 
 template<class T>
-struct undirected_triangle_counting: public application<T> {
+struct undirected_triangle_listing: public application<T> {
   uint64_t result = 0;
   void run(std::string path){
     //create the relation (currently a column wise table)
@@ -131,5 +131,5 @@ struct undirected_triangle_counting: public application<T> {
 
 template<class T>
 application<T>* init_app(){
-  return new undirected_triangle_counting<T>(); 
+  return new undirected_triangle_listing<T>(); 
 }
