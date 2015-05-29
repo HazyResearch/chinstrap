@@ -286,7 +286,7 @@ inline size_t block_bitset::par_foreach_index(
       const size_t cardinality,
       const size_t number_of_bytes,
       const type::layout t){
-  par_foreach_index(f,A,cardinality,number_of_bytes,t,0);
+  return par_foreach_index(f,A,cardinality,number_of_bytes,t,0);
 }
 
 inline long block_bitset::find(uint32_t key, 

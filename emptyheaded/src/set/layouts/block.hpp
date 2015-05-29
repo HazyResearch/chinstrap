@@ -207,7 +207,7 @@ inline size_t block::par_foreach_index(
     uinteger::par_foreach_index(f,uinteger_data,uint_card,num_uint_bytes,type::UINTEGER);
     block_bitset::par_foreach_index(f,new_bs_data,cardinality-uint_card,num_bs_bytes,type::BLOCK_BITSET,uint_card);
   }
-
+  return 1;
 }
 
 inline long block::find(uint32_t key, 
