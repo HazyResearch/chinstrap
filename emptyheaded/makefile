@@ -24,14 +24,18 @@ TOOLS_SOURCES=$(shell ls tools)
 TESTS_SOURCES=$(shell find tests -name '*.cpp' -exec basename {} \;)
 SERVER_SOURCES=server.cpp
 GENERATED_SOURCES=$(shell ls generated)
+BENCHMARKS_SOURCES=$(shell ls benchmarks)
 
 APPS=$(APPS_SOURCES:.cpp=)
 TOOLS=$(TOOLS_SOURCES:.cpp=)
 TESTS=$(TESTS_SOURCES:.cpp=)
+BENCHMARKS=$(BENCHMARKS_SOURCES:.cpp=)
+
 
 APPS_EXES=$(APPS:%=$(EXEDIR)/%)
 TOOLS_EXES=$(TOOLS:%=$(EXEDIR)/%)
 TESTS_EXES=$(TESTS:%=$(EXEDIR)/%)
+BENCHMARKS_EXES=$(BENCHMARKS:%=$(EXEDIR)/%)
 
 LIBS=-ltbb -lpthread
 
@@ -47,7 +51,10 @@ $(APPS_EXES): $(OBJECTS) $(APP_SOURCES) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=apps%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
 
 $(TOOLS_EXES): $(OBJECTS) $(EXEDIR)
-	$(CXX) $(CXXFLAGS) -m32 $(@:bin%=tools%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
+	$(CXX) $(CXXFLAGS) $(@:bin%=tools%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
+
+$(BENCHMARKS_EXES): $(OBJECTS) $(EXEDIR)
+	$(CXX) $(CXXFLAGS) $(@:bin%=benchmarks%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
 
 $(GENERATED_EXES): $(OBJECTS) $(EXEDIR)
 

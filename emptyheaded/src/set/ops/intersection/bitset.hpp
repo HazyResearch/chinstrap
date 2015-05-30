@@ -194,6 +194,66 @@ namespace ops{
 
     return C_in;
   }
+  inline Set<block_bitset>* set_intersect(Set<block_bitset> *C_in, const Set<block_bitset> *A_in, const Set<range_bitset> *B_in){
+    size_t count = 0;
+    size_t num_bytes = 0;
+
+    if(A_in->number_of_bytes > 0 && B_in->number_of_bytes > 0){
+      const size_t A_num_blocks = A_in->number_of_bytes/(2*sizeof(uint32_t)+(BLOCK_SIZE/8));
+      uint8_t *C = C_in->data;
+      const uint32_t offset = 2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t);
+
+      const uint64_t *b_index = (uint64_t*) B_in->data;
+      const uint64_t * const B = (uint64_t*)(B_in->data+sizeof(uint64_t));
+      const size_t s_b = ((B_in->number_of_bytes-sizeof(uint64_t))/(sizeof(uint64_t)+sizeof(uint32_t)));
+      const uint64_t b_end = (b_index[0]+s_b);
+      const uint64_t b_start = b_index[0];
+
+      for(size_t i = 0; i < A_num_blocks; i++){
+        uint32_t index = WORDS_PER_BLOCK * (*((uint32_t*)(A_in->data+i*offset)));
+        if( (index+WORDS_PER_BLOCK-1) >= b_start && index < b_end){
+          size_t j = 0;
+          uint64_t *A_data = (uint64_t*)(A_in->data+i*offset+2*sizeof(uint32_t));
+          *((uint32_t*)C) = index/WORDS_PER_BLOCK;
+          *((uint32_t*)(C+sizeof(uint32_t))) = count;
+          const size_t old_count = count;
+          while(index < b_start){
+            *((uint64_t*)(C+2*sizeof(uint32_t)+j*sizeof(uint64_t))) = 0;
+            index++;
+            j++;
+          }
+          while(j < WORDS_PER_BLOCK && index < b_end){
+            uint64_t result = A_data[j] & B[index-b_start];
+            *((uint64_t*)(C+2*sizeof(uint32_t)+j*sizeof(uint64_t))) = result; 
+            count += _mm_popcnt_u64(result);
+            j++;
+            index++;
+          }
+          while(j < WORDS_PER_BLOCK){
+            *((uint64_t*)(C+2*sizeof(uint32_t)+j*sizeof(uint64_t))) = 0;
+            j++;
+          }
+          if(old_count != count){
+            num_bytes += offset;
+            C += offset;
+          }
+        }
+        if(index >= b_end)
+          break;
+      }
+    }
+
+    const double density = 0.0;
+    C_in->cardinality = count;
+    C_in->number_of_bytes = num_bytes;
+    C_in->density = density;
+    C_in->type= type::BLOCK_BITSET;
+
+    return C_in;
+  }
+  inline Set<block_bitset>* set_intersect(Set<block_bitset> *C_in, const Set<range_bitset> *A_in, const Set<block_bitset> *B_in){
+    return set_intersect(C_in,B_in,A_in);
+  }
   inline Set<block_bitset>* set_intersect(Set<block_bitset> *C_in,const Set<block_bitset> *A_in,const Set<block_bitset> *B_in){
     if(A_in->number_of_bytes == 0 || B_in->number_of_bytes == 0){
       C_in->cardinality = 0;
