@@ -74,7 +74,7 @@ inline type::layout hybrid::get_type(const uint32_t *data, const size_t length){
       if(density > ((double)common::bitset_req) && length > common::bitset_length) {
         return type::RANGE_BITSET;
       }
-      else if( length > 64 ) {
+      else if( length > common::block_bitset_req ) {
         return type::BLOCK_BITSET;
       } 
       else {
