@@ -75,14 +75,24 @@ struct undirected_triangle_listing: public application<T> {
       return a + b;
     });
 
+    double t_get_block = 0.0;
+    double t_intersection = 0.0;
+
     A.par_foreach([&](size_t tid, uint32_t a_d){
+      auto it = debug::start_clock();
       const Set<T> matching_b = H.get_block(a_d)->set;
+      t_get_block += debug::stop_clock(it);
+
       //build output B block
       TrieBlock<T>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
       const size_t alloc_size = sizeof(uint64_t)*TR_ab->ranges->at(0)*2;
 
       Set<T> B(output_buffer.get_next(tid, alloc_size));
+
+      it = debug::start_clock();
       b_block->set = ops::set_intersect(&B, &matching_b, &A); //intersect the B
+      t_intersection += debug::stop_clock(it);
+
       output_buffer.roll_back(tid, alloc_size - b_block->set.number_of_bytes);
       b_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1)); //find out the range of level 1
 
@@ -91,12 +101,18 @@ struct undirected_triangle_listing: public application<T> {
 
       //Next attribute to peel off
       b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d){ // Peel off B attributes
+        it = debug::start_clock();
         const TrieBlock<T>* matching_c = H.get_block(b_d);
+        t_get_block += debug::stop_clock(it);
+
         // Placement new!!
         TrieBlock<T>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
         c_block->set = Set<T>(output_buffer.get_next(tid, alloc_size));
 
+        it = debug::start_clock();
         const size_t count = ops::set_intersect(&c_block->set, &matching_c->set, &matching_b)->cardinality;
+        t_intersection += debug::stop_clock(it);
+
         num_triangles.update(tid,count);
 
         output_buffer.roll_back(tid, alloc_size - c_block->set.number_of_bytes);
@@ -108,6 +124,9 @@ struct undirected_triangle_listing: public application<T> {
 
     std::cout << num_triangles.evaluate(0) << std::endl;
     debug::stop_clock("Query",qt);
+
+    std::cout << "GET BLOCK TIME: " << t_get_block << std::endl;
+    std::cout << "INTERSECTION TIME: " << t_intersection << std::endl;
 
     unsigned long size = 0;
     a_block->set.foreach([&](uint32_t a_d) {

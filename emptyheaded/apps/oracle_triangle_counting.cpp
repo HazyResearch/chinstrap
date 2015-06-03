@@ -1,7 +1,7 @@
 #include "main.hpp"
 
 template<class T>
-struct undirected_triangle_counting: public application<T> {
+struct oracle_triangle_counting: public application<T> {
   uint64_t result = 0;
   void run(std::string path){
     //create the relation (currently a column wise table)
@@ -78,10 +78,9 @@ struct undirected_triangle_counting: public application<T> {
     const TrieBlock<uinteger> H = *TR_ab->head;
     const Set<uinteger> A = H.set;
     A.par_foreach([&](size_t tid, uint32_t a_i){
+
       Set<uinteger> B(B_buffer.get_memory(tid)); //initialize the memory
       Set<uinteger> C(C_buffer.get_memory(tid));
-
-      std::cout << "A: " << a_i << std::endl; 
 
       const Set<uinteger> op1 = H.get_block(a_i)->set;
       auto outer = oracle::set_intersect(&B,&op1,&A,op1_buffer.get_memory(tid),op2_buffer.get_memory(tid));
@@ -91,7 +90,6 @@ struct undirected_triangle_counting: public application<T> {
       B = ops::set_intersect(&B,&op1,&A); //intersect the B
 
       B.foreach([&](uint32_t b_i){ //Peel off B attributes
-        std::cout << "A: " << a_i << " B: " << b_i << std::endl; 
         const TrieBlock<uinteger>* l2 = H.get_block(b_i);
         auto ot = oracle::set_intersect(&C,&l2->set,&op1,op1_buffer.get_memory(tid),op2_buffer.get_memory(tid)); //intersect the B
         oracle_time += std::get<0>(ot);
@@ -119,5 +117,5 @@ struct undirected_triangle_counting: public application<T> {
 
 template<class T>
 application<T>* init_app(){
-  return new undirected_triangle_counting<T>(); 
+  return new oracle_triangle_counting<T>(); 
 }

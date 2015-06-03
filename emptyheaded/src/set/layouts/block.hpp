@@ -234,7 +234,6 @@ inline long block::find(uint32_t key,
     index = block_bitset::find(key,new_bs_data,num_bs_bytes,type::BLOCK_BITSET);
     if(index != -1) return index+uint_card;
   }
-
   return index;
 }
 

@@ -297,6 +297,7 @@ inline long block_bitset::find(uint32_t key,
 
   const uint32_t data_offset = 2+(WORDS_PER_BLOCK*2);
   if(number_of_bytes > 0){
+    //always have at least one block in this code
     const size_t A_num_blocks = number_of_bytes/(2*sizeof(uint32_t)+(BLOCK_SIZE/8));
     long block_index = binary_search((uint32_t*)data_in,0,A_num_blocks-1,key/BLOCK_SIZE,[&](uint32_t d){return d*data_offset;});
     if(block_index != -1){

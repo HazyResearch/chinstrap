@@ -79,9 +79,6 @@ server: $(OBJECTS) $(EXEDIR)
 	SERVER_EXES=$(SERVER:%=$(EXEDIR)/%)
 	$(CXX) $(CXXFLAGS) $(@:bin%=server%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -ldl -o $bin/@ $(INCLUDE_DIRS)
 
-libs:
-	libs/build.sh
-
 tests: $(TESTS_EXES)
 	@$(foreach bin, $(TESTS_EXES), $(bin);)
 
