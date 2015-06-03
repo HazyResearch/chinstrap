@@ -1,10 +1,10 @@
 # Uncomment the following line to compile without PCM support
 #INTEL_PCM_HOME=/dfs/scratch0/caberger/IntelPerformanceCounterMonitorV2.8
 
-#CXX = g++-4.9
+#
 #CXX = /dfs/scratch0/noetzli/downloads/tmp/cilkplus-install/bin/g++ -Wcast-align
 #override CXX = g++
-override CXX = clang++
+ 
 override CXXFLAGS += -mavx -std=c++0x -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
 
 INCLUDE_DIRS=-Isrc
@@ -14,6 +14,11 @@ HEADERS=$(wildcard src/*hpp)
 SOURCES=$(wildcard src/*cpp)
 OBJECTS=$(SOURCES:src/%.cpp=$(OBJDIR)/%.o)
 
+ifdef TRAVIS
+	CXX = g++-4.9
+else 
+	CXX = clang++
+endif
 ifdef INTEL_PCM_HOME
 	INCLUDE_DIRS+=-I$(INTEL_PCM_HOME)
 	EXT_OBJECTS=$(INTEL_PCM_HOME)/cpucounters.o $(INTEL_PCM_HOME)/msr.o $(INTEL_PCM_HOME)/pci.o $(INTEL_PCM_HOME)/client_bw.o
