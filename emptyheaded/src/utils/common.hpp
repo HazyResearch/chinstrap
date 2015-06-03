@@ -38,7 +38,7 @@
 #define PADDING 300
 #define MAX_THREADS 512
 
-#define VECTORIZE 1
+#define VECTORIZE 0
 #define WRITE_VECTOR 1
 //#define NO_ALGORITHM
 

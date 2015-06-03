@@ -14,6 +14,10 @@ HEADERS=$(wildcard src/*hpp)
 SOURCES=$(wildcard src/*cpp)
 OBJECTS=$(SOURCES:src/%.cpp=$(OBJDIR)/%.o)
 
+ifdef NOVECTOR
+	override CXXFLAGS += -fno-tree-vectorize
+endif
+
 ifdef TRAVIS
 	CXX = g++-4.9
 else 

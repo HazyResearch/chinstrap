@@ -40,10 +40,105 @@
                    /* reads */ "i" (bytes));
 
 namespace ops{
+  //Code adopted from Daniel Lemire.
+  //https://github.com/lemire/SIMDCompressionAndIntersection/blob/master/src/intersection.cpp
+  /**
+   * This is often called galloping or exponential search.
+   *
+   * Used by frogintersectioncardinality below
+   *
+   * Based on binary search...
+   * Find the smallest integer larger than pos such
+   * that array[pos]>= min.
+   * If none can be found, return array.length.
+   * From code by O. Kaser.
+   */
+  static size_t __frogadvanceUntil(const uint32_t *array, const size_t pos,
+                                   const size_t length, const size_t min) {
+      size_t lower = pos + 1;
+
+      // special handling for a possibly common sequential case
+      if ((lower >= length) or (array[lower] >= min)) {
+          return lower;
+      }
+
+      size_t spansize = 1; // could set larger
+      // bootstrap an upper limit
+
+      while ((lower + spansize < length) and (array[lower + spansize] < min))
+          spansize *= 2;
+      size_t upper = (lower + spansize < length) ? lower + spansize : length - 1;
+
+      if (array[upper] < min) {// means array has no item >= min
+          return length;
+      }
+
+      // we know that the next-smallest span was too small
+      lower += (spansize / 2);
+
+      // else begin binary search
+      size_t mid = 0;
+      while (lower + 1 != upper) {
+          mid = (lower + upper) / 2;
+          if (array[mid] == min) {
+              return mid;
+          } else if (array[mid] < min)
+              lower = mid;
+          else
+              upper = mid;
+      }
+      return upper;
+
+  }
+
+  inline Set<uinteger>* scalar_gallop(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
+      const uint32_t *smallset = (uint32_t*)A_in->data;
+      const size_t smalllength = A_in->cardinality;
+      const uint32_t *largeset = (uint32_t*)B_in->data;
+      const size_t largelength = B_in->cardinality;
+      uint32_t *out = (uint32_t*)C_in->data;
+      if(A_in->cardinality < B_in->cardinality){
+        return scalar_gallop(C_in,B_in,A_in);
+      }
+      if (0 == smalllength){
+        C_in->cardinality = 0;
+        C_in->number_of_bytes = 0;
+        return C_in;
+      }
+
+      const uint32_t *const initout(out);
+      size_t k1 = 0, k2 = 0;
+      while (true) {
+          if (largeset[k1] < smallset[k2]) {
+              k1 = __frogadvanceUntil(largeset, k1, largelength, smallset[k2]);
+              if (k1 == largelength)
+                  break;
+          }
+  midpoint:
+          if (smallset[k2] < largeset[k1]) {
+              ++k2;
+              if (k2 == smalllength)
+                  break;
+          } else {
+              *out++ = smallset[k2];
+              ++k2;
+              if (k2 == smalllength)
+                  break;
+              k1 = __frogadvanceUntil(largeset, k1, largelength, smallset[k2]);
+              if (k1 == largelength)
+                  break;
+              goto midpoint;
+          }
+      }
+      C_in->cardinality = out - initout;
+      C_in->number_of_bytes = C_in->cardinality*sizeof(uint32_t);
+      return C_in;
+
+  }
+
   /**
    * Fast scalar scheme designed by N. Kurz.
    */
-
   inline size_t scalar(const uint32_t *A, const size_t lenA,
                 const uint32_t *B, const size_t lenB, uint32_t *out) {
       const uint32_t *const initout(out);
@@ -773,12 +868,16 @@ namespace ops{
 
     //return set_intersect_standard(C_in, rare, freq);
 
-    #ifndef NO_ALGORITHM
+#ifndef NO_ALGORITHM 
     const unsigned long min_size = 1;
     if(std::max(A_in->cardinality,B_in->cardinality) / std::max(min_size, std::min(A_in->cardinality,B_in->cardinality)) > 32)
+    #if VECTORIZE == 1
       return set_intersect_galloping(C_in, rare, freq);
-    else
+    #else 
+      return scalar_gallop(C_in,A_in,B_in);
     #endif
+    else
+#endif
       return set_intersect_shuffle(C_in, rare, freq);
   }
 }
