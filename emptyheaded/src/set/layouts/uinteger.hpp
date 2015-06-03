@@ -158,7 +158,7 @@ inline long uinteger::find(uint32_t key,
   const type::layout t){
   (void) t;
 
-  return binary_search((uint32_t*)data_in,0,(number_of_bytes/sizeof(uint32_t)),key,[&](uint32_t d){return d;});
+  return binary_search((uint32_t*)data_in,0,(number_of_bytes/sizeof(uint32_t))-1,key,[&](uint32_t d){return d;});
 }
 
 #endif

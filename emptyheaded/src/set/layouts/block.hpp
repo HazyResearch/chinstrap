@@ -101,8 +101,13 @@ inline std::tuple<size_t,type::layout> block::build(uint8_t *R, const uint32_t *
 
     auto tup2 = block_bitset::build(R,bitset_array,bs_i);
     total_bytes_used += std::get<0>(tup2);
+
+    delete[] uint_array;
+    delete[] bitset_array;
+
     return std::make_pair(total_bytes_used,type::BLOCK);
   }
+
   return std::make_pair(0,type::BLOCK);
 }
 

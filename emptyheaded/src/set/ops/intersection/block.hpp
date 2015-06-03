@@ -87,8 +87,6 @@ namespace ops{
     ((size_t*)C_in->data)[0] = (num_uint*sizeof(uint32_t));
     C_pointer += (num_uint*sizeof(uint32_t));
 
-    //std::cout << "Num uint: " << num_uint << std::endl;
-
     Set<block_bitset>BSBS(C_pointer);
     BSBS = ops::set_intersect(&BSBS,&A_BS,&B_BS);
     //std::cout << "BS BS count: " << BSBS.cardinality << std::endl;
