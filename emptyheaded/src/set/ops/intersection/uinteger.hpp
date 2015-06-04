@@ -47,7 +47,6 @@ namespace ops{
       return;
     }
   };
-
   struct unpack_uinteger{
     template<typename F>
     static inline void unpack(const __m128i x, const size_t num, F f){
@@ -252,6 +251,7 @@ namespace ops{
   ADVANCE_RARE:
       do {
           *matchOut = static_cast<uint32_t>(valRare);
+          f(valRare);
           valRare = rare[1]; // for next iteration
           ASM_LEA_ADD_BYTES(rare, sizeof(*rare)); // rare += 1;
 
@@ -859,15 +859,27 @@ namespace ops{
 
   template<typename F>
   inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f) {
-    return scalar_gallop<F,unpack_uinteger>(C_in,A_in,B_in,f);
-  }
-
-  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in) {
     const Set<uinteger> *rare = (A_in->cardinality > B_in->cardinality) ? B_in:A_in;
     const Set<uinteger> *freq = (A_in->cardinality > B_in->cardinality) ? A_in:B_in;
 
+#ifndef NO_ALGORITHM 
+    const unsigned long min_size = 1;
+    if(std::max(A_in->cardinality,B_in->cardinality) / std::max(min_size, std::min(A_in->cardinality,B_in->cardinality)) > 32)
+    #if VECTORIZE == 1
+      return set_intersect_galloping<unpack_uinteger>(C_in, rare, freq, f);
+    #else 
+      return scalar_gallop<unpack_uinteger>(C_in,A_in,B_in,f);
+    #endif
+    else
+#endif
+      return set_intersect_shuffle<unpack_uinteger>(C_in, rare, freq, f);
+  }
+
+  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in) {
     auto f = [&](uint32_t data){(void) data; return;};
-    //return set_intersect_standard(C_in, rare, freq);
+
+    const Set<uinteger> *rare = (A_in->cardinality > B_in->cardinality) ? B_in:A_in;
+    const Set<uinteger> *freq = (A_in->cardinality > B_in->cardinality) ? A_in:B_in;
 
 #ifndef NO_ALGORITHM 
     const unsigned long min_size = 1;

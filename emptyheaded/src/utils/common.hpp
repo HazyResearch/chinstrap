@@ -41,7 +41,7 @@
 #define VECTORIZE 1
 #define WRITE_VECTOR 1
 //#define NO_ALGORITHM
-#define OPTIMIZER_OVERHEAD
+//#define OPTIMIZER_OVERHEAD
 
 // Enables/disables pruning
 //#define NEW_BITSET
