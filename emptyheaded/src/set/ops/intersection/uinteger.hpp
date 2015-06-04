@@ -40,6 +40,23 @@
                    /* reads */ "i" (bytes));
 
 namespace ops{
+  struct unpack_null{
+    template<typename F>
+    static inline void unpack(const __m128i x, const size_t num, F f){
+      (void) x; (void) num; (void) f;
+      return;
+    }
+  };
+
+  struct unpack_uinteger{
+    template<typename F>
+    static inline void unpack(const __m128i x, const size_t num, F f){
+      for(size_t i =0 ; i < num; i++){
+        f(_mm_extract_epi32(x,i));
+      }
+    }
+  };
+
   //Code adopted from Daniel Lemire.
   //https://github.com/lemire/SIMDCompressionAndIntersection/blob/master/src/intersection.cpp
   /**
@@ -91,14 +108,15 @@ namespace ops{
 
   }
 
-  inline Set<uinteger>* scalar_gallop(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
+  template<class N,typename F>
+  inline Set<uinteger>* scalar_gallop(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
       const uint32_t *smallset = (uint32_t*)A_in->data;
       const size_t smalllength = A_in->cardinality;
       const uint32_t *largeset = (uint32_t*)B_in->data;
       const size_t largelength = B_in->cardinality;
       uint32_t *out = (uint32_t*)C_in->data;
       if(A_in->cardinality < B_in->cardinality){
-        return scalar_gallop(C_in,B_in,A_in);
+        return scalar_gallop<N>(C_in,B_in,A_in);
       }
       if (0 == smalllength){
         C_in->cardinality = 0;
@@ -121,6 +139,7 @@ namespace ops{
                   break;
           } else {
               *out++ = smallset[k2];
+              f(smallset[k2]);
               ++k2;
               if (k2 == smalllength)
                   break;
@@ -139,8 +158,9 @@ namespace ops{
   /**
    * Fast scalar scheme designed by N. Kurz.
    */
+  template<typename F>
   inline size_t scalar(const uint32_t *A, const size_t lenA,
-                const uint32_t *B, const size_t lenB, uint32_t *out) {
+                const uint32_t *B, const size_t lenB, uint32_t *out, F f) {
       const uint32_t *const initout(out);
       if (lenA == 0 || lenB == 0)
           return 0;
@@ -159,11 +179,8 @@ namespace ops{
                   return (out - initout);
           }
           if (*A == *B) {
-              #if WRITE_VECTOR == 1
               *out++ = *A;
-              #else
-              out++;
-              #endif
+              f(*A);
               if (++A == endA || ++B == endB)
                   return (out - initout);
           } else {
@@ -173,35 +190,7 @@ namespace ops{
 
       return (out - initout); // NOTREACHED
   }
-  inline size_t match_scalar(const uint32_t *A, const size_t lenA,
-                      const uint32_t *B, const size_t lenB,
-                      uint32_t *out) {
 
-      const uint32_t *initout = out;
-      if (lenA == 0 || lenB == 0) return 0;
-
-      const uint32_t *endA = A + lenA;
-      const uint32_t *endB = B + lenB;
-
-      while (1) {
-          while (*A < *B) {
-  SKIP_FIRST_COMPARE:
-              if (++A == endA) goto FINISH;
-          }
-          while (*A > *B) {
-              if (++B == endB) goto FINISH;
-          }
-          if (*A == *B) {
-              *out++ = *A;
-              if (++A == endA || ++B == endB) goto FINISH;
-          } else {
-              goto SKIP_FIRST_COMPARE;
-          }
-      }
-
-  FINISH:
-      return (out - initout);
-  }
 
   /**
    * Intersections scheme designed by N. Kurz that works very
@@ -218,7 +207,8 @@ namespace ops{
    *
    * This function  use inline assembly.
    */
-  inline Set<uinteger>* set_intersect_v1(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
+  template<class N,typename F>
+  inline Set<uinteger>* set_intersect_v1(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
       const uint32_t *rare = (uint32_t*)A_in->data;
       size_t lenRare = A_in->cardinality;
       const uint32_t *freq = (uint32_t*)B_in->data;
@@ -317,7 +307,7 @@ namespace ops{
       lenFreq = stopFreq + kFreqSpace - freq;
       lenRare = stopRare + kRareSpace - rare;
 
-      size_t tail = match_scalar(freq, lenFreq, rare, lenRare, matchOut);
+      size_t tail = scalar(freq, lenFreq, rare, lenRare, matchOut,f);
 
     const size_t density = 0.0;
     C_in->cardinality = count + tail;
@@ -341,7 +331,8 @@ namespace ops{
    *
    * This function DOES NOT use inline assembly instructions. Just intrinsics.
    */
-  inline Set<uinteger>* set_intersect_v3(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
+  template<class N,typename F>
+  inline Set<uinteger>* set_intersect_v3(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
       const uint32_t *rare = (uint32_t*)A_in->data;
       const size_t lenRare = A_in->cardinality;
       const uint32_t *freq = (uint32_t*)B_in->data;
@@ -367,7 +358,7 @@ namespace ops{
       const uint32_t *stopFreq = freq + lenFreq - freqspace;
       const uint32_t *stopRare = rare + lenRare - rarespace;
       if (freq > stopFreq) {
-        const size_t final_count = scalar(freq, lenFreq, rare, lenRare, out);
+        const size_t final_count = scalar(freq, lenFreq, rare, lenRare, out,f);
         const size_t density = 0.0;
         C_in->cardinality = final_count;
         C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
@@ -457,11 +448,12 @@ namespace ops{
   #endif 
           } else {
               *out++ = matchRare;
+              f(matchRare);
           }
       }
 
   FINISH_SCALAR: 
-    const size_t final_count = (out - initout) + scalar(freq,stopFreq + freqspace - freq, rare, stopRare + rarespace - rare, out);
+    const size_t final_count = (out - initout) + scalar(freq,stopFreq + freqspace - freq, rare, stopRare + rarespace - rare, out, f);
     const size_t density = 0.0;
     C_in->cardinality = final_count;
     C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
@@ -484,7 +476,8 @@ namespace ops{
    *
    * This function DOES NOT use assembly. It only relies on intrinsics.
    */
-  inline Set<uinteger>* set_intersect_galloping(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
+  template<class N,typename F>
+  inline Set<uinteger>* set_intersect_galloping(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
       const uint32_t *rare = (uint32_t*)A_in->data;
       const size_t lenRare = A_in->cardinality;
       const uint32_t *freq = (uint32_t*)B_in->data;
@@ -510,7 +503,7 @@ namespace ops{
       const uint32_t *stopFreq = freq + lenFreq - freqspace;
       const uint32_t *stopRare = rare + lenRare - rarespace;
       if (freq > stopFreq) {
-        const size_t final_count = scalar(freq, lenFreq, rare, lenRare, out);
+        const size_t final_count = scalar(freq, lenFreq, rare, lenRare, out, f);
         const size_t density = 0.0;
         C_in->cardinality = final_count;
         C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
@@ -664,11 +657,12 @@ namespace ops{
   #endif 
           } else {
               *out++ = matchRare;
+              f(matchRare);
           }
       }
 
   FINISH_SCALAR: 
-    const size_t final_count = (out - initout) + scalar(freq,stopFreq + freqspace - freq, rare, stopRare + rarespace - rare, out);
+    const size_t final_count = (out - initout) + scalar(freq,stopFreq + freqspace - freq, rare, stopRare + rarespace - rare, out, f);
     const size_t density = 0.0;
     C_in->cardinality = final_count;
     C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
@@ -677,7 +671,8 @@ namespace ops{
     return C_in;
   }
 
-  inline Set<uinteger>* set_intersect_ibm(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
+  template<class N,typename F>
+  inline Set<uinteger>* set_intersect_ibm(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
     uint32_t * const C = (uint32_t*) C_in->data; 
     const uint32_t * const A = (uint32_t*) A_in->data;
     const uint32_t * const B = (uint32_t*) B_in->data;
@@ -746,7 +741,7 @@ namespace ops{
           const size_t A_end = 8-start_index;
           const size_t B_pos = i_b;
           const size_t B_end = 8;
-          count += scalar(&A[A_pos],A_end,&B[B_pos],B_end,&C[count]);
+          count += scalar(&A[A_pos],A_end,&B[B_pos],B_end,&C[count],f);
         }
       } 
       if(A[i_a+7] > B[i_b+7]){
@@ -769,7 +764,7 @@ namespace ops{
     }
 
     // intersect the tail using scalar intersection
-    count += scalar(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,&C[count]);
+    count += scalar(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,&C[count],f);
 
     //XXX: Fix
     const double density = 0.0;//((count > 0) ? ((double)count/(C[count]-C[0])) : 0.0);
@@ -781,8 +776,9 @@ namespace ops{
 
     return C_in;
   }
-  
-  inline Set<uinteger>* set_intersect_shuffle(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
+
+  template<class N,typename F>
+  inline Set<uinteger>* set_intersect_shuffle(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
     uint32_t * const C = (uint32_t*) C_in->data; 
     const uint32_t * const A = (uint32_t*) A_in->data;
     const uint32_t * const B = (uint32_t*) B_in->data;
@@ -831,13 +827,12 @@ namespace ops{
       //]
 
       //[ copy out common elements
-      #if WRITE_VECTOR == 1
       //std::cout << "mask: " << mask << std::endl;
-      __m128i p = _mm_shuffle_epi8(v_a, masks::shuffle_mask32[mask]);
+      const __m128i p = _mm_shuffle_epi8(v_a, masks::shuffle_mask32[mask]);
       _mm_storeu_si128((__m128i*)&C[count], p);
+      const size_t num_hit = _mm_popcnt_u32(mask);
+      N::unpack(p,num_hit,f);
       //std::cout << "C[" << count << "]: " << C[count] << std::endl;
-
-      #endif
 
       count += _mm_popcnt_u32(mask); // a number of elements is a weight of the mask
       //]
@@ -845,7 +840,7 @@ namespace ops{
     #endif
 
     // intersect the tail using scalar intersection
-    count += scalar(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,&C[count]);
+    count += scalar(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,&C[count],f);
 
     #if WRITE_VECTOR == 0
     (void) C;
@@ -862,23 +857,29 @@ namespace ops{
     return C_in;  
   }
 
+  template<typename F>
+  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f) {
+    return scalar_gallop<F,unpack_uinteger>(C_in,A_in,B_in,f);
+  }
+
   inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in) {
     const Set<uinteger> *rare = (A_in->cardinality > B_in->cardinality) ? B_in:A_in;
     const Set<uinteger> *freq = (A_in->cardinality > B_in->cardinality) ? A_in:B_in;
 
+    auto f = [&](uint32_t data){(void) data; return;};
     //return set_intersect_standard(C_in, rare, freq);
 
 #ifndef NO_ALGORITHM 
     const unsigned long min_size = 1;
     if(std::max(A_in->cardinality,B_in->cardinality) / std::max(min_size, std::min(A_in->cardinality,B_in->cardinality)) > 32)
     #if VECTORIZE == 1
-      return set_intersect_galloping(C_in, rare, freq);
+      return set_intersect_galloping<unpack_null>(C_in, rare, freq, f);
     #else 
-      return scalar_gallop(C_in,A_in,B_in);
+      return scalar_gallop<unpack_null>(C_in,A_in,B_in,f);
     #endif
     else
 #endif
-      return set_intersect_shuffle(C_in, rare, freq);
+      return set_intersect_shuffle<unpack_null>(C_in, rare, freq, f);
   }
 }
 #endif

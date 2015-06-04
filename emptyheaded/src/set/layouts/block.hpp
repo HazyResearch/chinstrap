@@ -82,7 +82,7 @@ inline std::tuple<size_t,type::layout> block::build(uint8_t *R, const uint32_t *
 
       double density = ((i-block_start_index) < 2) ? 0.0:(double)(i-block_start_index)/BLOCK_SIZE;
 
-      if(density > BITSET_THRESHOLD){
+      if(density > common::bitset_req){
         for(size_t j = block_start_index; j < i; j++){
           bitset_array[bs_i++] = A[j];
         }

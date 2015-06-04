@@ -14,8 +14,6 @@ THIS CLASS IMPLEMENTS THE FUNCTIONS ASSOCIATED WITH THE BITSET LAYOUT.
 #define ADDRESS_BITS_PER_BLOCK 8
 #define WORDS_PER_BLOCK 4
 
-#define BITSET_THRESHOLD 0.11
-
 class block_bitset{
   public:
     static size_t word_index(const uint32_t bit_index);
