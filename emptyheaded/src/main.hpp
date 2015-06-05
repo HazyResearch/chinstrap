@@ -98,7 +98,9 @@ int main (int argc, char* argv[]) {
     std::cout << "LAYOUT: uinteger, # THREADS: " << NUM_THREADS << ", PATH: " << p << std::endl;
     application<uinteger>* myapp = init_app<uinteger>();
     myapp->run(p);
-  } else if(l == "range_bitset"){
+  } 
+/*
+  else if(l == "range_bitset"){
     std::cout << "LAYOUT: range_bitset, # THREADS: " << NUM_THREADS << ", PATH: " << p << std::endl;
     application<range_bitset>* myapp = init_app<range_bitset>();
     myapp->run(p);
@@ -115,6 +117,7 @@ int main (int argc, char* argv[]) {
     application<block>* myapp = init_app<block>();
     myapp->run(p);
   } 
+  */
   else{
     std::cout << "No valid layout entered" << std::endl;
     abort ();
