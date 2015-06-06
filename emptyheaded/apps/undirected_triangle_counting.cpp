@@ -80,11 +80,11 @@ struct undirected_triangle_counting: public application<T> {
       //std::cout << "A: " << a_i << std::endl; 
 
       const Set<T> op1 = H.get_block(a_i)->set;
-      B = ops::set_intersect(&B,&op1,&A); //intersect the B
+      B = ops::set_intersect<materialize>(&B,&op1,&A); //intersect the B
       B.foreach([&](uint32_t b_i){ //Peel off B attributes
         //std::cout << "A: " << a_i << " B: " << b_i << std::endl; 
         const TrieBlock<T>* l2 = H.get_block(b_i);
-        const size_t count = ops::set_intersect(&C,
+        const size_t count = ops::set_intersect<aggregate>(&C,
           &l2->set,
           &op1)->cardinality;
         //std::cout << count << std::endl;

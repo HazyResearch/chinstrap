@@ -38,14 +38,11 @@
     __asm volatile("lea %c1(%0), %0\n\t" :                       \
                    /* reads/writes %0 */  "+r" (ptr) :           \
                    /* reads */ "i" (bytes));
+  struct aggregate{};
+  struct materialize{};
 
 namespace ops{
-  struct unpack_null{
-    template<typename F>
-    static inline void unpack(const __m128i x, const size_t num, F f){
-      (void) x; (void) num; (void) f;
-      return;
-    }
+  struct no_check{
     static inline size_t check_registers(const __m128i Q0, const __m128i Q1){
       (void) Q0; (void) Q1;
       return 0;
@@ -60,32 +57,44 @@ namespace ops{
       return 0;
     }
   };
-  struct unpack_uinteger{
+  struct unpack_aggregate:no_check{
+    template <typename F>
+    static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
+      (void) x; (void) w; (void) f; (void) i_a; (void) i_b;
+      return 1;
+    }
     template<typename F>
-    static inline void unpack(const __m128i x, const size_t num, F f){
-      for(size_t i =0 ; i < num; i++){
-        f(_mm_extract_epi32(x,i));
-      }
+    static inline size_t unpack(const __m128i x, uint32_t *w, 
+      const size_t num, F f, const __m128i i_a, const __m128i i_b){
+      (void) i_a; (void) i_b;
+      (void) x; (void) num; (void) f; (void) w;
+
+      return num;
     }
-    static inline size_t check_registers(const __m128i Q0, const __m128i Q1){
-      if(_mm_testz_si128(Q0, Q0) == 0){
-        const uint32_t mask = _mm_movemask_ps((__m128)Q0);
-        return mask_array[mask];
-      } else{
-        const uint32_t mask = _mm_movemask_ps((__m128)Q1);
-        return mask_array[mask]+4;
-      }
-      return 0;
+  };
+  struct unpack_materialize:no_check{
+    template <typename F>
+    static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
+      (void) i_a; (void) i_b; (void) f;
+      *w = x;
+      return 1;
     }
+    template<typename F>
+    static inline size_t unpack(const __m128i x, uint32_t *w, 
+      const size_t num, F f, const __m128i i_a, const __m128i i_b){
+      (void) i_a; (void) i_b; (void) f;
+      _mm_storeu_si128((__m128i*)w, x);
+      return num;
+    }
+  };
+  struct check{
     static inline size_t check_registers(const __m128i Q0, const __m128i Q1, 
       const __m128i Q2, const __m128i Q3, 
       const __m128i r0, const __m128i r1, const __m128i r2, const __m128i r3, 
       const __m128i r4, const __m128i r5, const __m128i r6, const __m128i r7){
 
-      const vec F0 = _mm_or_si128(_mm_or_si128(Q0, Q1), _mm_or_si128(Q2, Q3));
-
-      const size_t mask_array[16] = {0,0,1,0,2,0,0,0,
-                               3,0,0,0,0,0,0,0};
+      (void) Q3;
+      const size_t mask_array[16] = {0,0,1,0,2,0,0,0,3,0,0,0,0,0,0,0};
 
       if (_mm_testz_si128(Q0, Q0) == 0) {
         if(_mm_testz_si128(r0, r0) == 0){
@@ -124,6 +133,85 @@ namespace ops{
       //not reached
       return 0;
     }
+    static inline size_t check_registers(const __m128i Q0, const __m128i Q1){
+      const size_t mask_array[16] = {0,0,1,0,2,0,0,0,3,0,0,0,0,0,0,0};
+      if(_mm_testz_si128(Q0, Q0) == 0){
+        const uint32_t mask = _mm_movemask_ps((__m128)Q0);
+        return mask_array[mask];
+      } else{
+        const uint32_t mask = _mm_movemask_ps((__m128)Q1);
+        return mask_array[mask]+4;
+      }
+      return 0;
+    }
+  };
+  struct unpack_uinteger_materialize:check{
+    template <typename F>
+    static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
+      *w = x;
+      return f(x,i_a,i_b);
+    }
+    template<typename F>
+    static inline size_t unpack(const __m128i x, uint32_t *w, 
+      const size_t num, F f, const __m128i i_a, const __m128i i_b){
+      size_t filter = 0;
+      for(size_t i =0 ; i < num; i++){
+        *(w+i) = _mm_extract_epi32(x,i);
+        filter += f(_mm_extract_epi32(x,i),_mm_extract_epi32(i_a,i),_mm_extract_epi32(i_b,i)); 
+      }      
+      return filter;
+    }
+  };
+  struct unpack_uinteger_aggregate:check{
+    template <typename F>
+    static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
+      (void) w;
+      return f(x,i_a,i_b);
+    }
+    template<typename F>
+    static inline size_t unpack(const __m128i x, uint32_t *w, 
+      const size_t num, F f, const __m128i i_a, const __m128i i_b){
+      (void) w;
+      size_t filter = 0;
+      for(size_t i =0 ; i < num; i++){
+        filter += f(_mm_extract_epi32(x,i),_mm_extract_epi32(i_a,i),_mm_extract_epi32(i_b,i)); 
+      }      
+      return filter;
+    }
+  };
+  struct unpack_uinteger_materialize_flip:check{
+    template <typename F>
+    static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
+      *w = x;
+      return f(x,i_b,i_a);
+    }
+    template<typename F>
+    static inline size_t unpack(const __m128i x, uint32_t *w, 
+      const size_t num, F f, const __m128i i_a, const __m128i i_b){
+      size_t filter = 0;
+      for(size_t i =0 ; i < num; i++){
+        *(w+i) = _mm_extract_epi32(x,i);
+        filter += f(_mm_extract_epi32(x,i),_mm_extract_epi32(i_b,i),_mm_extract_epi32(i_a,i)); 
+      }      
+      return filter;
+    }
+  };
+  struct unpack_uinteger_aggregate_flip:check{
+    template <typename F>
+    static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
+      (void) w;
+      return f(x,i_b,i_a);
+    }
+    template<typename F>
+    static inline size_t unpack(const __m128i x, uint32_t *w, 
+      const size_t num, F f, const __m128i i_a, const __m128i i_b){
+      (void) w;
+      size_t filter = 0;
+      for(size_t i =0 ; i < num; i++){
+        filter += f(_mm_extract_epi32(x,i),_mm_extract_epi32(i_b,i),_mm_extract_epi32(i_a,i)); 
+      }      
+      return filter;
+    }
   };
 
   //Code adopted from Daniel Lemire.
@@ -139,7 +227,6 @@ namespace ops{
    * If none can be found, return array.length.
    * From code by O. Kaser.
    */
-   /*
   static size_t __frogadvanceUntil(const uint32_t *array, const size_t pos,
                                    const size_t length, const size_t min) {
       size_t lower = pos + 1;
@@ -177,8 +264,7 @@ namespace ops{
       return upper;
 
   }
-  */
-  /*
+  
   template<class N,typename F>
   inline Set<uinteger>* scalar_gallop(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
       const uint32_t *smallset = (uint32_t*)A_in->data;
@@ -209,6 +295,7 @@ namespace ops{
               if (k2 == smalllength)
                   break;
           } else {
+              N::scalar(smallset[k2],out,f,k2,k1);
               *out++ = smallset[k2];
               f(smallset[k2],k2,k1);
               ++k2;
@@ -223,13 +310,12 @@ namespace ops{
       C_in->cardinality = out - initout;
       C_in->number_of_bytes = C_in->cardinality*sizeof(uint32_t);
       return C_in;
-
   }
-  */
+
   /**
    * Fast scalar scheme designed by N. Kurz.
    */
-  template<typename F>
+  template<class N, typename F>
   inline size_t scalar(const uint32_t *A, const size_t lenA,
                 const uint32_t *B, const size_t lenB, uint32_t *out, 
                 F f, const size_t offsetA, const size_t offsetB) {
@@ -253,8 +339,7 @@ namespace ops{
                   return (out - initout);
           }
           if (*A == *B) {
-              *out++ = *A;
-              f(*A,(A-startA)+offsetA,(B-startB)+offsetB);
+              out += N::scalar(*A,out,f,((A+offsetA)-startA),((B+offsetB)-startB));
               if (++A == endA || ++B == endB)
                   return (out - initout);
           } else {
@@ -411,6 +496,7 @@ namespace ops{
    *
    * This function DOES NOT use inline assembly instructions. Just intrinsics.
    */
+   /*
   template<class N,typename F>
   inline Set<uinteger>* set_intersect_v3(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
       const uint32_t *rare = (uint32_t*)A_in->data;
@@ -637,7 +723,7 @@ namespace ops{
     C_in->type= type::UINTEGER;
     return C_in;
   }
-
+  */
   /**
    * This is the SIMD galloping function. This intersection function works well
    * when lenRare and lenFreq have vastly different values.
@@ -652,6 +738,7 @@ namespace ops{
    *
    * This function DOES NOT use assembly. It only relies on intrinsics.
    */
+   /*
   template<class N,typename F>
   inline Set<uinteger>* set_intersect_galloping(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
       const uint32_t *rare = (uint32_t*)A_in->data;
@@ -1014,6 +1101,7 @@ namespace ops{
 
     return C_in;
   }
+  */
 
   template<class N,typename F>
   inline Set<uinteger>* set_intersect_shuffle(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
@@ -1040,52 +1128,63 @@ namespace ops{
       __m128i v_b = _mm_load_si128((__m128i*)&B[i_b]);
       //]
 
-      //[ move pointers
-      uint32_t a_max = A[i_a+3];
-      uint32_t b_max = B[i_b+3];
-      i_a += (a_max <= b_max) * 4;
-      i_b += (a_max >= b_max) * 4;
-      //]
-
       //[ compute mask of common elements
       const uint32_t right_cyclic_shift = _MM_SHUFFLE(0,3,2,1);
+
       __m128i cmp_mask1 = _mm_cmpeq_epi32(v_a, v_b);    // pairwise comparison
       v_b = _mm_shuffle_epi32(v_b, right_cyclic_shift);       // shuffling
+
       __m128i cmp_mask2 = _mm_cmpeq_epi32(v_a, v_b);    // again...
+      const uint32_t left_cyclic_shift = _MM_SHUFFLE(2,1,0,3);
+      __m128i cmp_mask2b = _mm_shuffle_epi32(cmp_mask2, left_cyclic_shift);
       v_b = _mm_shuffle_epi32(v_b, right_cyclic_shift);
+
       __m128i cmp_mask3 = _mm_cmpeq_epi32(v_a, v_b);    // and again...
+      const uint32_t left_cyclic_shift2 = _MM_SHUFFLE(1,0,3,2);
+      __m128i cmp_mask3b = _mm_shuffle_epi32(cmp_mask3, left_cyclic_shift2);
       v_b = _mm_shuffle_epi32(v_b, right_cyclic_shift);
+
       __m128i cmp_mask4 = _mm_cmpeq_epi32(v_a, v_b);    // and again.
+      const uint32_t left_cyclic_shift3 = _MM_SHUFFLE(0,3,2,1);
+      __m128i cmp_mask4b = _mm_shuffle_epi32(cmp_mask4, left_cyclic_shift3);
       __m128i cmp_mask = _mm_or_si128(
               _mm_or_si128(cmp_mask1, cmp_mask2),
               _mm_or_si128(cmp_mask3, cmp_mask4)
       ); // OR-ing of comparison masks
+      __m128i cmp_mask_b = _mm_or_si128(
+              _mm_or_si128(cmp_mask1, cmp_mask2b),
+              _mm_or_si128(cmp_mask3b, cmp_mask4b)
+      ); // OR-ing of comparison masks
+
       // convert the 128-bit mask to the 4-bit mask
-      uint32_t mask = _mm_movemask_ps((__m128)cmp_mask);
+      const uint32_t mask = _mm_movemask_ps((__m128)cmp_mask);
+      const uint32_t mask_b = _mm_movemask_ps((__m128)cmp_mask_b);
       //]
 
-      //[ copy out common elements
-      //std::cout << "mask: " << mask << std::endl;
+      __m128i a_offset = _mm_set1_epi32(i_a);
+      __m128i b_offset = _mm_set1_epi32(i_b);
+      
+      a_offset = _mm_add_epi32(_mm_shuffle_epi8(_mm_set_epi32(3,2,1,0),masks::shuffle_mask32[mask]),a_offset);
+      b_offset = _mm_add_epi32(_mm_shuffle_epi8(_mm_set_epi32(3,2,1,0),masks::shuffle_mask32[mask_b]),b_offset);
+
       const __m128i p = _mm_shuffle_epi8(v_a, masks::shuffle_mask32[mask]);
-      _mm_storeu_si128((__m128i*)&C[count], p);
-      const size_t num_hit = _mm_popcnt_u32(mask);
-      N::unpack(p,num_hit,f);
-      //std::cout << "C[" << count << "]: " << C[count] << std::endl;
+      const size_t num_hit = N::unpack(p,&C[count],_mm_popcnt_u32(mask),f,a_offset,b_offset);
 
-      count += _mm_popcnt_u32(mask); // a number of elements is a weight of the mask
-      //]
+      count += num_hit;
+
+      //advance pointers
+      const uint32_t a_max = A[i_a+3];
+      const uint32_t b_max = B[i_b+3];
+      i_a += (a_max <= b_max) * 4;
+      i_b += (a_max >= b_max) * 4;
     }
     #endif
 
     // intersect the tail using scalar intersection
-    count += scalar(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,&C[count],f);
-
-    #if WRITE_VECTOR == 0
-    (void) C;
-    #endif
+    count += scalar<N>(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,&C[count],f,i_a,i_b);
 
     //XXX: Fix
-    const double density = 0.0;//((count > 0) ? ((double)count/(C[count]-C[0])) : 0.0);
+    const double density = 0.0;
     
     C_in->cardinality = count;
     C_in->number_of_bytes = count*sizeof(uint32_t);
@@ -1095,41 +1194,51 @@ namespace ops{
     return C_in;  
   }
 
-  template<typename F>
-  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f) {
-    const Set<uinteger> *rare = (A_in->cardinality > B_in->cardinality) ? B_in:A_in;
-    const Set<uinteger> *freq = (A_in->cardinality > B_in->cardinality) ? A_in:B_in;
-
-#ifndef NO_ALGORITHM 
-    const unsigned long min_size = 1;
-    if(std::max(A_in->cardinality,B_in->cardinality) / std::max(min_size, std::min(A_in->cardinality,B_in->cardinality)) > 32)
-    #if VECTORIZE == 1
-      return set_intersect_galloping<unpack_uinteger>(C_in, rare, freq, f);
-    #else 
-      return scalar_gallop<unpack_uinteger>(C_in,A_in,B_in,f);
+  template<class N, typename F>
+  inline Set<uinteger>* run_intersection(Set<uinteger> *C_in, const Set<uinteger> *rare, const Set<uinteger> *freq, F f){
+    #ifndef NO_ALGORITHM 
+        const unsigned long min_size = 1;
+        if(std::max(A_in->cardinality,B_in->cardinality) / std::max(min_size, std::min(A_in->cardinality,B_in->cardinality)) > 32)
+        #if VECTORIZE == 1
+          return set_intersect_galloping<N>(C_in, rare, freq, f);
+        #else 
+          return scalar_gallop<N>(C_in,A_in,B_in,f);
+        #endif
+        else
     #endif
-    else
-#endif
-      return set_intersect_shuffle<unpack_uinteger>(C_in, rare, freq, f);
+      return set_intersect_shuffle<N>(C_in, rare, freq, f);
   }
 
-  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in) {
-    auto f = [&](uint32_t data){(void) data; return;};
+  template<class N>
+  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, const std::function<size_t(uint32_t data, uint32_t i_a, uint32_t i_b)> f) {
+    if(A_in->cardinality > B_in->cardinality){
+      return run_intersection<unpack_uinteger_materialize_flip>(C_in,B_in,A_in,f);
+    } 
+    return run_intersection<unpack_uinteger_materialize>(C_in,A_in,B_in,f);
+  }
 
+  template<>
+  inline Set<uinteger>* set_intersect<aggregate>(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, const std::function<size_t(uint32_t data, uint32_t i_a, uint32_t i_b)> f) {
+    if(A_in->cardinality > B_in->cardinality){
+      return run_intersection<unpack_uinteger_aggregate_flip>(C_in,B_in,A_in,f);
+    } 
+    return run_intersection<unpack_uinteger_aggregate>(C_in,A_in,B_in,f);
+  }
+  
+  template<class N>
+  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in) {
     const Set<uinteger> *rare = (A_in->cardinality > B_in->cardinality) ? B_in:A_in;
     const Set<uinteger> *freq = (A_in->cardinality > B_in->cardinality) ? A_in:B_in;
+    auto f = [&](uint32_t data, const uint32_t i_a, const uint32_t i_b){(void) data; (void) i_a; (void) i_b; return;};
+    return run_intersection<unpack_materialize>(C_in,rare,freq,f);
+  }
 
-#ifndef NO_ALGORITHM 
-    const unsigned long min_size = 1;
-    if(std::max(A_in->cardinality,B_in->cardinality) / std::max(min_size, std::min(A_in->cardinality,B_in->cardinality)) > 32)
-    #if VECTORIZE == 1
-      return set_intersect_galloping<unpack_null>(C_in, rare, freq, f);
-    #else 
-      return scalar_gallop<unpack_null>(C_in,A_in,B_in,f);
-    #endif
-    else
-#endif
-      return set_intersect_shuffle<unpack_null>(C_in, rare, freq, f);
+  template<>
+  inline Set<uinteger>* set_intersect<aggregate>(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in) {
+    const Set<uinteger> *rare = (A_in->cardinality > B_in->cardinality) ? B_in:A_in;
+    const Set<uinteger> *freq = (A_in->cardinality > B_in->cardinality) ? A_in:B_in;
+    auto f = [&](uint32_t data, const uint32_t i_a, const uint32_t i_b){(void) data; (void) i_a; (void) i_b; return;};
+    return run_intersection<unpack_aggregate>(C_in,rare,freq,f);
   }
 }
 #endif
