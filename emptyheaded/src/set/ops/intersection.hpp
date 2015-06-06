@@ -2,6 +2,8 @@
 #define _INTERSECTION_H_
 
 #include "intersection/uinteger.hpp"
+#include "intersection/bitset.hpp"
+
 //#include "intersection/set.hpp"
 //#include "intersection/block.hpp"
 //#include "intersection/oracle.hpp"

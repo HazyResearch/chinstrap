@@ -2,23 +2,288 @@
 #define _BITSET_INTERSECTION_H_
 
 namespace ops{
-  struct unpack_null_bs{
-    template<typename F>
-    static inline void unpack(const uint64_t x, const uint64_t num, F f){
-      (void) x; (void) num; (void) f;
+  inline size_t get_num_set(const uint32_t key, const uint64_t data, const uint32_t offset){
+    const uint64_t masked_word = data & (masks::find_mask[(key%BITS_PER_WORD)]);
+    return _mm_popcnt_u64(masked_word) + offset;
+  }
+  //////
+  struct bs_aggregate_null{
+    static inline void write_block_header(uint32_t *C, const uint32_t data, const uint32_t count){
+      (void) C; (void) data; (void) count;
       return;
     }
-  };
-  struct unpack_bitset{
+
     template<typename F>
-    static inline void unpack(const uint64_t x, const uint64_t offset, F f){
-      for(size_t j = 0; j < BITS_PER_WORD; j++){
-        if((x >> j) % 2) {
-          f(offset + j);
-        }
+    static inline size_t unpack_range(size_t count, uint64_t x, const uint64_t offset, F f,
+      const uint64_t A, const uint64_t B, const uint32_t *A_index, const uint32_t *B_index,
+      uint64_t *result, uint32_t *index_data){
+
+      (void) A, (void) B; (void) A_index; (void) B_index;(void) offset; (void)f;
+      (void) result; (void) index_data;
+
+      count += _mm_popcnt_u64(x);      
+      return count;
+    }
+
+    template<typename F>
+    static inline std::tuple<size_t,uint32_t,uint32_t> unpack_block(size_t count, uint64_t x, const uint64_t offset, F f,
+      const uint64_t A, const uint64_t B, uint32_t A_index, uint32_t B_index,
+      uint64_t *result){
+
+      (void) A, (void) B; (void) A_index; (void) B_index;(void) offset; (void)f;
+      (void) result;
+
+      count += _mm_popcnt_u64(x);      
+      return std::make_tuple(count,0,0);
+    }
+
+
+
+    template<typename F>
+    static inline size_t range(const __m256 r, const __m256 A, const __m256 B, 
+      size_t count, uint64_t *result, uint32_t *index_data, const uint64_t offset, F f, 
+      const uint32_t *A_index, const uint32_t *B_index){
+
+      (void) A; (void) B; (void) result; (void) index_data; (void) offset;
+      (void) f; (void) A_index; (void) B_index;
+      for(size_t i = 0 ; i < 4; i++){
+        count += _mm_popcnt_u64(_mm256_extract_epi64(r,i));
       }
+      return count;
+    }
+    template<typename F>
+    static inline std::tuple<size_t,uint32_t,uint32_t> block(const __m256 r, const __m256 A, const __m256 B, 
+      size_t count, uint64_t *result, const uint64_t offset, F f, 
+      uint32_t A_index, uint32_t B_index){
+
+      (void) A; (void) B; (void) result; (void) offset;
+      (void) f; (void) A_index; (void) B_index;
+      for(size_t i = 0 ; i < 4; i++){
+        count += _mm_popcnt_u64(_mm256_extract_epi64(r,i));
+      }
+
+      return std::make_tuple(count,0,0);
     }
   };
+
+  /////
+  struct bs_materialize_null{
+    static inline void write_block_header(uint32_t *C, const uint32_t data, const uint32_t count){
+      *C = data;
+      *(C+1) = count; 
+    }
+
+    template<typename F>
+    static inline size_t unpack_range(size_t count, uint64_t x, const uint64_t offset, F f,
+      const uint64_t A, const uint64_t B, const uint32_t *A_index, const uint32_t *B_index,
+      uint64_t *result, uint32_t *index_data){
+
+      (void) A, (void) B; (void) A_index; (void) B_index;(void) offset; (void)f;
+
+      *index_data = count;
+      count += _mm_popcnt_u64(x);      
+      *result = x;
+      return count;
+    }
+
+    template<typename F>
+    static inline std::tuple<size_t,uint32_t,uint32_t> unpack_block(size_t count, uint64_t x, const uint64_t offset, F f,
+      const uint64_t A, const uint64_t B, uint32_t A_index, uint32_t B_index,
+      uint64_t *result){
+
+      (void) A, (void) B; (void) A_index; (void) B_index; (void) offset; (void)f;
+
+      count += _mm_popcnt_u64(x);      
+      *result = x;
+
+      return std::make_tuple(count,0,0);
+    }
+
+    template<typename F>
+    static inline size_t range(const __m256 r, const __m256 A, const __m256 B, 
+      size_t count, uint64_t *result, uint32_t *index_data, const uint64_t offset, F f, 
+      const uint32_t *A_index, const uint32_t *B_index){
+
+      (void) A; (void) B; (void) result; (void) index_data; (void) offset;
+      (void) f; (void) A_index; (void) B_index;
+      _mm256_storeu_ps((float*)(result), r);
+      for(size_t i = 0 ; i < 4; i++){
+        index_data[i] = count;
+        count += _mm_popcnt_u64(_mm256_extract_epi64(r,i));
+      }
+      return count;
+    }
+    template<typename F>
+    static inline std::tuple<size_t,uint32_t,uint32_t> block(const __m256 r, const __m256 A, const __m256 B, 
+      size_t count, uint64_t *result, const uint64_t offset, F f, 
+      uint32_t A_index, uint32_t B_index){
+
+      (void) A; (void) B; (void) result; (void) offset;
+      (void) f; (void) A_index; (void) B_index;
+      _mm256_storeu_ps((float*)(result), r);
+      for(size_t i = 0 ; i < 4; i++){
+        count += _mm_popcnt_u64(_mm256_extract_epi64(r,i));
+      }
+
+      return std::make_tuple(count,0,0);
+    }
+  };
+
+  //////
+  struct bs_unpack_materialize{
+    static inline void write_block_header(uint32_t *C, const uint32_t data, const uint32_t count){
+      *C = data;
+      *(C+1) = count; 
+    }
+
+    template<typename F>
+    static inline std::tuple<size_t,uint32_t,uint32_t> unpack_block(size_t count, uint64_t x, const uint64_t offset, F f,
+      const uint64_t A, const uint64_t B, uint32_t A_index, uint32_t B_index,
+      uint64_t *result){
+
+      for(size_t j = 0; j < BITS_PER_WORD; j++){
+        if((x >> j) % 2) {
+          const uint32_t a_i = get_num_set(offset+j,A,A_index);
+          const uint32_t b_i = get_num_set(offset+j,B,B_index);
+          const size_t ret = f(offset+j,a_i,b_i);
+          count += ret;
+          x ^= (-ret ^ x) & (1 << j); //sets the j'th bit to the output of the function
+        }
+      }
+      *result = x;
+      A_index += _mm_popcnt_u64(A);
+      B_index += _mm_popcnt_u64(B);
+      return std::make_tuple(count,A_index,B_index);
+    }
+
+    template<typename F>
+    static inline size_t unpack_range(size_t count, uint64_t x, const uint64_t offset, F f,
+      const uint64_t A, const uint64_t B, const uint32_t *A_index, const uint32_t *B_index,
+      uint64_t *result, uint32_t *index_data){
+
+      *index_data = count;
+      for(size_t j = 0; j < BITS_PER_WORD; j++){
+        if((x >> j) % 2) {
+          const uint32_t a_i = get_num_set(offset+j,A,*A_index);
+          std::cout << "A index: " << a_i << " " << *A_index << std::endl;
+
+          const uint32_t b_i = get_num_set(offset+j,B,*B_index);
+          const size_t ret = f(offset+j,a_i,b_i);
+          count += ret;
+          x ^= (-ret ^ x) & (1 << j); //sets the j'th bit to the output of the function
+        }
+      }
+      *result = x;
+      return count;
+    }
+    template<typename F>
+    static inline size_t range(const __m256 r, const __m256 A, const __m256 B, 
+      size_t count, uint64_t *result, uint32_t *index_data, const uint64_t offset, F f, 
+      const uint32_t *A_index, const uint32_t *B_index){
+
+      for(size_t i = 0 ; i < 4; i++){
+        count = unpack_range(
+          count,
+          _mm256_extract_epi64(r,i),offset+i*BITS_PER_WORD,f,
+          _mm256_extract_epi64(A,i),_mm256_extract_epi64(B,i),
+          A_index+i,B_index+i,result+i,index_data+i);
+      }
+      return count;
+    }
+    template<typename F>
+    static inline std::tuple<size_t,uint32_t,uint32_t> block(const __m256 r, const __m256 A, const __m256 B, 
+      size_t count, uint64_t *result, const uint64_t offset, F f, 
+      uint32_t A_index, uint32_t B_index){
+
+      for(size_t i = 0 ; i < 4; i++){
+        auto tup = unpack_block(
+          count,
+          _mm256_extract_epi64(r,i),offset+i*BITS_PER_WORD,f,
+          _mm256_extract_epi64(A,i),_mm256_extract_epi64(B,i),
+          A_index,B_index,result+i);
+        count = std::get<0>(tup);
+        A_index = std::get<1>(tup);
+        B_index = std::get<2>(tup);
+      }
+      return std::make_tuple(count,A_index,B_index);
+    }
+  };
+
+  /////
+  struct bs_unpack_aggregate{
+    static inline void write_block_header(uint32_t *C, const uint32_t data, const uint32_t count){
+      (void) C; (void) data; (void) count;
+      return;
+    }
+    template<typename F>
+    static inline size_t unpack_range(size_t count, uint64_t x, const uint64_t offset, F f,
+      const uint64_t A, const uint64_t B, const uint32_t *A_index, const uint32_t *B_index,
+      uint64_t *result, uint32_t *index_data){
+
+      (void) index_data; (void) result;
+
+      for(size_t j = 0; j < BITS_PER_WORD; j++){
+        if((x >> j) % 2) {
+          const uint32_t a_i = get_num_set(offset+j,A,*A_index);
+          const uint32_t b_i = get_num_set(offset+j,B,*B_index);
+          const size_t ret = f(offset+j,a_i,b_i);
+          count += ret;
+        }
+      }
+      return count;
+    }
+    template<typename F>
+    static inline std::tuple<size_t,uint32_t,uint32_t> unpack_block(size_t count, uint64_t x, const uint64_t offset, F f,
+      const uint64_t A, const uint64_t B, uint32_t A_index, uint32_t B_index,
+      uint64_t *result){
+
+      (void) result;
+
+      for(size_t j = 0; j < BITS_PER_WORD; j++){
+        if((x >> j) % 2) {
+          const uint32_t a_i = get_num_set(offset+j,A,A_index);
+          const uint32_t b_i = get_num_set(offset+j,B,B_index);
+          const size_t ret = f(offset+j,a_i,b_i);
+          count += ret;
+        }
+      }
+      A_index += _mm_popcnt_u64(A);
+      B_index += _mm_popcnt_u64(B);
+      return std::make_tuple(count,A_index,B_index);    
+    }
+    template<typename F>
+    static inline size_t range(const __m256 r, const __m256 A, const __m256 B, 
+      size_t count, uint64_t *result, uint32_t *index_data, const uint64_t offset, F f, 
+      const uint32_t *A_index, const uint32_t *B_index){
+
+      for(size_t i = 0 ; i < 4; i++){
+        count = unpack_range(
+          count,
+          _mm256_extract_epi64(r,i),offset+i*BITS_PER_WORD,f,
+          _mm256_extract_epi64(A,i),_mm256_extract_epi64(B,i),
+          A_index+i,B_index+i,result+i,index_data+i);
+      }
+      return count;
+    }
+    template<typename F>
+    static inline std::tuple<size_t,uint32_t,uint32_t> block(const __m256 r, const __m256 A, const __m256 B, 
+      size_t count, uint64_t *result, const uint64_t offset, F f, 
+      uint32_t A_index, uint32_t B_index){
+
+      for(size_t i = 0 ; i < 4; i++){
+        auto tup = unpack_block(
+          count,
+          _mm256_extract_epi64(r,i),offset+i*BITS_PER_WORD,f,
+          _mm256_extract_epi64(A,i),_mm256_extract_epi64(B,i),
+          A_index,B_index,result+i);
+        count = std::get<0>(tup);
+        A_index = std::get<1>(tup);
+        B_index = std::get<2>(tup);
+      }
+      return std::make_tuple(count,A_index,B_index);
+    }
+  };
+
 
   template<typename F, typename FA, typename FB, typename FCA, typename FCB, typename FEA, typename FEB>
   inline void find_matching_offsets(const uint8_t *A, 
@@ -96,7 +361,9 @@ namespace ops{
     const uint64_t * const B,
     const size_t b_size,
     const uint64_t offset,
-    F f){
+    F f,
+    const uint32_t *A32_index,
+    const uint32_t *B32_index){
     
     size_t i = 0;
     size_t count = 0;
@@ -107,25 +374,11 @@ namespace ops{
       const __m256 m1 = _mm256_loadu_ps((float*)(A + vector_index));
       const __m256 m2 = _mm256_loadu_ps((float*)(B + vector_index));
       const __m256 r = _mm256_and_ps(m1, m2);
-      
-      _mm256_storeu_ps((float*)(result_data+vector_index), r);
-      
-      index_data[vector_index] = count;
-      count += _mm_popcnt_u64(result_data[vector_index]);
-      N::unpack(result_data[vector_index],(offset+vector_index)*BITS_PER_WORD,f);
-      
-      index_data[vector_index+1] = count;
-      count += _mm_popcnt_u64(result_data[vector_index+1]);
-      N::unpack(result_data[vector_index+1],(offset+vector_index+1)*BITS_PER_WORD,f);
 
-      index_data[vector_index+2] = count;
-      count += _mm_popcnt_u64(result_data[vector_index+2]);
-      N::unpack(result_data[vector_index+2],(offset+vector_index+2)*BITS_PER_WORD,f);
-
-      index_data[vector_index+3] = count;
-      count += _mm_popcnt_u64(result_data[vector_index+3]);
-      N::unpack(result_data[vector_index+3],(offset+vector_index+3)*BITS_PER_WORD,f);
-
+      count = N::range(r,m1,m2,count,result_data+vector_index,
+        index_data+vector_index,(offset+vector_index)*BITS_PER_WORD,
+        f,A32_index+vector_index,B32_index+vector_index);
+    
       i += 256;
     }
     #endif
@@ -134,23 +387,24 @@ namespace ops{
     for(; i < b_size; i+=64){
       const size_t vector_index = (i/BITS_PER_WORD);
       const uint64_t r = A[vector_index] & B[vector_index]; 
-      N::unpack(r,offset+(vector_index)*BITS_PER_WORD,f);
-      result_data[vector_index] = r;
-      index_data[vector_index] = count;
-      count += _mm_popcnt_u64(r);
+      count = N::unpack_range(count,r,offset+(vector_index)*BITS_PER_WORD,f,
+        A[vector_index],B[vector_index],A32_index+vector_index,B32_index+vector_index,
+        result_data+vector_index,index_data+vector_index);
     }
 
     return count;
   }
 
-  template <class N,typename F>
+  template <class N, typename F>
   inline size_t intersect_block(
     uint64_t * const result_data, 
     const uint64_t * const A, 
     const uint64_t * const B,
     const size_t b_size,
     const uint64_t offset,
-    F f){
+    F f,
+    uint32_t i_a,
+    uint32_t i_b){
     
     size_t i = 0;
     size_t count = 0;
@@ -161,21 +415,15 @@ namespace ops{
       const __m256 m1 = _mm256_loadu_ps((float*)(A + vector_index));
       const __m256 m2 = _mm256_loadu_ps((float*)(B + vector_index));
       const __m256 r = _mm256_and_ps(m1, m2);
-      
-      _mm256_storeu_ps((float*)(result_data+vector_index), r);
-      
-      count += _mm_popcnt_u64(result_data[vector_index]);
-      N::unpack(result_data[vector_index],(offset+vector_index)*BITS_PER_WORD,f);
 
-      count += _mm_popcnt_u64(result_data[vector_index+1]);
-      N::unpack(result_data[vector_index+1],(offset+vector_index+1)*BITS_PER_WORD,f);
+      auto tup = N::block(r,m1,m2,count,result_data+vector_index,
+        (offset+vector_index)*BITS_PER_WORD,
+        f,i_a,i_b);
 
-      count += _mm_popcnt_u64(result_data[vector_index+2]);
-      N::unpack(result_data[vector_index+2],(offset+vector_index+2)*BITS_PER_WORD,f);
+      count = std::get<0>(tup);
+      i_a = std::get<1>(tup);
+      i_b = std::get<2>(tup);
 
-      count += _mm_popcnt_u64(result_data[vector_index+3]);
-      N::unpack(result_data[vector_index+3],(offset+vector_index+3)*BITS_PER_WORD,f);
-      
       i += 256;
     }
     #endif
@@ -184,17 +432,21 @@ namespace ops{
     for(; i < b_size; i+=BITS_PER_WORD){
       const size_t vector_index = (i/BITS_PER_WORD);
       const uint64_t r = A[vector_index] & B[vector_index]; 
-      N::unpack(r,(offset+vector_index)*BITS_PER_WORD,f);
+      
+      auto tup = N::unpack_block(count,r,(offset+vector_index)*BITS_PER_WORD,f,
+        A[vector_index],B[vector_index],i_a,i_b,
+        result_data+vector_index);
 
-      result_data[vector_index] = r;
-      count += _mm_popcnt_u64(r);
+      count = std::get<0>(tup);
+      i_a = std::get<1>(tup);
+      i_b = std::get<2>(tup);
     }
 
     return count;
   }
 
   template <class N,typename F>
-  inline Set<range_bitset>* set_intersect(Set<range_bitset> *C_in, const Set<range_bitset> *A_in, const Set<range_bitset> *B_in, F f){
+  inline Set<range_bitset>* run_intersection(Set<range_bitset> *C_in, const Set<range_bitset> *A_in, const Set<range_bitset> *B_in, F f){
     long count = 0l;
     C_in->number_of_bytes = 0;
 
@@ -205,8 +457,8 @@ namespace ops{
       uint64_t * const C = (uint64_t*)(C_in->data+sizeof(uint64_t));
       const uint64_t * const A = (uint64_t*)(A_in->data+sizeof(uint64_t));
       const uint64_t * const B = (uint64_t*)(B_in->data+sizeof(uint64_t));
-      const size_t s_a = ((A_in->number_of_bytes-sizeof(uint64_t))/(sizeof(uint64_t)+sizeof(uint32_t)));
-      const size_t s_b = ((B_in->number_of_bytes-sizeof(uint64_t))/(sizeof(uint64_t)+sizeof(uint32_t)));
+      const size_t s_a = range_bitset::get_number_of_words(A_in->number_of_bytes); 
+      const size_t s_b = range_bitset::get_number_of_words(B_in->number_of_bytes);
 
       const bool a_big = a_index[0] > b_index[0];
       const uint64_t start_index = (a_big) ? a_index[0] : b_index[0];
@@ -216,6 +468,9 @@ namespace ops{
       const uint64_t end_index = ((a_index[0]+s_a) > (b_index[0]+s_b)) ? (b_index[0]+s_b):(a_index[0]+s_a);
       const uint64_t total_size = (start_index > end_index) ? 0:(end_index-start_index);
 
+      const uint32_t* A32_index = (uint32_t*)(A+s_a)+a_start_index;
+      const uint32_t* B32_index = (uint32_t*)(B+s_b)+b_start_index;
+
       //16 uint16_ts
       //8 ints
       //4 longs
@@ -224,7 +479,7 @@ namespace ops{
       uint64_t * const c_index = (uint64_t*) C_in->data;
       c_index[0] = start_index;
     
-      count = intersect_range_block<N>(C,index_write,A+a_start_index,B+b_start_index,total_size*64,start_index,f);
+      count = intersect_range_block<N>(C,index_write,A+a_start_index,B+b_start_index,total_size*64,start_index,f,A32_index,B32_index);
 
       C_in->number_of_bytes = total_size*(sizeof(uint64_t)+sizeof(uint32_t))+sizeof(uint64_t);
     }
@@ -237,18 +492,30 @@ namespace ops{
     return C_in;
   }
   
+  template<class N>
   inline Set<range_bitset>* set_intersect(Set<range_bitset> *C_in, const Set<range_bitset> *A_in, const Set<range_bitset> *B_in){
     auto f = [&](uint32_t data){(void) data; return;};
-    return set_intersect<unpack_null_bs>(C_in,A_in,B_in,f);
+    return run_intersection<bs_materialize_null>(C_in,A_in,B_in,f);
   }
 
-  template <typename F>
-  inline Set<range_bitset>* set_intersect(Set<range_bitset> *C_in, const Set<range_bitset> *A_in, const Set<range_bitset> *B_in, F f){
-    return set_intersect<unpack_bitset>(C_in,A_in,B_in,f);
+  template<>
+  inline Set<range_bitset>* set_intersect<aggregate>(Set<range_bitset> *C_in, const Set<range_bitset> *A_in, const Set<range_bitset> *B_in){
+    auto f = [&](uint32_t data){(void) data; return;};
+    return run_intersection<bs_aggregate_null>(C_in,A_in,B_in,f);
+  }
+
+  template <class N>
+  inline Set<range_bitset>* set_intersect(Set<range_bitset> *C_in, const Set<range_bitset> *A_in, const Set<range_bitset> *B_in, const std::function<size_t(uint32_t data, uint32_t i_a, uint32_t i_b)> f){
+    return run_intersection<bs_unpack_materialize>(C_in,A_in,B_in,f);
+  }
+
+  template <>
+  inline Set<range_bitset>* set_intersect<aggregate>(Set<range_bitset> *C_in, const Set<range_bitset> *A_in, const Set<range_bitset> *B_in, const std::function<size_t(uint32_t data, uint32_t i_a, uint32_t i_b)> f){
+    return run_intersection<bs_unpack_aggregate>(C_in,A_in,B_in,f);
   }
 
   template <typename N, typename F>
-  inline Set<block_bitset>* set_intersect(Set<block_bitset> *C_in,const Set<block_bitset> *A_in,const Set<block_bitset> *B_in, F f){
+  inline Set<block_bitset>* run_intersection(Set<block_bitset> *C_in,const Set<block_bitset> *A_in,const Set<block_bitset> *B_in, F f){
     if(A_in->number_of_bytes == 0 || B_in->number_of_bytes == 0){
       C_in->cardinality = 0;
       C_in->number_of_bytes = 0;
@@ -278,10 +545,12 @@ namespace ops{
         B_in->data,B_num_blocks,offset,[&](uint32_t b){return b;},check_f,finish_f, 
         
         [&](uint32_t a_index, uint32_t b_index, uint32_t data){    
-          *((uint32_t*)C) = data;
-          *((uint32_t*)(C+sizeof(uint32_t))) = count; 
+          N::write_block_header((uint32_t*)C,data,count);
           const size_t old_count = count;
-          count += intersect_block<N>((uint64_t*)(C+2*sizeof(uint32_t)),(uint64_t*)(A_data+a_index*offset),(uint64_t*)(B_data+b_index*offset),BLOCK_SIZE,data*WORDS_PER_BLOCK,f);
+          const uint32_t a_i = *(uint32_t*)(A_data+a_index*offset-sizeof(uint32_t)); 
+          const uint32_t b_i = *(uint32_t*)(B_data+b_index*offset-sizeof(uint32_t)); 
+
+          count += intersect_block<N>((uint64_t*)(C+2*sizeof(uint32_t)),(uint64_t*)(A_data+a_index*offset),(uint64_t*)(B_data+b_index*offset),BLOCK_SIZE,data*WORDS_PER_BLOCK,f,a_i,b_i);
           if(old_count != count){
             C += 2*sizeof(uint32_t)+bytes_per_block;
             num_bytes += 2*sizeof(uint32_t)+bytes_per_block;
@@ -298,14 +567,26 @@ namespace ops{
     return C_in;
   }
 
+  template<class N>
   inline Set<block_bitset>* set_intersect(Set<block_bitset> *C_in, const Set<block_bitset> *A_in, const Set<block_bitset> *B_in){
     auto f = [&](uint32_t data){(void) data; return;};
-    return set_intersect<unpack_null_bs>(C_in,A_in,B_in,f);
+    return run_intersection<bs_materialize_null>(C_in,A_in,B_in,f);
   }
 
-  template <typename F>
-  inline Set<block_bitset>* set_intersect(Set<block_bitset> *C_in, const Set<block_bitset> *A_in, const Set<block_bitset> *B_in, F f){
-    return set_intersect<unpack_bitset>(C_in,A_in,B_in,f);
+  template<>
+  inline Set<block_bitset>* set_intersect<aggregate>(Set<block_bitset> *C_in, const Set<block_bitset> *A_in, const Set<block_bitset> *B_in){
+    auto f = [&](uint32_t data){(void) data; return;};
+    return run_intersection<bs_aggregate_null>(C_in,A_in,B_in,f);
+  }
+
+  template <class N>
+  inline Set<block_bitset>* set_intersect(Set<block_bitset> *C_in, const Set<block_bitset> *A_in, const Set<block_bitset> *B_in, const std::function<size_t(uint32_t data, uint32_t i_a, uint32_t i_b)> f){
+    return run_intersection<bs_unpack_materialize>(C_in,A_in,B_in,f);
+  }
+
+  template <>
+  inline Set<block_bitset>* set_intersect<aggregate>(Set<block_bitset> *C_in, const Set<block_bitset> *A_in, const Set<block_bitset> *B_in, const std::function<size_t(uint32_t data, uint32_t i_a, uint32_t i_b)> f){
+    return run_intersection<bs_unpack_aggregate>(C_in,A_in,B_in,f);
   }
 
 }

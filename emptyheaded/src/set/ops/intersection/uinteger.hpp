@@ -837,7 +837,6 @@ namespace ops{
         
                   if (_mm_testz_si128(F0, F0) == 0) {
                     const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
-                    std::cout << (rare-startRare) << " " << ((freq+freqOffset)-startFreq) << std::endl;
                     out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
                   } 
               } else {
@@ -875,7 +874,6 @@ namespace ops{
         
                   if (_mm_testz_si128(F0, F0) == 0) {
                     const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
-                    std::cout << (rare-startRare) << " " << ((freq+freqOffset)-startFreq) << std::endl;
                     out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
                   }  
               }
@@ -915,7 +913,6 @@ namespace ops{
         
                   if (_mm_testz_si128(F0, F0) == 0) {
                     const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
-                    std::cout << (rare-startRare) << " " << ((freq+freqOffset)-startFreq) << std::endl;
                     out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
                   } 
               } else {
@@ -953,7 +950,6 @@ namespace ops{
         
                   if (_mm_testz_si128(F0, F0) == 0) {
                     const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
-                    std::cout << (rare-startRare) << " " << ((freq+freqOffset)-startFreq) << std::endl;
                     out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
                   } 
               }
@@ -1172,11 +1168,11 @@ namespace ops{
   inline Set<uinteger>* run_intersection(Set<uinteger> *C_in, const Set<uinteger> *rare, const Set<uinteger> *freq, F f){
     #ifndef NO_ALGORITHM 
         const unsigned long min_size = 1;
-        if(std::max(A_in->cardinality,B_in->cardinality) / std::max(min_size, std::min(A_in->cardinality,B_in->cardinality)) > 32)
+        if(std::max(rare->cardinality,freq->cardinality) / std::max(min_size, std::min(rare->cardinality,freq->cardinality)) > 32)
         #if VECTORIZE == 1
           return set_intersect_galloping<N>(C_in, rare, freq, f);
         #else 
-          return scalar_gallop<N>(C_in,A_in,B_in,f);
+          return scalar_gallop<N>(C_in,rare,freq,f);
         #endif
         else
     #endif
