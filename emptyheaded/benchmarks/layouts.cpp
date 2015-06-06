@@ -1,13 +1,19 @@
 #include "emptyheaded.hpp"
 
 int main (int argc, char* argv[]) {
-  uint32_t a[10] = {0,1,2,3,4,5,257,512,768,2056};
-  uint32_t b[10] = {0,1,2,3,4,5,512,613,650,768};
 
-  uint8_t *a_data = new uint8_t[10*10*sizeof(uint64_t)];
+  const size_t a_size = 3000;
+  uint32_t *a = new uint32_t[a_size];
+  for(size_t i = 0; i < a_size; i++){
+    a[i] = i;
+  }
+
+  uint32_t b[10] = {0,50,78,89,90,91,96,613,650,768};
+
+  uint8_t *a_data = new uint8_t[a_size*10*sizeof(uint64_t)];
   uint8_t *b_data = new uint8_t[10*10*sizeof(uint64_t)];
 
-  Set<uinteger> as = Set<uinteger>::from_array(a_data,a,10);
+  Set<uinteger> as = Set<uinteger>::from_array(a_data,a,a_size);
   Set<uinteger> bs = Set<uinteger>::from_array(b_data,b,10);
 
   uint8_t *c_data = new uint8_t[10*10*sizeof(uint64_t)];

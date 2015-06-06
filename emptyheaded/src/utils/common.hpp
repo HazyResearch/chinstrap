@@ -69,6 +69,9 @@ namespace common{
   static size_t block_bitset_req = 16;
 }
 
+struct aggregate{};
+struct materialize{};
+
 namespace type{
   enum file : uint8_t{
     csv = 0,

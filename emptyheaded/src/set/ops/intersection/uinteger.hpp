@@ -38,8 +38,6 @@
     __asm volatile("lea %c1(%0), %0\n\t" :                       \
                    /* reads/writes %0 */  "+r" (ptr) :           \
                    /* reads */ "i" (bytes));
-  struct aggregate{};
-  struct materialize{};
 
 namespace ops{
   struct no_check{
@@ -576,7 +574,7 @@ namespace ops{
                   const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
         
                   if (_mm_testz_si128(F0, F0) == 0) {
-                    const size_t freqOffset = N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
                     out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
                   }                
               } else {
@@ -614,7 +612,7 @@ namespace ops{
                   const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
         
                   if (_mm_testz_si128(F0, F0) == 0) {
-                    const size_t freqOffset = N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
                     out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
                   }  
               
@@ -655,7 +653,7 @@ namespace ops{
                   const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
         
                   if (_mm_testz_si128(F0, F0) == 0) {
-                    const size_t freqOffset = N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
                     out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
                   }   
 
@@ -693,7 +691,7 @@ namespace ops{
                   const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
         
                   if (_mm_testz_si128(F0, F0) == 0) {
-                    const size_t freqOffset = N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
                     out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
                   }  
               }
@@ -702,7 +700,7 @@ namespace ops{
       }
 
   FINISH_SCALAR: 
-    const size_t final_count = (out - initout) + scalar<N>(freq,stopFreq + freqspace - freq, rare, stopRare + rarespace - rare, out, f, freq-startFreq, rare-startRare);
+    const size_t final_count = (out - initout) + scalar<N>(rare, stopRare + rarespace - rare, freq,stopFreq + freqspace - freq, out, f, rare-startRare, freq-startFreq);
     const size_t density = 0.0;
     C_in->cardinality = final_count;
     C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
@@ -838,7 +836,8 @@ namespace ops{
                   const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
         
                   if (_mm_testz_si128(F0, F0) == 0) {
-                    const size_t freqOffset = N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    std::cout << (rare-startRare) << " " << ((freq+freqOffset)-startFreq) << std::endl;
                     out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
                   } 
               } else {
@@ -875,7 +874,8 @@ namespace ops{
                   const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
         
                   if (_mm_testz_si128(F0, F0) == 0) {
-                    const size_t freqOffset = N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    std::cout << (rare-startRare) << " " << ((freq+freqOffset)-startFreq) << std::endl;
                     out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
                   }  
               }
@@ -914,7 +914,8 @@ namespace ops{
                   const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
         
                   if (_mm_testz_si128(F0, F0) == 0) {
-                    const size_t freqOffset = N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    std::cout << (rare-startRare) << " " << ((freq+freqOffset)-startFreq) << std::endl;
                     out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
                   } 
               } else {
@@ -951,7 +952,8 @@ namespace ops{
                   const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
         
                   if (_mm_testz_si128(F0, F0) == 0) {
-                    const size_t freqOffset = N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    std::cout << (rare-startRare) << " " << ((freq+freqOffset)-startFreq) << std::endl;
                     out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
                   } 
               }
@@ -960,7 +962,7 @@ namespace ops{
       }
 
   FINISH_SCALAR: 
-    const size_t final_count = (out - initout) + scalar<N>(freq,stopFreq + freqspace - freq, rare, stopRare + rarespace - rare, out, f, freq-startFreq, rare-startRare);
+    const size_t final_count = (out - initout) + scalar<N>(rare, stopRare + rarespace - rare, freq,stopFreq + freqspace - freq, out, f, rare-startRare, freq-startFreq);
     const size_t density = 0.0;
     C_in->cardinality = final_count;
     C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
@@ -1039,7 +1041,7 @@ namespace ops{
           const size_t A_end = 8-start_index;
           const size_t B_pos = i_b;
           const size_t B_end = 8;
-          count += scalar<N>(&A[A_pos],A_end,&B[B_pos],B_end,&C[count],f,i_a,i_b);
+          count += scalar<N>(&A[A_pos],A_end,&B[B_pos],B_end,&C[count],f,A_pos,B_pos);
         }
       } 
       if(A[i_a+7] > B[i_b+7]){
@@ -1180,14 +1182,15 @@ namespace ops{
     #endif
       //return set_intersect_ibm<N>(C_in, rare, freq, f);
       //return set_intersect_v3<N>(C_in, rare, freq, f);
-      return set_intersect_v1<N>(C_in, rare, freq, f);
+      //return set_intersect_v1<N>(C_in, rare, freq, f);
       //return set_intersect_galloping<N>(C_in, rare, freq, f);
-      //return set_intersect_shuffle<N>(C_in, rare, freq, f);
+      return set_intersect_shuffle<N>(C_in, rare, freq, f);
   }
 
   template<class N>
   inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, const std::function<size_t(uint32_t data, uint32_t i_a, uint32_t i_b)> f) {
     if(A_in->cardinality > B_in->cardinality){
+      std::cout << "FLIP" << std::endl;
       return run_intersection<unpack_uinteger_materialize_flip>(C_in,B_in,A_in,f);
     } 
     return run_intersection<unpack_uinteger_materialize>(C_in,A_in,B_in,f);
