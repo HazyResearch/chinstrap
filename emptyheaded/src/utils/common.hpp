@@ -40,7 +40,7 @@
 
 #define VECTORIZE 1
 #define WRITE_VECTOR 1
-//#define NO_ALGORITHM
+#define NO_ALGORITHM
 //#define OPTIMIZER_OVERHEAD
 
 // Enables/disables pruning

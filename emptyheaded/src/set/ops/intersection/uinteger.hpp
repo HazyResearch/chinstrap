@@ -56,6 +56,10 @@ namespace ops{
     }
   };
   struct unpack_aggregate:no_check{
+    static inline uint32_t* advanceC(uint32_t *C, size_t amount){
+      (void) C; (void) amount;
+      return NULL;
+    }
     template <typename F>
     static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
       (void) x; (void) w; (void) f; (void) i_a; (void) i_b;
@@ -71,6 +75,9 @@ namespace ops{
     }
   };
   struct unpack_materialize:no_check{
+    static inline uint32_t* advanceC(uint32_t *C, size_t amount){
+      return C+amount;
+    }
     template <typename F>
     static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
       (void) i_a; (void) i_b; (void) f;
@@ -144,6 +151,9 @@ namespace ops{
     }
   };
   struct unpack_uinteger_materialize:check{
+    static inline uint32_t* advanceC(uint32_t *C, size_t amount){
+      return C+amount;
+    }
     template <typename F>
     static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
       *w = x;
@@ -161,6 +171,10 @@ namespace ops{
     }
   };
   struct unpack_uinteger_aggregate:check{
+    static inline uint32_t* advanceC(uint32_t *C, size_t amount){
+      (void) C; (void) amount;
+      return NULL;
+    }
     template <typename F>
     static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
       (void) w;
@@ -178,6 +192,9 @@ namespace ops{
     }
   };
   struct unpack_uinteger_materialize_flip:check{
+    static inline uint32_t* advanceC(uint32_t *C, size_t amount){
+      return C+amount;
+    }
     template <typename F>
     static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
       *w = x;
@@ -195,6 +212,10 @@ namespace ops{
     }
   };
   struct unpack_uinteger_aggregate_flip:check{
+    static inline uint32_t* advanceC(uint32_t *C, size_t amount){
+      (void) C; (void) amount;
+      return NULL;
+    }
     template <typename F>
     static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
       (void) w;
@@ -270,6 +291,7 @@ namespace ops{
       const uint32_t *largeset = (uint32_t*)B_in->data;
       const size_t largelength = B_in->cardinality;
       uint32_t *out = (uint32_t*)C_in->data;
+      size_t count = 0;
       if(A_in->cardinality < B_in->cardinality){
         return scalar_gallop<N>(C_in,B_in,A_in);
       }
@@ -279,7 +301,6 @@ namespace ops{
         return C_in;
       }
 
-      const uint32_t *const initout(out);
       size_t k1 = 0, k2 = 0;
       while (true) {
           if (largeset[k1] < smallset[k2]) {
@@ -293,7 +314,9 @@ namespace ops{
               if (k2 == smalllength)
                   break;
           } else {
-              out += N::scalar(smallset[k2],out,f,k2,k1);
+              const size_t hit_amount = N::scalar(smallset[k2],out,f,k2,k1);
+              out = N::advanceC(out,hit_amount);
+              count += hit_amount;
               ++k2;
               if (k2 == smalllength)
                   break;
@@ -303,7 +326,7 @@ namespace ops{
               goto midpoint;
           }
       }
-      C_in->cardinality = out - initout;
+      C_in->cardinality = count;
       C_in->number_of_bytes = C_in->cardinality*sizeof(uint32_t);
       return C_in;
   }
@@ -315,7 +338,6 @@ namespace ops{
   inline size_t scalar(const uint32_t *A, const size_t lenA,
                 const uint32_t *B, const size_t lenB, uint32_t *out, 
                 F f, const size_t offsetA, const size_t offsetB) {
-      const uint32_t *const initout(out);
       if (lenA == 0 || lenB == 0)
           return 0;
 
@@ -323,27 +345,30 @@ namespace ops{
       const uint32_t *startB = B;
       const uint32_t *endA = A + lenA;
       const uint32_t *endB = B + lenB;
+      size_t count = 0;
 
       while (1) {
           while (*A < *B) {
   SKIP_FIRST_COMPARE:
               if (++A == endA)
-                  return (out - initout);
+                  return count;
           }
           while (*A > *B) {
               if (++B == endB)
-                  return (out - initout);
+                  return count;
           }
           if (*A == *B) {
-              out += N::scalar(*A,out,f,((A+offsetA)-startA),((B+offsetB)-startB));
+              const size_t hit_amount = N::scalar(*A,out,f,((A+offsetA)-startA),((B+offsetB)-startB));
+              out = N::advanceC(out,hit_amount);
+              count += hit_amount;
               if (++A == endA || ++B == endB)
-                  return (out - initout);
+                  return count;
           } else {
               goto SKIP_FIRST_COMPARE;
           }
       }
 
-      return (out - initout); // NOTREACHED
+      return count; // NOTREACHED
   }
 
 
@@ -370,10 +395,10 @@ namespace ops{
       size_t lenFreq = B_in->cardinality;
       uint32_t *matchOut = (uint32_t*)C_in->data;
 
+      size_t count = 0;
       const uint32_t *startFreq = freq;
       const uint32_t *startRare = rare;
 
-      const uint32_t *matchOrig = matchOut;
       if (lenFreq == 0 || lenRare == 0){
         const size_t density = 0.0;
         C_in->cardinality = 0;
@@ -422,12 +447,16 @@ namespace ops{
     #ifdef __SSE4_1__
         if(_mm_testz_si128(F0,F0) == 0){
           const size_t freqOffset = N::check_registers(F0,F1);
-          matchOut += N::scalar(old_rare,matchOut,f,(rare-startRare),((freq+freqOffset)-startFreq));
+          const size_t hit_amount = N::scalar(old_rare,matchOut,f,(rare-startRare),((freq+freqOffset)-startFreq));
+          matchOut = N::advanceC(matchOut,hit_amount);
+          count += hit_amount;
         }
     #else
         if (_mm_movemask_epi8(F0)){
           const size_t freqOffset = N::check_registers(F0,F1);
-          matchOut += N::scalar(old_rare,matchOut,f,(rare-startRare),((freq+freqOffset)-startFreq));
+          const size_t hit_amount = N::scalar(old_rare,matchOut,f,(rare-startRare),((freq+freqOffset)-startFreq));
+          matchOut = N::advanceC(matchOut,hit_amount);
+          count += hit_amount;
         }
     #endif
         F0 = _mm_lddqu_si128(reinterpret_cast<const __m128i *>(freq));
@@ -457,9 +486,7 @@ namespace ops{
 
       goto ADVANCE_RARE;
 
-      size_t count;
   FINISH_SCALAR:
-      count = matchOut - matchOrig;
 
       lenFreq = stopFreq + kFreqSpace - freq;
       lenRare = stopRare + kRareSpace - rare;
@@ -495,6 +522,7 @@ namespace ops{
       const size_t lenFreq = B_in->cardinality;
       uint32_t *out = (uint32_t*)C_in->data;
 
+      size_t count = 0;
       const uint32_t *startRare = rare;
       const uint32_t *startFreq = freq;
 
@@ -507,7 +535,6 @@ namespace ops{
         return C_in;
       }
       assert(lenRare <= lenFreq);
-      const uint32_t *const initout(out);
       typedef __m128i vec;
       const uint32_t veclen = sizeof(vec) / sizeof(uint32_t);
       const size_t vecmax = veclen - 1;
@@ -575,7 +602,9 @@ namespace ops{
         
                   if (_mm_testz_si128(F0, F0) == 0) {
                     const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
-                    out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
                   }                
               } else {
 
@@ -613,7 +642,9 @@ namespace ops{
         
                   if (_mm_testz_si128(F0, F0) == 0) {
                     const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
-                    out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
                   }  
               
               }
@@ -654,7 +685,9 @@ namespace ops{
         
                   if (_mm_testz_si128(F0, F0) == 0) {
                     const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
-                    out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
                   }   
 
               } else {
@@ -692,7 +725,9 @@ namespace ops{
         
                   if (_mm_testz_si128(F0, F0) == 0) {
                     const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
-                    out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
                   }  
               }
 
@@ -700,7 +735,7 @@ namespace ops{
       }
 
   FINISH_SCALAR: 
-    const size_t final_count = (out - initout) + scalar<N>(rare, stopRare + rarespace - rare, freq,stopFreq + freqspace - freq, out, f, rare-startRare, freq-startFreq);
+    const size_t final_count = count + scalar<N>(rare, stopRare + rarespace - rare, freq,stopFreq + freqspace - freq, out, f, rare-startRare, freq-startFreq);
     const size_t density = 0.0;
     C_in->cardinality = final_count;
     C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
@@ -732,6 +767,7 @@ namespace ops{
 
       const uint32_t * const startRare = rare;
       const uint32_t * const startFreq = freq;
+      size_t count = 0;
 
       if (lenFreq == 0 || lenRare == 0){
         const size_t density = 0.0;
@@ -742,7 +778,6 @@ namespace ops{
         return C_in;
       }
       assert(lenRare <= lenFreq);
-      const uint32_t *const initout(out);
       typedef __m128i vec;
       const uint32_t veclen = sizeof(vec) / sizeof(uint32_t);
       const size_t vecmax = veclen - 1;
@@ -837,7 +872,9 @@ namespace ops{
         
                   if (_mm_testz_si128(F0, F0) == 0) {
                     const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
-                    out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
                   } 
               } else {
                   //there are 16 SSE registers in AVX architecture, we use 12 here + 1 + 1 + 1
@@ -874,7 +911,9 @@ namespace ops{
         
                   if (_mm_testz_si128(F0, F0) == 0) {
                     const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
-                    out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
                   }  
               }
           } else {
@@ -913,7 +952,9 @@ namespace ops{
         
                   if (_mm_testz_si128(F0, F0) == 0) {
                     const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
-                    out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
                   } 
               } else {
                   //there are 16 SSE registers in AVX architecture, we use 12 here + 1 + 1 + 1
@@ -950,7 +991,9 @@ namespace ops{
         
                   if (_mm_testz_si128(F0, F0) == 0) {
                     const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
-                    out += N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
                   } 
               }
 
@@ -958,7 +1001,7 @@ namespace ops{
       }
 
   FINISH_SCALAR: 
-    const size_t final_count = (out - initout) + scalar<N>(rare, stopRare + rarespace - rare, freq,stopFreq + freqspace - freq, out, f, rare-startRare, freq-startFreq);
+    const size_t final_count = count + scalar<N>(rare, stopRare + rarespace - rare, freq,stopFreq + freqspace - freq, out, f, rare-startRare, freq-startFreq);
     const size_t density = 0.0;
     C_in->cardinality = final_count;
     C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
@@ -969,7 +1012,7 @@ namespace ops{
 
   template<class N,typename F>
   inline Set<uinteger>* set_intersect_ibm(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
-    uint32_t * const C = (uint32_t*) C_in->data; 
+    uint32_t * C = (uint32_t*) C_in->data; 
     const uint32_t * const A = (uint32_t*) A_in->data;
     const uint32_t * const B = (uint32_t*) B_in->data;
     const size_t s_a = A_in->cardinality;
@@ -1037,7 +1080,9 @@ namespace ops{
           const size_t A_end = 8-start_index;
           const size_t B_pos = i_b;
           const size_t B_end = 8;
-          count += scalar<N>(&A[A_pos],A_end,&B[B_pos],B_end,&C[count],f,A_pos,B_pos);
+          const size_t adv_amount = scalar<N>(&A[A_pos],A_end,&B[B_pos],B_end,C,f,A_pos,B_pos);
+          count += adv_amount;
+          C = N::advanceC(C,adv_amount);
         }
       } 
       if(A[i_a+7] > B[i_b+7]){
@@ -1060,7 +1105,7 @@ namespace ops{
     }
 
     // intersect the tail using scalar intersection
-    count += scalar<N>(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,&C[count],f,i_a,i_b);
+    count += scalar<N>(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,C,f,i_a,i_b);
 
     //XXX: Fix
     const double density = 0.0;//((count > 0) ? ((double)count/(C[count]-C[0])) : 0.0);
@@ -1075,7 +1120,7 @@ namespace ops{
 
   template<class N,typename F>
   inline Set<uinteger>* set_intersect_shuffle(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
-    uint32_t * const C = (uint32_t*) C_in->data; 
+    uint32_t * C = (uint32_t*) C_in->data; 
     const uint32_t * const A = (uint32_t*) A_in->data;
     const uint32_t * const B = (uint32_t*) B_in->data;
     const size_t s_a = A_in->cardinality;
@@ -1138,8 +1183,8 @@ namespace ops{
       b_offset = _mm_add_epi32(_mm_shuffle_epi8(_mm_set_epi32(3,2,1,0),masks::shuffle_mask32[mask_b]),b_offset);
 
       const __m128i p = _mm_shuffle_epi8(v_a, masks::shuffle_mask32[mask]);
-      const size_t num_hit = N::unpack(p,&C[count],_mm_popcnt_u32(mask),f,a_offset,b_offset);
-
+      const size_t num_hit = N::unpack(p,C,_mm_popcnt_u32(mask),f,a_offset,b_offset);
+      C = N::advanceC(C,num_hit); //to avoid NULL pointer exception on aggregate
       count += num_hit;
 
       //advance pointers
@@ -1151,7 +1196,7 @@ namespace ops{
     #endif
 
     // intersect the tail using scalar intersection
-    count += scalar<N>(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,&C[count],f,i_a,i_b);
+    count += scalar<N>(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,C,f,i_a,i_b);
 
     //XXX: Fix
     const double density = 0.0;
@@ -1183,24 +1228,23 @@ namespace ops{
       return set_intersect_shuffle<N>(C_in, rare, freq, f);
   }
 
-  template<class N>
-  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, const std::function<size_t(uint32_t data, uint32_t i_a, uint32_t i_b)> f) {
+  template<typename F>
+  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f) {
     if(A_in->cardinality > B_in->cardinality){
-      std::cout << "FLIP" << std::endl;
       return run_intersection<unpack_uinteger_materialize_flip>(C_in,B_in,A_in,f);
     } 
     return run_intersection<unpack_uinteger_materialize>(C_in,A_in,B_in,f);
   }
 
-  template<>
-  inline Set<uinteger>* set_intersect<aggregate>(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, const std::function<size_t(uint32_t data, uint32_t i_a, uint32_t i_b)> f) {
+  template<typename F>
+  inline size_t set_intersect(const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f) {
+    Set<uinteger> C_in;
     if(A_in->cardinality > B_in->cardinality){
-      return run_intersection<unpack_uinteger_aggregate_flip>(C_in,B_in,A_in,f);
+      return run_intersection<unpack_uinteger_aggregate_flip>(&C_in,B_in,A_in,f)->cardinality;
     } 
-    return run_intersection<unpack_uinteger_aggregate>(C_in,A_in,B_in,f);
+    return run_intersection<unpack_uinteger_aggregate>(&C_in,A_in,B_in,f)->cardinality;
   }
   
-  template<class N>
   inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in) {
     const Set<uinteger> *rare = (A_in->cardinality > B_in->cardinality) ? B_in:A_in;
     const Set<uinteger> *freq = (A_in->cardinality > B_in->cardinality) ? A_in:B_in;
@@ -1208,12 +1252,12 @@ namespace ops{
     return run_intersection<unpack_materialize>(C_in,rare,freq,f);
   }
 
-  template<>
-  inline Set<uinteger>* set_intersect<aggregate>(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in) {
+  inline size_t set_intersect(const Set<uinteger> *A_in, const Set<uinteger> *B_in) {
     const Set<uinteger> *rare = (A_in->cardinality > B_in->cardinality) ? B_in:A_in;
     const Set<uinteger> *freq = (A_in->cardinality > B_in->cardinality) ? A_in:B_in;
     auto f = [&](uint32_t data, const uint32_t i_a, const uint32_t i_b){(void) data; (void) i_a; (void) i_b; return;};
-    return run_intersection<unpack_aggregate>(C_in,rare,freq,f);
+    Set<uinteger> C_in;
+    return run_intersection<unpack_aggregate>(&C_in,rare,freq,f)->cardinality;
   }
 }
 #endif
