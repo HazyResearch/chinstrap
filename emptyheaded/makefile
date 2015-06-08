@@ -1,7 +1,7 @@
 # Uncomment the following line to compile without PCM support
-INTEL_PCM_HOME=/dfs/scratch0/caberger/IntelPerformanceCounterMonitorV2.8
+#INTEL_PCM_HOME=/dfs/scratch0/caberger/IntelPerformanceCounterMonitorV2.8
 
-CXX ?= g++-4.9
+#CXX = g++-4.9
 #CXX = /dfs/scratch0/noetzli/downloads/tmp/cilkplus-install/bin/g++ -Wcast-align
 #override CXX = g++
 override CXX = clang++
@@ -52,7 +52,7 @@ $(TOOLS_EXES): $(OBJECTS) $(EXEDIR)
 $(GENERATED_EXES): $(OBJECTS) $(EXEDIR)
 
 $(TESTS_EXES): $(OBJECTS) $(EXEDIR)
-	$(CXX) $(CXXFLAGS) $(@:bin%=tests%.cpp) $(OBJECTS) ./libs/gtest-1.7.0/src/gtest_main.o ./libs/gtest-1.7.0/src/gtest-all.o $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS) -DGOOGLE_TEST -I./libs/gtest-1.7.0/include/ -I./libs/gtest-1.7.0/ -I./apps/
+	$(CXX) $(CXXFLAGS) $(@:bin%=tests%.cpp) $(OBJECTS) $(EXT_OBJECTS) -lgtest $(LIBS) -o $@ $(INCLUDE_DIRS) -DGOOGLE_TEST -I./apps/
 
 $(OBJECTS): $(SOURCES) $(HEADERS) $(OBJDIR)
 	$(CXX) $(CXXFLAGS) $(LIB_INCS) -o $@ -c $(@:build%.o=src%.cpp) $(INCLUDE_DIRS)

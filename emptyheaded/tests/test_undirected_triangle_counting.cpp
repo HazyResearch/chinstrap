@@ -7,3 +7,8 @@ TEST(UNDIRECTED_TRIANGLE_COUNTING, FACEBOOK_TRIANGLES_HYBRID) {
   myapp->run("tests/data/replicated.tsv");
   EXPECT_EQ((uint64_t)1612010, myapp->result);
 }
+
+int main(int argc, char **argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
