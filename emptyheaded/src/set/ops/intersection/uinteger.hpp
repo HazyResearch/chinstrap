@@ -191,48 +191,7 @@ namespace ops{
       return filter;
     }
   };
-  struct unpack_uinteger_materialize_flip:check{
-    static inline uint32_t* advanceC(uint32_t *C, size_t amount){
-      return C+amount;
-    }
-    template <typename F>
-    static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
-      *w = x;
-      return f(x,i_b,i_a);
-    }
-    template<typename F>
-    static inline size_t unpack(const __m128i x, uint32_t *w, 
-      const size_t num, F f, const __m128i i_a, const __m128i i_b){
-      size_t filter = 0;
-      for(size_t i =0 ; i < num; i++){
-        *(w+i) = _mm_extract_epi32(x,i);
-        filter += f(_mm_extract_epi32(x,i),_mm_extract_epi32(i_b,i),_mm_extract_epi32(i_a,i)); 
-      }      
-      return filter;
-    }
-  };
-  struct unpack_uinteger_aggregate_flip:check{
-    static inline uint32_t* advanceC(uint32_t *C, size_t amount){
-      (void) C; (void) amount;
-      return NULL;
-    }
-    template <typename F>
-    static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
-      (void) w;
-      return f(x,i_b,i_a);
-    }
-    template<typename F>
-    static inline size_t unpack(const __m128i x, uint32_t *w, 
-      const size_t num, F f, const __m128i i_a, const __m128i i_b){
-      (void) w;
-      size_t filter = 0;
-      for(size_t i =0 ; i < num; i++){
-        filter += f(_mm_extract_epi32(x,i),_mm_extract_epi32(i_b,i),_mm_extract_epi32(i_a,i)); 
-      }      
-      return filter;
-    }
-  };
-
+  
   //Code adopted from Daniel Lemire.
   //https://github.com/lemire/SIMDCompressionAndIntersection/blob/master/src/intersection.cpp
   /**
@@ -1231,7 +1190,8 @@ namespace ops{
   template<typename F>
   inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f) {
     if(A_in->cardinality > B_in->cardinality){
-      return run_intersection<unpack_uinteger_materialize_flip>(C_in,B_in,A_in,f);
+      auto f_in = [&](uint32_t data, uint32_t a_i, uint32_t b_i){return f(data,b_i,a_i);};
+      return run_intersection<unpack_uinteger_materialize>(C_in,B_in,A_in,f_in);
     } 
     return run_intersection<unpack_uinteger_materialize>(C_in,A_in,B_in,f);
   }
@@ -1240,7 +1200,8 @@ namespace ops{
   inline size_t set_intersect(const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f) {
     Set<uinteger> C_in;
     if(A_in->cardinality > B_in->cardinality){
-      return run_intersection<unpack_uinteger_aggregate_flip>(&C_in,B_in,A_in,f)->cardinality;
+      auto f_in = [&](uint32_t data, uint32_t a_i, uint32_t b_i){return f(data,b_i,a_i);};
+      return run_intersection<unpack_uinteger_aggregate>(&C_in,B_in,A_in,f_in)->cardinality;
     } 
     return run_intersection<unpack_uinteger_aggregate>(&C_in,A_in,B_in,f)->cardinality;
   }

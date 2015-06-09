@@ -13,7 +13,14 @@ namespace ops{
     const uint32_t probe_value = value % BLOCK_SIZE;
     const size_t word_to_check = probe_value / BITS_PER_WORD;
     const size_t bit_to_check = probe_value % BITS_PER_WORD;
+
     if((block[word_to_check] >> bit_to_check) % 2){
+      
+      for(size_t i = 0 ; i < word_to_check; i++){
+        i_b += _mm_popcnt_u64(block[i]);
+      }
+      i_b = range_bitset::get_num_set(value,block[word_to_check],i_b);
+      
       return N::scalar(value,result,f,i_a,i_b);
     } 
     return 0;
@@ -39,7 +46,8 @@ namespace ops{
       const uint32_t cur = A[i];
       const size_t cur_index = range_bitset::word_index(cur);
       if((cur_index < (s_b+start_index)) && (cur_index >= start_index) && range_bitset::is_set(cur,B,start_index)){
-        const size_t num_hit = N::scalar(cur,C,f,i,B_index[cur_index-start_index]);
+        const uint32_t b_index = range_bitset::get_num_set(cur,B[cur_index],B_index[cur_index-start_index]);
+        const size_t num_hit = N::scalar(cur,C,f,i,b_index);
         count += num_hit;
         N::advanceC(C,num_hit);
       } else if(cur_index >= (s_b+start_index)){
@@ -88,7 +96,8 @@ namespace ops{
   template <typename F>
   inline size_t set_intersect(const Set<range_bitset> *A_in, const Set<uinteger> *B_in, F f){
     Set<uinteger> C_in;
-    return run_intersection<unpack_uinteger_aggregate>(&C_in,B_in,A_in,f)->cardinality;
+    auto f_in = [&](uint32_t data, uint32_t a_i, uint32_t b_i){return f(data,b_i,a_i);};
+    return run_intersection<unpack_uinteger_aggregate>(&C_in,B_in,A_in,f_in)->cardinality;
   }
 
   template <typename F>
@@ -97,7 +106,8 @@ namespace ops{
   }
   template <typename F>
   inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<range_bitset> *A_in, const Set<uinteger> *B_in, F f){
-    return run_intersection<unpack_uinteger_materialize>(C_in,B_in,A_in,f);
+    auto f_in = [&](uint32_t data, uint32_t a_i, uint32_t b_i){return f(data,b_i,a_i);};
+    return run_intersection<unpack_uinteger_materialize>(C_in,B_in,A_in,f_in);
   }
 
   template<class N, typename F>
@@ -182,7 +192,8 @@ namespace ops{
   template <typename F>
   inline size_t set_intersect(const Set<block_bitset> *A_in, const Set<uinteger> *B_in, F f){
     Set<uinteger> C_in;
-    return run_intersection<unpack_uinteger_aggregate>(&C_in,B_in,A_in,f)->cardinality;
+    auto f_in = [&](uint32_t data, uint32_t a_i, uint32_t b_i){return f(data,b_i,a_i);};
+    return run_intersection<unpack_uinteger_aggregate>(&C_in,B_in,A_in,f_in)->cardinality;
   }
 
   template <typename F>
@@ -191,7 +202,8 @@ namespace ops{
   }
   template <typename F>
   inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<block_bitset> *A_in, const Set<uinteger> *B_in, F f){
-    return run_intersection<unpack_uinteger_materialize>(C_in,B_in,A_in,f);
+    auto f_in = [&](uint32_t data, uint32_t a_i, uint32_t b_i){return f(data,b_i,a_i);};
+    return run_intersection<unpack_uinteger_materialize>(C_in,B_in,A_in,f_in);
   }
   
   template<class N, typename F>
@@ -214,9 +226,9 @@ namespace ops{
         uint32_t index = WORDS_PER_BLOCK * (*((uint32_t*)(A_in->data+i*offset)));
         if( (index+WORDS_PER_BLOCK-1) >= b_start && index < b_end){
           size_t j = 0;
-          uint64_t *A_data = (uint64_t*)(A_in->data+i*offset+2*sizeof(uint32_t));
-          uint32_t A_index = *(uint32_t*)(A_in->data+i*offset+1*sizeof(uint32_t));
-          uint32_t B_index = *(uint32_t*)(B+s_b+(index-b_start));
+          uint64_t *A_data = (uint64_t*)(A_in->data+ i*offset + 2*sizeof(uint32_t));
+          uint32_t A_index = *(uint32_t*)(A_in->data+ i*offset + 1*sizeof(uint32_t));
+          uint32_t BB_index = *( ((uint32_t*)(B+s_b)) + (index-b_start) );
 
           N::write_block_header((uint32_t*)C,index/WORDS_PER_BLOCK,count);
           C = N::advanceC(C,2*sizeof(uint32_t));
@@ -231,10 +243,10 @@ namespace ops{
             const uint64_t result = A_data[j] & B[index-b_start];
 
             auto tup = N::unpack_block(count,result,index*BITS_PER_WORD,f,
-                  A_data[j],B[index-b_start],A_index,B_index,(uint64_t*)C,j);
+                  A_data[j],B[index-b_start],A_index,BB_index,(uint64_t*)C,j);
             count = std::get<0>(tup);
             A_index = std::get<1>(tup);
-            B_index = std::get<2>(tup);
+            BB_index = std::get<2>(tup);
 
             j++;
             index++;
@@ -284,8 +296,9 @@ namespace ops{
 
   template <typename F>
   inline size_t set_intersect(const Set<block_bitset> *A_in, const Set<range_bitset> *B_in, F f){
+    auto f_in = [&](uint32_t data, uint32_t a_i, uint32_t b_i){return f(data,b_i,a_i);};
     Set<block_bitset> C_in;
-    return run_intersection<bs_unpack_aggregate>(&C_in,A_in,B_in,f)->cardinality;
+    return run_intersection<bs_unpack_aggregate>(&C_in,A_in,B_in,f_in)->cardinality;
   }
 
 
@@ -297,7 +310,8 @@ namespace ops{
 
   template <typename F>
   inline Set<block_bitset>* set_intersect(Set<block_bitset> *C_in, const Set<block_bitset> *A_in, const Set<range_bitset> *B_in, F f){
-    return run_intersection<bs_unpack_materialize>(C_in,A_in,B_in,f);
+    auto f_in = [&](uint32_t data, uint32_t a_i, uint32_t b_i){return f(data,b_i,a_i);};
+    return run_intersection<bs_unpack_materialize>(C_in,A_in,B_in,f_in);
   }
   template <typename F>
   inline Set<block_bitset>* set_intersect(Set<block_bitset> *C_in, const Set<range_bitset> *A_in, const Set<block_bitset> *B_in, F f){
