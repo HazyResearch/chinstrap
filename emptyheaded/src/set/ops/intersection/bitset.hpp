@@ -63,7 +63,7 @@ namespace ops{
       (void) A; (void) B; (void) result; (void) index_data; (void) offset;
       (void) f; (void) A_index; (void) B_index; (void) r_index;
       for(size_t i = 0 ; i < 4; i++){
-        count += _mm_popcnt_u64(_mm256_extract_epi64(r,i));
+        count += _mm_popcnt_u64(_mm256_extract_epi64((__m256i)r,i));
       }
       return count;
     }
@@ -75,7 +75,7 @@ namespace ops{
       (void) A; (void) B; (void) result; (void) offset;
       (void) f; (void) A_index; (void) B_index; (void) r_index;
       for(size_t i = 0 ; i < 4; i++){
-        count += _mm_popcnt_u64(_mm256_extract_epi64(r,i));
+        count += _mm_popcnt_u64(_mm256_extract_epi64((__m256i)r,i));
       }
 
       return std::make_tuple(count,0,0);
@@ -146,7 +146,7 @@ namespace ops{
       _mm256_storeu_ps((float*)(result+r_index), r);
       for(size_t i = 0 ; i < 4; i++){
         index_data[i+r_index] = count;
-        count += _mm_popcnt_u64(_mm256_extract_epi64(r,i));
+        count += _mm_popcnt_u64(_mm256_extract_epi64((__m256i)r,i));
       }
       return count;
     }
@@ -159,7 +159,7 @@ namespace ops{
       (void) f; (void) A_index; (void) B_index;
       _mm256_storeu_ps((float*)(result+r_index), r);
       for(size_t i = 0 ; i < 4; i++){
-        count += _mm_popcnt_u64(_mm256_extract_epi64(r,i));
+        count += _mm_popcnt_u64(_mm256_extract_epi64((__m256i)r,i));
       }
 
       return std::make_tuple(count,0,0);
@@ -223,8 +223,6 @@ namespace ops{
       for(size_t j = 0; j < BITS_PER_WORD; j++){
         if((x >> j) % 2) {
           const uint32_t a_i = get_num_set(offset+j,A,*A_index);
-          std::cout << "A index: " << a_i << " " << *A_index << std::endl;
-
           const uint32_t b_i = get_num_set(offset+j,B,*B_index);
           const size_t ret = f(offset+j,a_i,b_i);
           count += ret;
@@ -242,8 +240,8 @@ namespace ops{
       for(size_t i = 0 ; i < 4; i++){
         count = unpack_range(
           count,
-          _mm256_extract_epi64(r,i),offset+i*BITS_PER_WORD,f,
-          _mm256_extract_epi64(A,i),_mm256_extract_epi64(B,i),
+          _mm256_extract_epi64((__m256i)r,i),offset+i*BITS_PER_WORD,f,
+          _mm256_extract_epi64((__m256i)A,i),_mm256_extract_epi64((__m256i)B,i),
           A_index+i,B_index+i,result,i+r_index,index_data);
       }
       return count;
@@ -256,8 +254,8 @@ namespace ops{
       for(size_t i = 0 ; i < 4; i++){
         auto tup = unpack_block(
           count,
-          _mm256_extract_epi64(r,i),offset+i*BITS_PER_WORD,f,
-          _mm256_extract_epi64(A,i),_mm256_extract_epi64(B,i),
+          _mm256_extract_epi64((__m256i)r,i),offset+i*BITS_PER_WORD,f,
+          _mm256_extract_epi64((__m256i)A,i),_mm256_extract_epi64((__m256i)B,i),
           A_index,B_index,result,i+r_index);
         count = std::get<0>(tup);
         A_index = std::get<1>(tup);
@@ -337,8 +335,8 @@ namespace ops{
       for(size_t i = 0 ; i < 4; i++){
         count = unpack_range(
           count,
-          _mm256_extract_epi64(r,i),offset+i*BITS_PER_WORD,f,
-          _mm256_extract_epi64(A,i),_mm256_extract_epi64(B,i),
+          _mm256_extract_epi64((__m256i)r,i),offset+i*BITS_PER_WORD,f,
+          _mm256_extract_epi64((__m256i)A,i),_mm256_extract_epi64((__m256i)B,i),
           A_index+i,B_index+i,result,i+r_index,index_data);
       }
       return count;
@@ -351,8 +349,8 @@ namespace ops{
       for(size_t i = 0 ; i < 4; i++){
         auto tup = unpack_block(
           count,
-          _mm256_extract_epi64(r,i),offset+i*BITS_PER_WORD,f,
-          _mm256_extract_epi64(A,i),_mm256_extract_epi64(B,i),
+          _mm256_extract_epi64((__m256i)r,i),offset+i*BITS_PER_WORD,f,
+          _mm256_extract_epi64((__m256i)A,i),_mm256_extract_epi64((__m256i)B,i),
           A_index,B_index,result,i+r_index);
         count = std::get<0>(tup);
         A_index = std::get<1>(tup);
