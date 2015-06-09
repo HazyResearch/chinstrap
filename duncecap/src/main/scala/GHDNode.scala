@@ -14,6 +14,12 @@ class Relation(val attrs: List[String],val name: String = "") {
       case that: Relation => that.attrs.equals(attrs) && that.name.equals(name)
       case _ => false
     }
+
+  def toASTRelation(astRelations : List[ASTRelation]): ASTRelation = {
+    val astRelation = astRelations.find((a : ASTRelation) => a.identifierName == name)
+    assert(astRelation.isDefined)
+    return astRelation.get
+  }
 }
 
 class GHDNode(val rels: List[Relation]) {
@@ -33,6 +39,10 @@ class GHDNode(val rels: List[Relation]) {
   }
 
   override def hashCode = 41 * rels.hashCode() + children.hashCode()
+
+  def getNumBags(): Int = {
+    1 + children.foldLeft(0)((accum : Int, child : GHDNode) => accum + child.getNumBags())
+  }
 
   def scoreTree(): Int = {
     bagWidth = attrSet.size

@@ -15,7 +15,6 @@ object NPRRSetupUtil {
   }
 
   type RWRelations = List[RWRelation]
-
   type RName = String
   type RIndex = Int
   type Column = (RName, RIndex)
