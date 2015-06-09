@@ -53,7 +53,7 @@ namespace par{
         }
      }
      else {
-        double t_begin = debug::start_clock();
+        auto t_begin = debug::start_clock();
         double* thread_times = NULL;
 
 #ifdef ENABLE_PRINT_THREAD_TIMES
@@ -65,7 +65,7 @@ namespace par{
         next_work = 0;
 
         for(size_t k = 0; k < real_num_threads; k++) {
-           threads[k] = std::thread([&block_size](double t_begin, double* thread_times, int k, std::atomic<size_t>* next_work, size_t offset, size_t range_len, std::function<void(size_t, size_t)> body) -> void {
+           threads[k] = std::thread([&block_size](std::chrono::time_point<std::chrono::system_clock> t_begin, double* thread_times, int k, std::atomic<size_t>* next_work, size_t offset, size_t range_len, std::function<void(size_t, size_t)> body) -> void {
               size_t local_block_size = block_size;
 
               while(true) {

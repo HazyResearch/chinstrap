@@ -1,14 +1,23 @@
 #include "gtest/gtest.h"
 #include "undirected_triangle_counting.cpp"
 
-TEST(UNDIRECTED_TRIANGLE_COUNTING, FACEBOOK_TRIANGLES_HYBRID) {
+TEST(UNDIRECTED_TRIANGLE_COUNTING, UINTEGER) {
+  NUM_THREADS = 4;
+  undirected_triangle_counting<uinteger> *myapp = new undirected_triangle_counting<uinteger>();
+  myapp->run("tests/data/replicated.tsv");
+  EXPECT_EQ((uint64_t)1612010, myapp->result);
+}
+
+TEST(UNDIRECTED_TRIANGLE_COUNTING, HYBRID) {
   NUM_THREADS = 4;
   undirected_triangle_counting<hybrid> *myapp = new undirected_triangle_counting<hybrid>();
   myapp->run("tests/data/replicated.tsv");
   EXPECT_EQ((uint64_t)1612010, myapp->result);
 }
 
-int main(int argc, char **argv) {
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+TEST(UNDIRECTED_TRIANGLE_COUNTING, BLOCK) {
+  NUM_THREADS = 4;
+  undirected_triangle_counting<block> *myapp = new undirected_triangle_counting<block>();
+  myapp->run("tests/data/replicated.tsv");
+  EXPECT_EQ((uint64_t)1612010, myapp->result);
 }

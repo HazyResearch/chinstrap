@@ -1,10 +1,10 @@
 # Uncomment the following line to compile without PCM support
 #INTEL_PCM_HOME=/dfs/scratch0/caberger/IntelPerformanceCounterMonitorV2.8
 
-#CXX = g++-4.9
+#
 #CXX = /dfs/scratch0/noetzli/downloads/tmp/cilkplus-install/bin/g++ -Wcast-align
 #override CXX = g++
-override CXX = clang++
+ 
 override CXXFLAGS += -mavx -std=c++0x -pedantic -O3 -Wall -Wno-unused-function -Wextra -march=native -mtune=native
 
 INCLUDE_DIRS=-Isrc
@@ -14,6 +14,15 @@ HEADERS=$(wildcard src/*hpp)
 SOURCES=$(wildcard src/*cpp)
 OBJECTS=$(SOURCES:src/%.cpp=$(OBJDIR)/%.o)
 
+ifdef NOVECTOR
+	override CXXFLAGS += -fno-tree-vectorize
+endif
+
+ifdef TRAVIS
+	CXX = g++-4.9
+else 
+	CXX = clang++
+endif
 ifdef INTEL_PCM_HOME
 	INCLUDE_DIRS+=-I$(INTEL_PCM_HOME)
 	EXT_OBJECTS=$(INTEL_PCM_HOME)/cpucounters.o $(INTEL_PCM_HOME)/msr.o $(INTEL_PCM_HOME)/pci.o $(INTEL_PCM_HOME)/client_bw.o
@@ -24,14 +33,18 @@ TOOLS_SOURCES=$(shell ls tools)
 TESTS_SOURCES=$(shell find tests -name '*.cpp' -exec basename {} \;)
 SERVER_SOURCES=server.cpp
 GENERATED_SOURCES=$(shell ls generated)
+BENCHMARKS_SOURCES=$(shell ls benchmarks)
 
 APPS=$(APPS_SOURCES:.cpp=)
 TOOLS=$(TOOLS_SOURCES:.cpp=)
 TESTS=$(TESTS_SOURCES:.cpp=)
+BENCHMARKS=$(BENCHMARKS_SOURCES:.cpp=)
+
 
 APPS_EXES=$(APPS:%=$(EXEDIR)/%)
 TOOLS_EXES=$(TOOLS:%=$(EXEDIR)/%)
 TESTS_EXES=$(TESTS:%=$(EXEDIR)/%)
+BENCHMARKS_EXES=$(BENCHMARKS:%=$(EXEDIR)/%)
 
 LIBS=-ltbb -lpthread
 
@@ -47,7 +60,10 @@ $(APPS_EXES): $(OBJECTS) $(APP_SOURCES) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=apps%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
 
 $(TOOLS_EXES): $(OBJECTS) $(EXEDIR)
-	$(CXX) $(CXXFLAGS) -m32 $(@:bin%=tools%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
+	$(CXX) $(CXXFLAGS) $(@:bin%=tools%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
+
+$(BENCHMARKS_EXES): $(OBJECTS) $(EXEDIR)
+	$(CXX) $(CXXFLAGS) $(@:bin%=benchmarks%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
 
 $(GENERATED_EXES): $(OBJECTS) $(EXEDIR)
 
@@ -66,9 +82,6 @@ server: $(OBJECTS) $(EXEDIR)
 	SERVER=$(SERVER_SOURCES:.cpp=)
 	SERVER_EXES=$(SERVER:%=$(EXEDIR)/%)
 	$(CXX) $(CXXFLAGS) $(@:bin%=server%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -ldl -o $bin/@ $(INCLUDE_DIRS)
-
-libs:
-	libs/build.sh
 
 tests: $(TESTS_EXES)
 	@$(foreach bin, $(TESTS_EXES), $(bin);)

@@ -62,6 +62,7 @@ struct undirected_triangle_counting: public application<T> {
     //R(a,b) join T(b,c) join S(a,c)
 
     //rpcm.init_counter_states();
+
     //allocate memory
     allocator::memory<uint8_t> B_buffer(R_ab->num_rows*sizeof(uint64_t));
     allocator::memory<uint8_t> C_buffer(R_ab->num_rows*sizeof(uint64_t));
@@ -73,24 +74,45 @@ struct undirected_triangle_counting: public application<T> {
 
     const TrieBlock<T> H = *TR_ab->head;
     const Set<T> A = H.set;
-    A.par_foreach([&](size_t tid, uint32_t a_i){
+    size_t tid = 0;
+    uint32_t a_i = 856;
+
       Set<T> B(B_buffer.get_memory(tid)); //initialize the memory
       Set<T> C(C_buffer.get_memory(tid));
 
-      //std::cout << "A: " << a_i << std::endl; 
-
       const Set<T> op1 = H.get_block(a_i)->set;
+      std::cout << "a_i: " << a_i << " " << op1.cardinality << std::endl;
+      op1.foreach([&](uint32_t data){
+        std::cout << data << std::endl;
+      });
+
       B = ops::set_intersect(&B,&op1,&A); //intersect the B
       B.foreach([&](uint32_t b_i){ //Peel off B attributes
-        //std::cout << "A: " << a_i << " B: " << b_i << std::endl; 
-        const TrieBlock<T>* l2 = H.get_block(b_i);
-        const size_t count = ops::set_intersect(&C,
-          &l2->set,
-          &op1)->cardinality;
-        //std::cout << count << std::endl;
-        num_triangles.update(tid,count);
+        if(b_i == 671){
+          std::cout << "A: " << a_i << " A_card: " << A.cardinality << " B: " << b_i << " B_card: " << B.cardinality << std::endl;
+          const TrieBlock<T>* l2 = H.get_block(b_i);
+          assert(l2 != NULL);
+          std::cout << "l2: " << l2->set.cardinality << " " << l2->set.number_of_bytes << std::endl;
+          l2->set.foreach([&](uint32_t data){
+            std::cout << "data: " << data << std::endl;
+          });
+          
+          std::cout << "op1: " << op1.cardinality << " " << op1.number_of_bytes << std::endl;
+          op1.foreach([&](uint32_t data){
+            std::cout << data << std::endl;
+          });
+          
+          ops::set_intersect(&C,
+            &op1,
+            &l2->set);
+          size_t count = C.cardinality;
+          std::cout << count << " " << C.number_of_bytes << std::endl;
+          C.foreach([&](uint32_t data){
+            std::cout << "output: " << data << std::endl;
+          });
+          num_triangles.update(tid,count);
+        }
       });
-    });
 
     result = num_triangles.evaluate(0);
     

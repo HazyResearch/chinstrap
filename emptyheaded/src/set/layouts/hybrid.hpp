@@ -67,14 +67,18 @@ inline type::layout hybrid::get_type(const uint32_t *data, const size_t length){
   if(length > 1) {
     uint32_t range = data[length - 1] - data[0];
     if(range > 0){
-      double density = (double) length / range;
      // double c = compressibility(data, length);
+      /* else */
+
+      double density = (double) length / range;
       if(density > ((double)common::bitset_req) && length > common::bitset_length) {
+        return type::RANGE_BITSET;
+      }
+      /*
+      else if( length > common::block_bitset_req ) {
         return type::BLOCK_BITSET;
-      } //else if( (length/(range/BLOCK_SIZE)  > common::pshort_requirement)) {
-        //return common::BITSET_NEW;
-      //}
-       else {
+      } */
+      else {
         return type::UINTEGER;
       }
     }

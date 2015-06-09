@@ -1,6 +1,7 @@
 #ifndef DEBUG_H
 #define DEBUG_H
 
+#include <chrono>
 #include "common.hpp"
 
 namespace debug{
@@ -8,20 +9,18 @@ namespace debug{
   //static size_t pshort_requirement = 16;
   //static double bitset_req = (1.0/256.0);
   struct timeval tim; 
-  static double start_clock (){
-    gettimeofday(&tim, NULL);  
-    return tim.tv_sec+(tim.tv_usec/1000000.0); 
+  static std::chrono::time_point<std::chrono::system_clock> start_clock (){
+    return std::chrono::system_clock::now(); 
   }
 
-  static inline double stop_clock(double t_in){
-    gettimeofday(&tim, NULL);  
-    double t2=tim.tv_sec+(tim.tv_usec/1000000.0);  
-    return t2 - t_in;
+  static inline double stop_clock(std::chrono::time_point<std::chrono::system_clock> t_in){
+    std::chrono::duration<double> elapsed_seconds = std::chrono::system_clock::now()-t_in; 
+    return elapsed_seconds.count();
   }
-  static double stop_clock(std::string in,double t_in){
+  static double stop_clock(std::string in,std::chrono::time_point<std::chrono::system_clock> t_in){
     double t2= stop_clock(t_in);
     std::cout << "Time["+in+"]: " << t2 << " s" << std::endl;
-    return t2 - t_in;
+    return t2;
   }
 
   static void allocateStack(){

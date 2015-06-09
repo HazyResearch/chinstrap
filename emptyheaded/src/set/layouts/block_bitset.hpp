@@ -44,6 +44,15 @@ class block_bitset{
         const type::layout t);
 
     template<typename F>
+    static void foreach_index(
+        F f,
+        const uint8_t *data_in,
+        const size_t cardinality,
+        const size_t number_of_bytes,
+        const type::layout t,
+        const uint32_t index_offs);
+
+    template<typename F>
     static void foreach_until(
         F f,
         const uint8_t *data_in,
@@ -66,6 +75,15 @@ class block_bitset{
       const size_t cardinality,
       const size_t number_of_bytes,
       const type::layout t);
+
+    template<typename F>
+    static size_t par_foreach_index(
+      F f,
+      const uint8_t* A,
+      const size_t cardinality,
+      const size_t number_of_bytes,
+      const type::layout t,
+      const uint32_t index_offs);
 
 };
 //compute word of data
@@ -168,9 +186,9 @@ inline void block_bitset::foreach_index(
     const uint8_t * const A,
     const size_t cardinality,
     const size_t number_of_bytes,
-    const type::layout type) {
+    const type::layout type,
+    const uint32_t index_offs) {
   (void) cardinality; (void) type;
-  (void) f; (void) number_of_bytes; (void) A;
 
   uint8_t *A_ptr = const_cast<uint8_t*>(A); 
   if(number_of_bytes > 0){
@@ -183,12 +201,22 @@ inline void block_bitset::foreach_index(
         const size_t word = j / BITS_PER_WORD;
         const size_t bit = j % BITS_PER_WORD;
         if((data[word] >> bit) % 2) {
-          f(index++,offset*BLOCK_SIZE + j);
+          f(index_offs+index++,offset*BLOCK_SIZE + j);
         }
       }
       A_ptr += 2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t);
     }
   }
+}
+
+template<typename F>
+inline void block_bitset::foreach_index(
+    F f,
+    const uint8_t * const A,
+    const size_t cardinality,
+    const size_t number_of_bytes,
+    const type::layout type){
+  foreach_index(f,A,cardinality,number_of_bytes,type,0);
 }
 
 // Iterates over set applying a lambda in parallel.
@@ -227,7 +255,8 @@ inline size_t block_bitset::par_foreach_index(
       const uint8_t* A,
       const size_t cardinality,
       const size_t number_of_bytes,
-      const type::layout t) {
+      const type::layout t,
+      const uint32_t index_offs) {
   (void) cardinality; (void) t;
 
   const uint32_t data_offset = 2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t);
@@ -242,12 +271,22 @@ inline size_t block_bitset::par_foreach_index(
           const size_t word = j / BITS_PER_WORD;
           const size_t bit = j % BITS_PER_WORD;
           if((data[word] >> bit) % 2) {
-            f(tid,index++,offset*BLOCK_SIZE + j);
+            f(tid,index_offs+index++,offset*BLOCK_SIZE + j);
           }
         }
     });
   }
   return 0;
+}
+
+template<typename F>
+inline size_t block_bitset::par_foreach_index(
+      F f,
+      const uint8_t* A,
+      const size_t cardinality,
+      const size_t number_of_bytes,
+      const type::layout t){
+  return par_foreach_index(f,A,cardinality,number_of_bytes,t,0);
 }
 
 inline long block_bitset::find(uint32_t key, 
@@ -258,8 +297,9 @@ inline long block_bitset::find(uint32_t key,
 
   const uint32_t data_offset = 2+(WORDS_PER_BLOCK*2);
   if(number_of_bytes > 0){
+    //always have at least one block in this code
     const size_t A_num_blocks = number_of_bytes/(2*sizeof(uint32_t)+(BLOCK_SIZE/8));
-    long block_index = binary_search((uint32_t*)data_in,0,A_num_blocks,key/BLOCK_SIZE,[&](uint32_t d){return d*data_offset;});
+    long block_index = binary_search((uint32_t*)data_in,0,A_num_blocks-1,key/BLOCK_SIZE,[&](uint32_t d){return d*data_offset;});
     if(block_index != -1){
       uint8_t *A_BLOCK = const_cast<uint8_t*>(data_in)+block_index*(2*sizeof(uint32_t)+WORDS_PER_BLOCK*sizeof(uint64_t));
       uint64_t *A64 = (uint64_t*)(A_BLOCK+2*sizeof(uint32_t));

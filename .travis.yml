@@ -10,7 +10,11 @@ before_install:
   - sudo apt-get install libgtest-dev
   - "cd /usr/src/gtest && sudo cmake . && sudo cmake --build . && sudo mv libg* /usr/local/lib/ ; cd -"
 
-script: "cd ./emptyheaded && make clean && make tests"
+script: "cd ./emptyheaded && make clean && make tests TRAVIS=true"
+
+notifications:
+  email:
+    - craberger@gmail.com
 
 branches:
   only:

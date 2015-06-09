@@ -49,14 +49,16 @@ size_t produce_ranges(size_t start, size_t end,
     next_ranges[num_distinct] = start_range;
     data[num_distinct] = cur;
 
-    if(++i == end)
-      break;
-    num_distinct++;
-    while(cur == prev && i < end){
-      prev = current->at(indicies[i++]);
+    ++num_distinct;
+
+    while(cur == prev){
+      if((i+1) >= end)
+        goto FINISH;
+      prev = current->at(indicies[++i]);
     }
-    --i;
+
   }
+  FINISH:
   next_ranges[num_distinct] = end;
   return num_distinct; //should be all you need.
 }
