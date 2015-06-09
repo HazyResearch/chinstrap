@@ -49,7 +49,7 @@ namespace ops{
         const uint32_t b_index = range_bitset::get_num_set(cur,B[cur_index],B_index[cur_index-start_index]);
         const size_t num_hit = N::scalar(cur,C,f,i,b_index);
         count += num_hit;
-        N::advanceC(C,num_hit);
+        C = N::advanceC(C,num_hit);
       } else if(cur_index >= (s_b+start_index)){
         break;
       }

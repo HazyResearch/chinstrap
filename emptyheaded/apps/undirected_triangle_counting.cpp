@@ -75,16 +75,15 @@ struct undirected_triangle_counting: public application<T> {
     A.par_foreach([&](size_t tid, uint32_t a_i){
       Set<T> B(B_buffer.get_memory(tid)); //initialize the memory
 
-      //std::cout << "A: " << a_i << std::endl; 
-
       const Set<T> op1 = H.get_block(a_i)->set;
-      B = ops::set_intersect<materialize>(&B,&op1,&A); //intersect the B
+      B = ops::set_intersect(&B,&op1,&A); //intersect the B
+      //std::cout << "A: " << a_i << " card: " << B.cardinality << std::endl; 
       B.foreach([&](uint32_t b_i){ //Peel off B attributes
         //std::cout << "A: " << a_i << " B: " << b_i << std::endl; 
         const TrieBlock<T>* l2 = H.get_block(b_i);
-        const size_t count = ops::set_intersect<aggregate>(
+        const size_t count = ops::set_intersect(
           &l2->set,
-          &op1)->cardinality;
+          &op1);
         //std::cout << count << std::endl;
         num_triangles.update(tid,count);
       });

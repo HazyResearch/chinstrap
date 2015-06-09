@@ -554,9 +554,6 @@ namespace ops{
       uint64_t * const C = N::write_range_index(C_in->data,start_index);
       uint32_t * index_write = N::index_data(C,total_size);
 
-    
-      std::cout << "A: " << *A32_index << " " << a_start_index << std::endl;
-
       count = intersect_range_block<N>(C,index_write,A+a_start_index,B+b_start_index,total_size*64,start_index,f,A32_index,B32_index);
 
       C_in->number_of_bytes = total_size*(sizeof(uint64_t)+sizeof(uint32_t))+sizeof(uint64_t);
