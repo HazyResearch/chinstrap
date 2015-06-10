@@ -64,7 +64,6 @@ struct undirected_triangle_counting: public application<T> {
     //rpcm.init_counter_states();
     //allocate memory
     allocator::memory<uint8_t> B_buffer(R_ab->num_rows*sizeof(uint64_t));
-    allocator::memory<uint8_t> C_buffer(R_ab->num_rows*sizeof(uint64_t));
     par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
       return a + b;
     });
@@ -75,18 +74,16 @@ struct undirected_triangle_counting: public application<T> {
     const Set<T> A = H.set;
     A.par_foreach([&](size_t tid, uint32_t a_i){
       Set<T> B(B_buffer.get_memory(tid)); //initialize the memory
-      Set<T> C(C_buffer.get_memory(tid));
-
-      //std::cout << "A: " << a_i << std::endl; 
 
       const Set<T> op1 = H.get_block(a_i)->set;
       B = ops::set_intersect(&B,&op1,&A); //intersect the B
+      //std::cout << "A: " << a_i << " card: " << B.cardinality << std::endl; 
       B.foreach([&](uint32_t b_i){ //Peel off B attributes
         //std::cout << "A: " << a_i << " B: " << b_i << std::endl; 
         const TrieBlock<T>* l2 = H.get_block(b_i);
-        const size_t count = ops::set_intersect(&C,
+        const size_t count = ops::set_intersect(
           &l2->set,
-          &op1)->cardinality;
+          &op1);
         //std::cout << count << std::endl;
         num_triangles.update(tid,count);
       });

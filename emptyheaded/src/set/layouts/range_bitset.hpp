@@ -22,6 +22,7 @@ class range_bitset{
     static type::layout get_type();
     static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
     static size_t get_number_of_words(size_t num_bytes);
+    static size_t get_num_set(const uint32_t key, const uint64_t data, const uint32_t offset);
 
     template<typename F>
     static void foreach(
@@ -98,6 +99,8 @@ inline std::tuple<size_t,type::layout> range_bitset::build(uint8_t *R, const uin
     while(i < s_a){
       uint32_t cur = A[i];
       word = word_index(cur);
+
+      R32_index[word-offset] = i;
       uint64_t set_value = (uint64_t) 1 << (cur % BITS_PER_WORD);
       bool same_word = true;
       ++i;
@@ -109,7 +112,6 @@ inline std::tuple<size_t,type::layout> range_bitset::build(uint8_t *R, const uin
         } else same_word = false;
       }
       R64_data[word-offset] = set_value;
-      R32_index[word-offset] = (i-1);
     }
     const size_t num_bytes = (num_words)*(BYTES_PER_WORD+sizeof(uint32_t)) + sizeof(uint64_t);
     return std::make_pair(num_bytes,type::RANGE_BITSET);
@@ -267,6 +269,10 @@ inline size_t range_bitset::par_foreach_index(
 
   return 1;
 }
+inline size_t range_bitset::get_num_set(const uint32_t key, const uint64_t data, const uint32_t offset){
+  const uint64_t masked_word = data & (masks::find_mask[(key%BITS_PER_WORD)]);
+  return _mm_popcnt_u64(masked_word) + offset;
+}
 
 inline long range_bitset::find(uint32_t key, const uint8_t *A, const size_t number_of_bytes, const type::layout t){
   (void) t;
@@ -280,8 +286,7 @@ inline long range_bitset::find(uint32_t key, const uint8_t *A, const size_t numb
     if(word >= offset && word < (offset+num_data_words)){
       if(is_set(key,A64,offset)){
         //figure out how many in word set before one we want, then add up index
-        const uint64_t masked_word = ((A64)[word-offset]) & (masks::find_mask[(key%BITS_PER_WORD)]);
-        return _mm_popcnt_u64(masked_word) + A32_index[word-offset];
+        return get_num_set(key,(A64)[word-offset],A32_index[word-offset]);
       }
     }
   }

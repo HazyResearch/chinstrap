@@ -63,6 +63,7 @@ struct oracle_triangle_counting: public application<T> {
 
     //rpcm.init_counter_states();
     //allocate memory
+/*
     allocator::memory<uint8_t> B_buffer(a_encoding->num_distinct*10*sizeof(uint64_t));
     allocator::memory<uint8_t> C_buffer(a_encoding->num_distinct*10*sizeof(uint64_t));
     allocator::memory<uint8_t> op1_buffer(a_encoding->num_distinct*10*sizeof(uint64_t));
@@ -105,7 +106,7 @@ struct oracle_triangle_counting: public application<T> {
     std::cout << "Oracle Time: " << oracle_time << std::endl;
     std::cout << "Optimizer Time: " << optimizer_time << std::endl;
     std::cout << result << std::endl;
-
+  */
     /*
     rpcm.end_counter_states();
     rpcm.print_state();

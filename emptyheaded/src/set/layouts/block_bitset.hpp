@@ -14,8 +14,6 @@ THIS CLASS IMPLEMENTS THE FUNCTIONS ASSOCIATED WITH THE BITSET LAYOUT.
 #define ADDRESS_BITS_PER_BLOCK 8
 #define WORDS_PER_BLOCK 4
 
-#define BITSET_THRESHOLD 0.11
-
 class block_bitset{
   public:
     static size_t word_index(const uint32_t bit_index);
@@ -128,7 +126,7 @@ inline std::tuple<size_t,type::layout> block_bitset::build(uint8_t *R, const uin
         i++;
       }
       *(uint32_t*)(R) = block_id;
-      *(uint32_t*)(R+sizeof(uint32_t)) = i;
+      *(uint32_t*)(R+sizeof(uint32_t)) = block_start_index;
       pack_block((uint64_t*)(R+2*sizeof(uint32_t)),&A[block_start_index],(i-block_start_index));
       R += WORDS_PER_BLOCK*sizeof(uint64_t)+2*sizeof(uint32_t);
     }

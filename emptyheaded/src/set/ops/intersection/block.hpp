@@ -7,7 +7,8 @@
 
 namespace ops{
 
-  inline Set<block>* set_intersect(Set<block> *C_in,const Set<block> *A_in,const Set<block> *B_in){
+  template<class N, typename F>
+  inline Set<block>* set_intersect(Set<block> *C_in,const Set<block> *A_in,const Set<block> *B_in, F f){
     if(A_in->number_of_bytes == 0 || B_in->number_of_bytes == 0){
       C_in->cardinality = 0;
       C_in->number_of_bytes = 0;
@@ -49,6 +50,7 @@ namespace ops{
       //std::cout << "checking a: " << a_d  << std::endl;
       if(B_BS.find(a_d) != -1){
         C_data[count++] = a_d;
+        f(a_d);
       }
       return;
     };
@@ -63,6 +65,7 @@ namespace ops{
     auto check_b = [&](uint32_t a_d){
       if(A_BS.find(a_d) != -1){
         C_data[count++] = a_d;
+        f(a_d);
       }
       return;
     };
@@ -76,6 +79,7 @@ namespace ops{
     auto match = [&](uint32_t a_index, uint32_t b_index, uint32_t d){
       (void) a_index; (void) b_index;
       C_data[count++] = d;
+      f(d);
       return std::make_pair<uint32_t,uint32_t>(1,1);
     };
     ////////////////////////////////////////////////////////
@@ -88,7 +92,7 @@ namespace ops{
     C_pointer += (num_uint*sizeof(uint32_t));
 
     Set<block_bitset>BSBS(C_pointer);
-    BSBS = ops::set_intersect(&BSBS,&A_BS,&B_BS);
+    BSBS = ops::set_intersect<N>(&BSBS,&A_BS,&B_BS,f);
     //std::cout << "BS BS count: " << BSBS.cardinality << std::endl;
     count += BSBS.cardinality;
 
@@ -99,5 +103,18 @@ namespace ops{
 
     return C_in;
   }
+
+  inline Set<block>* set_intersect(Set<block> *C_in, const Set<block> *A_in, const Set<block> *B_in){
+    auto f = [&](uint32_t data){(void) data; return;};
+    return set_intersect<unpack_null_bs>(C_in,A_in,B_in,f);
+  }
+
+  template <typename F>
+  inline Set<block>* set_intersect(Set<block> *C_in, const Set<block> *A_in, const Set<block> *B_in, F f){
+    return set_intersect<unpack_bitset>(C_in,A_in,B_in,f);
+  }
+
+
+
 }
 #endif

@@ -38,9 +38,10 @@
 #define PADDING 300
 #define MAX_THREADS 512
 
-#define VECTORIZE 0
+#define VECTORIZE 1
 #define WRITE_VECTOR 1
-//#define NO_ALGORITHM
+#define NO_ALGORITHM
+//#define OPTIMIZER_OVERHEAD
 
 // Enables/disables pruning
 //#define NEW_BITSET
@@ -60,9 +61,16 @@ static size_t NUM_THREADS = 48;
 
 namespace common{
   static size_t bitset_length = 0;
+#ifndef OPTIMIZER_OVERHEAD
   static double bitset_req = (1.0/256.0);
+#else
+  static double bitset_req = 2.0;
+#endif
   static size_t block_bitset_req = 16;
 }
+
+struct aggregate{};
+struct materialize{};
 
 namespace type{
   enum file : uint8_t{

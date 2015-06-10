@@ -40,6 +40,158 @@
                    /* reads */ "i" (bytes));
 
 namespace ops{
+  struct no_check{
+    static inline size_t check_registers(const __m128i Q0, const __m128i Q1){
+      (void) Q0; (void) Q1;
+      return 0;
+    }
+    static inline size_t check_registers(const __m128i Q0, const __m128i Q1, 
+      const __m128i Q2, const __m128i Q3, 
+      const __m128i r0, const __m128i r1, const __m128i r2, const __m128i r3, 
+      const __m128i r4, const __m128i r5, const __m128i r6, const __m128i r7){
+      (void) Q0; (void) Q1; (void) Q2; (void) Q3; 
+      (void) r0; (void) r1; (void) r2; (void) r3; 
+      (void) r4; (void) r5; (void) r6; (void) r7; 
+      return 0;
+    }
+  };
+  struct unpack_aggregate:no_check{
+    static inline uint32_t* advanceC(uint32_t *C, size_t amount){
+      (void) C; (void) amount;
+      return NULL;
+    }
+    template <typename F>
+    static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
+      (void) x; (void) w; (void) f; (void) i_a; (void) i_b;
+      return 1;
+    }
+    template<typename F>
+    static inline size_t unpack(const __m128i x, uint32_t *w, 
+      const size_t num, F f, const __m128i i_a, const __m128i i_b){
+      (void) i_a; (void) i_b;
+      (void) x; (void) num; (void) f; (void) w;
+
+      return num;
+    }
+  };
+  struct unpack_materialize:no_check{
+    static inline uint32_t* advanceC(uint32_t *C, size_t amount){
+      return C+amount;
+    }
+    template <typename F>
+    static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
+      (void) i_a; (void) i_b; (void) f;
+      *w = x;
+      return 1;
+    }
+    template<typename F>
+    static inline size_t unpack(const __m128i x, uint32_t *w, 
+      const size_t num, F f, const __m128i i_a, const __m128i i_b){
+      (void) i_a; (void) i_b; (void) f;
+      _mm_storeu_si128((__m128i*)w, x);
+      return num;
+    }
+  };
+  struct check{
+    static inline size_t check_registers(const __m128i Q0, const __m128i Q1, 
+      const __m128i Q2, const __m128i Q3, 
+      const __m128i r0, const __m128i r1, const __m128i r2, const __m128i r3, 
+      const __m128i r4, const __m128i r5, const __m128i r6, const __m128i r7){
+
+      (void) Q3;
+      const size_t mask_array[16] = {0,0,1,0,2,0,0,0,3,0,0,0,0,0,0,0};
+
+      if (_mm_testz_si128(Q0, Q0) == 0) {
+        if(_mm_testz_si128(r0, r0) == 0){
+          const uint32_t mask = _mm_movemask_ps((__m128)r0);
+          return mask_array[mask]+4*0;
+        } else{
+          const uint32_t mask = _mm_movemask_ps((__m128)r1);
+          return mask_array[mask]+4*1;
+        }
+      } else if(_mm_testz_si128(Q1, Q1) == 0){
+        if(_mm_testz_si128(r2, r2) == 0){
+          const uint32_t mask = _mm_movemask_ps((__m128)r2);
+          return mask_array[mask]+4*2;
+        } else{
+          const uint32_t mask = _mm_movemask_ps((__m128)r3);
+          return mask_array[mask]+4*3;
+        }
+      } else if(_mm_testz_si128(Q2, Q2) == 0){
+        if(_mm_testz_si128(r4, r4) == 0){
+          const uint32_t mask = _mm_movemask_ps((__m128)r4);
+          return mask_array[mask]+4*4;
+        } else{
+          const uint32_t mask = _mm_movemask_ps((__m128)r5);
+          return mask_array[mask]+4*5;
+        }
+      } else{
+        if(_mm_testz_si128(r6, r6) == 0){
+          const uint32_t mask = _mm_movemask_ps((__m128)r6);
+          return mask_array[mask]+4*6;
+        } else{
+          const uint32_t mask = _mm_movemask_ps((__m128)r7);
+          return mask_array[mask]+4*7;
+        }
+      }
+
+      //not reached
+      return 0;
+    }
+    static inline size_t check_registers(const __m128i Q0, const __m128i Q1){
+      const size_t mask_array[16] = {0,0,1,0,2,0,0,0,3,0,0,0,0,0,0,0};
+      if(_mm_testz_si128(Q0, Q0) == 0){
+        const uint32_t mask = _mm_movemask_ps((__m128)Q0);
+        return mask_array[mask];
+      } else{
+        const uint32_t mask = _mm_movemask_ps((__m128)Q1);
+        return mask_array[mask]+4;
+      }
+      return 0;
+    }
+  };
+  struct unpack_uinteger_materialize:check{
+    static inline uint32_t* advanceC(uint32_t *C, size_t amount){
+      return C+amount;
+    }
+    template <typename F>
+    static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
+      *w = x;
+      return f(x,i_a,i_b);
+    }
+    template<typename F>
+    static inline size_t unpack(const __m128i x, uint32_t *w, 
+      const size_t num, F f, const __m128i i_a, const __m128i i_b){
+      size_t filter = 0;
+      for(size_t i =0 ; i < num; i++){
+        *(w+i) = _mm_extract_epi32(x,i);
+        filter += f(_mm_extract_epi32(x,i),_mm_extract_epi32(i_a,i),_mm_extract_epi32(i_b,i)); 
+      }      
+      return filter;
+    }
+  };
+  struct unpack_uinteger_aggregate:check{
+    static inline uint32_t* advanceC(uint32_t *C, size_t amount){
+      (void) C; (void) amount;
+      return NULL;
+    }
+    template <typename F>
+    static inline size_t scalar(const uint32_t x, uint32_t *w, F f, const uint32_t i_a, const uint32_t i_b){
+      (void) w;
+      return f(x,i_a,i_b);
+    }
+    template<typename F>
+    static inline size_t unpack(const __m128i x, uint32_t *w, 
+      const size_t num, F f, const __m128i i_a, const __m128i i_b){
+      (void) w;
+      size_t filter = 0;
+      for(size_t i =0 ; i < num; i++){
+        filter += f(_mm_extract_epi32(x,i),_mm_extract_epi32(i_a,i),_mm_extract_epi32(i_b,i)); 
+      }      
+      return filter;
+    }
+  };
+  
   //Code adopted from Daniel Lemire.
   //https://github.com/lemire/SIMDCompressionAndIntersection/blob/master/src/intersection.cpp
   /**
@@ -90,15 +242,17 @@ namespace ops{
       return upper;
 
   }
-
-  inline Set<uinteger>* scalar_gallop(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
+  
+  template<class N,typename F>
+  inline Set<uinteger>* scalar_gallop(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
       const uint32_t *smallset = (uint32_t*)A_in->data;
       const size_t smalllength = A_in->cardinality;
       const uint32_t *largeset = (uint32_t*)B_in->data;
       const size_t largelength = B_in->cardinality;
       uint32_t *out = (uint32_t*)C_in->data;
+      size_t count = 0;
       if(A_in->cardinality < B_in->cardinality){
-        return scalar_gallop(C_in,B_in,A_in);
+        return scalar_gallop<N>(C_in,B_in,A_in);
       }
       if (0 == smalllength){
         C_in->cardinality = 0;
@@ -106,7 +260,6 @@ namespace ops{
         return C_in;
       }
 
-      const uint32_t *const initout(out);
       size_t k1 = 0, k2 = 0;
       while (true) {
           if (largeset[k1] < smallset[k2]) {
@@ -120,7 +273,9 @@ namespace ops{
               if (k2 == smalllength)
                   break;
           } else {
-              *out++ = smallset[k2];
+              const size_t hit_amount = N::scalar(smallset[k2],out,f,k2,k1);
+              out = N::advanceC(out,hit_amount);
+              count += hit_amount;
               ++k2;
               if (k2 == smalllength)
                   break;
@@ -130,78 +285,51 @@ namespace ops{
               goto midpoint;
           }
       }
-      C_in->cardinality = out - initout;
+      C_in->cardinality = count;
       C_in->number_of_bytes = C_in->cardinality*sizeof(uint32_t);
       return C_in;
-
   }
 
   /**
    * Fast scalar scheme designed by N. Kurz.
    */
+  template<class N, typename F>
   inline size_t scalar(const uint32_t *A, const size_t lenA,
-                const uint32_t *B, const size_t lenB, uint32_t *out) {
-      const uint32_t *const initout(out);
+                const uint32_t *B, const size_t lenB, uint32_t *out, 
+                F f, const size_t offsetA, const size_t offsetB) {
       if (lenA == 0 || lenB == 0)
           return 0;
 
+      const uint32_t *startA = A;
+      const uint32_t *startB = B;
       const uint32_t *endA = A + lenA;
       const uint32_t *endB = B + lenB;
+      size_t count = 0;
 
       while (1) {
           while (*A < *B) {
   SKIP_FIRST_COMPARE:
               if (++A == endA)
-                  return (out - initout);
+                  return count;
           }
           while (*A > *B) {
               if (++B == endB)
-                  return (out - initout);
+                  return count;
           }
           if (*A == *B) {
-              #if WRITE_VECTOR == 1
-              *out++ = *A;
-              #else
-              out++;
-              #endif
+              const size_t hit_amount = N::scalar(*A,out,f,((A+offsetA)-startA),((B+offsetB)-startB));
+              out = N::advanceC(out,hit_amount);
+              count += hit_amount;
               if (++A == endA || ++B == endB)
-                  return (out - initout);
+                  return count;
           } else {
               goto SKIP_FIRST_COMPARE;
           }
       }
 
-      return (out - initout); // NOTREACHED
+      return count; // NOTREACHED
   }
-  inline size_t match_scalar(const uint32_t *A, const size_t lenA,
-                      const uint32_t *B, const size_t lenB,
-                      uint32_t *out) {
 
-      const uint32_t *initout = out;
-      if (lenA == 0 || lenB == 0) return 0;
-
-      const uint32_t *endA = A + lenA;
-      const uint32_t *endB = B + lenB;
-
-      while (1) {
-          while (*A < *B) {
-  SKIP_FIRST_COMPARE:
-              if (++A == endA) goto FINISH;
-          }
-          while (*A > *B) {
-              if (++B == endB) goto FINISH;
-          }
-          if (*A == *B) {
-              *out++ = *A;
-              if (++A == endA || ++B == endB) goto FINISH;
-          } else {
-              goto SKIP_FIRST_COMPARE;
-          }
-      }
-
-  FINISH:
-      return (out - initout);
-  }
 
   /**
    * Intersections scheme designed by N. Kurz that works very
@@ -218,15 +346,18 @@ namespace ops{
    *
    * This function  use inline assembly.
    */
-  inline Set<uinteger>* set_intersect_v1(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
+  template<class N,typename F>
+  inline Set<uinteger>* set_intersect_v1(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
       const uint32_t *rare = (uint32_t*)A_in->data;
       size_t lenRare = A_in->cardinality;
       const uint32_t *freq = (uint32_t*)B_in->data;
       size_t lenFreq = B_in->cardinality;
       uint32_t *matchOut = (uint32_t*)C_in->data;
 
-      assert(lenRare <= lenFreq);
-      const uint32_t *matchOrig = matchOut;
+      size_t count = 0;
+      const uint32_t *startFreq = freq;
+      const uint32_t *startRare = rare;
+
       if (lenFreq == 0 || lenRare == 0){
         const size_t density = 0.0;
         C_in->cardinality = 0;
@@ -248,43 +379,47 @@ namespace ops{
 
       if (COMPILER_RARELY((rare >= stopRare) || (freq >= stopFreq))) goto FINISH_SCALAR;
 
-      uint64_t valRare;
+      uint32_t valRare;
       valRare = rare[0];
-      VEC_SET_ALL_TO_INT(Rare, valRare);
+      Rare = _mm_set1_epi32(valRare);
 
       uint64_t maxFreq;
       maxFreq = freq[2 * 4 - 1];
-      VEC_LOAD_OFFSET(F0, freq, 0 * sizeof(VEC_T)) ;
-      VEC_LOAD_OFFSET(F1, freq, 1 * sizeof(VEC_T));
+      F0 = _mm_lddqu_si128(reinterpret_cast<const __m128i *>(freq));
+      F1 = _mm_lddqu_si128(reinterpret_cast<const __m128i *>(freq + 4));
 
       if (COMPILER_RARELY(maxFreq < valRare)) goto ADVANCE_FREQ;
 
   ADVANCE_RARE:
       do {
-          *matchOut = static_cast<uint32_t>(valRare);
-          valRare = rare[1]; // for next iteration
-          ASM_LEA_ADD_BYTES(rare, sizeof(*rare)); // rare += 1;
-
-          if (COMPILER_RARELY(rare >= stopRare)) {
-              rare -= 1;
-              goto FINISH_SCALAR;
-          }
-
-          VEC_CMP_EQUAL(F0, Rare) ;
-          VEC_CMP_EQUAL(F1, Rare);
-
-          VEC_SET_ALL_TO_INT(Rare, valRare);
-
-          VEC_OR(F0, F1);
-  #ifdef __SSE4_1__
-          VEC_ADD_PTEST(matchOut, 1, F0);
-  #else
-          matchOut += static_cast<uint32_t>(_mm_movemask_epi8(F0) != 0);
-  #endif
-
-          VEC_LOAD_OFFSET(F0, freq, 0 * sizeof(VEC_T)) ;
-          VEC_LOAD_OFFSET(F1, freq, 1 * sizeof(VEC_T));
-
+        const uint32_t old_rare = valRare;
+        valRare = rare[1]; // for next iteration
+        rare += 1;
+        if (COMPILER_RARELY(rare >= stopRare)) {
+          rare -= 1;
+          goto FINISH_SCALAR;
+        }
+        F0 = _mm_cmpeq_epi32(F0, Rare);
+        F1 = _mm_cmpeq_epi32(F1, Rare);
+        Rare = _mm_set1_epi32(valRare);
+        F0 = _mm_or_si128(F0, F1);
+    #ifdef __SSE4_1__
+        if(_mm_testz_si128(F0,F0) == 0){
+          const size_t freqOffset = N::check_registers(F0,F1);
+          const size_t hit_amount = N::scalar(old_rare,matchOut,f,(rare-startRare),((freq+freqOffset)-startFreq));
+          matchOut = N::advanceC(matchOut,hit_amount);
+          count += hit_amount;
+        }
+    #else
+        if (_mm_movemask_epi8(F0)){
+          const size_t freqOffset = N::check_registers(F0,F1);
+          const size_t hit_amount = N::scalar(old_rare,matchOut,f,(rare-startRare),((freq+freqOffset)-startFreq));
+          matchOut = N::advanceC(matchOut,hit_amount);
+          count += hit_amount;
+        }
+    #endif
+        F0 = _mm_lddqu_si128(reinterpret_cast<const __m128i *>(freq));
+        F1 = _mm_lddqu_si128(reinterpret_cast<const __m128i *>(freq + 4));
       } while (maxFreq >= valRare);
 
       uint64_t maxProbe;
@@ -310,14 +445,12 @@ namespace ops{
 
       goto ADVANCE_RARE;
 
-      size_t count;
   FINISH_SCALAR:
-      count = matchOut - matchOrig;
 
       lenFreq = stopFreq + kFreqSpace - freq;
       lenRare = stopRare + kRareSpace - rare;
 
-      size_t tail = match_scalar(freq, lenFreq, rare, lenRare, matchOut);
+    size_t tail = scalar<N>(freq, lenFreq, rare, lenRare, matchOut,f,rare-startRare,freq-startFreq);
 
     const size_t density = 0.0;
     C_in->cardinality = count + tail;
@@ -327,7 +460,6 @@ namespace ops{
 
     return C_in;  
   }
-
   /**
    * This intersection function is similar to v1, but is faster when
    * the difference between lenRare and lenFreq is large, but not too large.
@@ -341,12 +473,17 @@ namespace ops{
    *
    * This function DOES NOT use inline assembly instructions. Just intrinsics.
    */
-  inline Set<uinteger>* set_intersect_v3(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
+  template<class N,typename F>
+  inline Set<uinteger>* set_intersect_v3(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
       const uint32_t *rare = (uint32_t*)A_in->data;
       const size_t lenRare = A_in->cardinality;
       const uint32_t *freq = (uint32_t*)B_in->data;
       const size_t lenFreq = B_in->cardinality;
       uint32_t *out = (uint32_t*)C_in->data;
+
+      size_t count = 0;
+      const uint32_t *startRare = rare;
+      const uint32_t *startFreq = freq;
 
       if (lenFreq == 0 || lenRare == 0){
         const size_t density = 0.0;
@@ -357,7 +494,6 @@ namespace ops{
         return C_in;
       }
       assert(lenRare <= lenFreq);
-      const uint32_t *const initout(out);
       typedef __m128i vec;
       const uint32_t veclen = sizeof(vec) / sizeof(uint32_t);
       const size_t vecmax = veclen - 1;
@@ -367,7 +503,7 @@ namespace ops{
       const uint32_t *stopFreq = freq + lenFreq - freqspace;
       const uint32_t *stopRare = rare + lenRare - rarespace;
       if (freq > stopFreq) {
-        const size_t final_count = scalar(freq, lenFreq, rare, lenRare, out);
+        const size_t final_count = scalar<N>(freq, lenFreq, rare, lenRare, out,f,freq-startFreq,rare-startRare);
         const size_t density = 0.0;
         C_in->cardinality = final_count;
         C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
@@ -388,80 +524,177 @@ namespace ops{
               if (freq > stopFreq)
                   goto FINISH_SCALAR;
           }
-          vec Q0, Q1, Q2, Q3;
+          vec Q0, Q1, Q2, Q3; 
           if (freq[veclen * 15 + vecmax] >= matchRare) {
               if (freq[veclen * 7 + vecmax] < matchRare) {
-                  Q0 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 8), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 9), Match));
-                  Q1 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 10), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 11), Match));
+                  //there are 16 SSE registers in AVX architecture, we use 12 here + 1 + 1 + 1
+                  //if the compiler is good this code should just use 15 registers (could spill though)
+                  //these are all vectors we are comparing can get index from that (+8 = +8 vectors)
+                 //Match, r0-r7, Q0-Q3, lr Match (8+4+2)
+                  const size_t offset = 8;
+                  __m128i lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset);
+                  const __m128i r0 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 1);
+                  const __m128i r1 = _mm_cmpeq_epi32(lr, Match);
+                  Q0 = _mm_or_si128(r0,r1);
+                  
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 2);
+                  const __m128i r2 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 3);
+                  const __m128i r3 = _mm_cmpeq_epi32(lr, Match);
+                  Q1 = _mm_or_si128(r2,r3);
 
-                  Q2 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 12), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 13), Match));
-                  Q3 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 14), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 15), Match));
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 4);
+                  const __m128i r4 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 5);
+                  const __m128i r5 = _mm_cmpeq_epi32(lr, Match);
+                  Q2 = _mm_or_si128(r4,r5);
+
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 6);
+                  const __m128i r6 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 7);
+                  const __m128i r7 = _mm_cmpeq_epi32(lr, Match);
+                  Q3 = _mm_or_si128(r6,r7);
+
+                  lr = _mm_or_si128(Q0, Q1);
+                  const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
+        
+                  if (_mm_testz_si128(F0, F0) == 0) {
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
+                  }                
               } else {
-                  Q0 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 4), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 5), Match));
-                  Q1 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 6), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 7), Match));
-                  Q2 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 0), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 1), Match));
-                  Q3 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 2), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 3), Match));
+
+                  //there are 16 SSE registers in AVX architecture, we use 12 here + 1 + 1 + 1
+                  //if the compiler is good this code should just use 15 registers (could spill though)
+                  //these are all vectors we are comparing can get index from that (+8 = +8 vectors)
+                 //Match, r0-r7, Q0-Q3, lr Match (8+4+2)
+                  const size_t offset = 0;
+                  __m128i lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset);
+                  const __m128i r0 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 1);
+                  const __m128i r1 = _mm_cmpeq_epi32(lr, Match);
+                  Q0 = _mm_or_si128(r0,r1);
+                  
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 2);
+                  const __m128i r2 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 3);
+                  const __m128i r3 = _mm_cmpeq_epi32(lr, Match);
+                  Q1 = _mm_or_si128(r2,r3);
+
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 4);
+                  const __m128i r4 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 5);
+                  const __m128i r5 = _mm_cmpeq_epi32(lr, Match);
+                  Q2 = _mm_or_si128(r4,r5);
+
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 6);
+                  const __m128i r6 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 7);
+                  const __m128i r7 = _mm_cmpeq_epi32(lr, Match);
+                  Q3 = _mm_or_si128(r6,r7);
+
+                  lr = _mm_or_si128(Q0, Q1);
+                  const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
+        
+                  if (_mm_testz_si128(F0, F0) == 0) {
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
+                  }  
+              
               }
           } else {
               if (freq[veclen * 23 + vecmax] < matchRare) {
-                  Q0 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 8 + 16), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 9 + 16), Match));
-                  Q1 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 10 + 16), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 11 + 16), Match));
 
-                  Q2 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 12 + 16), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 13 + 16), Match));
-                  Q3 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 14 + 16), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 15 + 16), Match));
+                //there are 16 SSE registers in AVX architecture, we use 12 here + 1 + 1 + 1
+                //if the compiler is good this code should just use 15 registers (could spill though)
+                //these are all vectors we are comparing can get index from that (+8 = +8 vectors)
+               //Match, r0-r7, Q0-Q3, lr Match (8+4+2)
+                const size_t offset = 24;
+                  __m128i lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset);
+                  const __m128i r0 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 1);
+                  const __m128i r1 = _mm_cmpeq_epi32(lr, Match);
+                  Q0 = _mm_or_si128(r0,r1);
+                  
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 2);
+                  const __m128i r2 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 3);
+                  const __m128i r3 = _mm_cmpeq_epi32(lr, Match);
+                  Q1 = _mm_or_si128(r2,r3);
+
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 4);
+                  const __m128i r4 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 5);
+                  const __m128i r5 = _mm_cmpeq_epi32(lr, Match);
+                  Q2 = _mm_or_si128(r4,r5);
+
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 6);
+                  const __m128i r6 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 7);
+                  const __m128i r7 = _mm_cmpeq_epi32(lr, Match);
+                  Q3 = _mm_or_si128(r6,r7);
+
+                  lr = _mm_or_si128(Q0, Q1);
+                  const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
+        
+                  if (_mm_testz_si128(F0, F0) == 0) {
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
+                  }   
+
               } else {
-                  Q0 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 4 + 16), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 5 + 16), Match));
-                  Q1 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 6 + 16), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 7 + 16), Match));
-                  Q2 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 0 + 16), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 1 + 16), Match));
-                  Q3 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 2 + 16), Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 3 + 16), Match));
+                  //there are 16 SSE registers in AVX architecture, we use 12 here + 1 + 1 + 1
+                  //if the compiler is good this code should just use 15 registers (could spill though)
+                  //these are all vectors we are comparing can get index from that (+8 = +8 vectors)
+                 //Match, r0-r7, Q0-Q3, lr Match (8+4+2)
+                const size_t offset = 16;
+                  __m128i lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset);
+                  const __m128i r0 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 1);
+                  const __m128i r1 = _mm_cmpeq_epi32(lr, Match);
+                  Q0 = _mm_or_si128(r0,r1);
+                  
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 2);
+                  const __m128i r2 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 3);
+                  const __m128i r3 = _mm_cmpeq_epi32(lr, Match);
+                  Q1 = _mm_or_si128(r2,r3);
+
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 4);
+                  const __m128i r4 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 5);
+                  const __m128i r5 = _mm_cmpeq_epi32(lr, Match);
+                  Q2 = _mm_or_si128(r4,r5);
+
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 6);
+                  const __m128i r6 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 7);
+                  const __m128i r7 = _mm_cmpeq_epi32(lr, Match);
+                  Q3 = _mm_or_si128(r6,r7);
+
+                  lr = _mm_or_si128(Q0, Q1);
+                  const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
+        
+                  if (_mm_testz_si128(F0, F0) == 0) {
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
+                  }  
               }
 
-          }
-          const vec F0 = _mm_or_si128(_mm_or_si128(Q0, Q1), _mm_or_si128(Q2, Q3));
-  #ifdef __SSE4_1__
-          if (_mm_testz_si128(F0, F0)) {
-  #else 
-          if (!_mm_movemask_epi8(F0)) {
-  #endif 
-          } else {
-              *out++ = matchRare;
           }
       }
 
   FINISH_SCALAR: 
-    const size_t final_count = (out - initout) + scalar(freq,stopFreq + freqspace - freq, rare, stopRare + rarespace - rare, out);
+    const size_t final_count = count + scalar<N>(rare, stopRare + rarespace - rare, freq,stopFreq + freqspace - freq, out, f, rare-startRare, freq-startFreq);
     const size_t density = 0.0;
     C_in->cardinality = final_count;
     C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
@@ -469,7 +702,6 @@ namespace ops{
     C_in->type= type::UINTEGER;
     return C_in;
   }
-
   /**
    * This is the SIMD galloping function. This intersection function works well
    * when lenRare and lenFreq have vastly different values.
@@ -484,12 +716,17 @@ namespace ops{
    *
    * This function DOES NOT use assembly. It only relies on intrinsics.
    */
-  inline Set<uinteger>* set_intersect_galloping(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
+  template<class N,typename F>
+  inline Set<uinteger>* set_intersect_galloping(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
       const uint32_t *rare = (uint32_t*)A_in->data;
       const size_t lenRare = A_in->cardinality;
       const uint32_t *freq = (uint32_t*)B_in->data;
       const size_t lenFreq = B_in->cardinality;
       uint32_t *out = (uint32_t*)C_in->data;
+
+      const uint32_t * const startRare = rare;
+      const uint32_t * const startFreq = freq;
+      size_t count = 0;
 
       if (lenFreq == 0 || lenRare == 0){
         const size_t density = 0.0;
@@ -500,7 +737,6 @@ namespace ops{
         return C_in;
       }
       assert(lenRare <= lenFreq);
-      const uint32_t *const initout(out);
       typedef __m128i vec;
       const uint32_t veclen = sizeof(vec) / sizeof(uint32_t);
       const size_t vecmax = veclen - 1;
@@ -510,7 +746,7 @@ namespace ops{
       const uint32_t *stopFreq = freq + lenFreq - freqspace;
       const uint32_t *stopRare = rare + lenRare - rarespace;
       if (freq > stopFreq) {
-        const size_t final_count = scalar(freq, lenFreq, rare, lenRare, out);
+        const size_t final_count = scalar<N>(freq, lenFreq, rare, lenRare, out, f, freq-startFreq, rare-startRare);
         const size_t density = 0.0;
         C_in->cardinality = final_count;
         C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
@@ -561,114 +797,170 @@ namespace ops{
           vec Q0, Q1, Q2, Q3;
           if (freq[veclen * 15 + vecmax] >= matchRare) {
               if (freq[veclen * 7 + vecmax] < matchRare) {
-                  Q0
-                      = _mm_or_si128(
-                            _mm_cmpeq_epi32(
-                                _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 8), Match),
-                            _mm_cmpeq_epi32(
-                                _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 9), Match));
-                  Q1 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 10),
-                                           Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 11),
-                                           Match));
+                  //there are 16 SSE registers in AVX architecture, we use 12 here + 1 + 1 + 1
+                  //if the compiler is good this code should just use 15 registers (could spill though)
+                  //these are all vectors we are comparing can get index from that (+8 = +8 vectors)
+                 //Match, r0-r7, Q0-Q3, lr Match (8+4+2)
+                  const size_t offset = 8;
+                  __m128i lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset);
+                  const __m128i r0 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 1);
+                  const __m128i r1 = _mm_cmpeq_epi32(lr, Match);
+                  Q0 = _mm_or_si128(r0,r1);
+                  
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 2);
+                  const __m128i r2 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 3);
+                  const __m128i r3 = _mm_cmpeq_epi32(lr, Match);
+                  Q1 = _mm_or_si128(r2,r3);
 
-                  Q2 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 12),
-                                           Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 13),
-                                           Match));
-                  Q3 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 14),
-                                           Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 15),
-                                           Match));
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 4);
+                  const __m128i r4 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 5);
+                  const __m128i r5 = _mm_cmpeq_epi32(lr, Match);
+                  Q2 = _mm_or_si128(r4,r5);
+
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 6);
+                  const __m128i r6 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 7);
+                  const __m128i r7 = _mm_cmpeq_epi32(lr, Match);
+                  Q3 = _mm_or_si128(r6,r7);
+
+                  lr = _mm_or_si128(Q0, Q1);
+                  const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
+        
+                  if (_mm_testz_si128(F0, F0) == 0) {
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
+                  } 
               } else {
-                  Q0
-                      = _mm_or_si128(
-                            _mm_cmpeq_epi32(
-                                _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 4), Match),
-                            _mm_cmpeq_epi32(
-                                _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 5), Match));
-                  Q1
-                      = _mm_or_si128(
-                            _mm_cmpeq_epi32(
-                                _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 6), Match),
-                            _mm_cmpeq_epi32(
-                                _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 7), Match));
-                  Q2
-                      = _mm_or_si128(
-                            _mm_cmpeq_epi32(
-                                _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 0), Match),
-                            _mm_cmpeq_epi32(
-                                _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 1), Match));
-                  Q3
-                      = _mm_or_si128(
-                            _mm_cmpeq_epi32(
-                                _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 2), Match),
-                            _mm_cmpeq_epi32(
-                                _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 3), Match));
+                  //there are 16 SSE registers in AVX architecture, we use 12 here + 1 + 1 + 1
+                  //if the compiler is good this code should just use 15 registers (could spill though)
+                  //these are all vectors we are comparing can get index from that (+8 = +8 vectors)
+                 //Match, r0-r7, Q0-Q3, lr Match (8+4+2)
+                  const size_t offset = 0;
+                  __m128i lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset);
+                  const __m128i r0 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 1);
+                  const __m128i r1 = _mm_cmpeq_epi32(lr, Match);
+                  Q0 = _mm_or_si128(r0,r1);
+                  
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 2);
+                  const __m128i r2 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 3);
+                  const __m128i r3 = _mm_cmpeq_epi32(lr, Match);
+                  Q1 = _mm_or_si128(r2,r3);
+
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 4);
+                  const __m128i r4 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 5);
+                  const __m128i r5 = _mm_cmpeq_epi32(lr, Match);
+                  Q2 = _mm_or_si128(r4,r5);
+
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 6);
+                  const __m128i r6 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 7);
+                  const __m128i r7 = _mm_cmpeq_epi32(lr, Match);
+                  Q3 = _mm_or_si128(r6,r7);
+
+                  lr = _mm_or_si128(Q0, Q1);
+                  const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
+        
+                  if (_mm_testz_si128(F0, F0) == 0) {
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
+                  }  
               }
           } else {
               if (freq[veclen * 23 + vecmax] < matchRare) {
-                  Q0 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 8 + 16),
-                                           Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 9 + 16),
-                                           Match));
-                  Q1 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 10 + 16),
-                                           Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 11 + 16),
-                                           Match));
+                  //there are 16 SSE registers in AVX architecture, we use 12 here + 1 + 1 + 1
+                  //if the compiler is good this code should just use 15 registers (could spill though)
+                  //these are all vectors we are comparing can get index from that (+8 = +8 vectors)
+                 //Match, r0-r7, Q0-Q3, lr Match (8+4+2)
+                  const size_t offset = 24;
+                  __m128i lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset);
+                  const __m128i r0 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 1);
+                  const __m128i r1 = _mm_cmpeq_epi32(lr, Match);
+                  Q0 = _mm_or_si128(r0,r1);
+                  
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 2);
+                  const __m128i r2 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 3);
+                  const __m128i r3 = _mm_cmpeq_epi32(lr, Match);
+                  Q1 = _mm_or_si128(r2,r3);
 
-                  Q2 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 12 + 16),
-                                           Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 13 + 16),
-                                           Match));
-                  Q3 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 14 + 16),
-                                           Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 15 + 16),
-                                           Match));
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 4);
+                  const __m128i r4 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 5);
+                  const __m128i r5 = _mm_cmpeq_epi32(lr, Match);
+                  Q2 = _mm_or_si128(r4,r5);
+
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 6);
+                  const __m128i r6 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 7);
+                  const __m128i r7 = _mm_cmpeq_epi32(lr, Match);
+                  Q3 = _mm_or_si128(r6,r7);
+
+                  lr = _mm_or_si128(Q0, Q1);
+                  const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
+        
+                  if (_mm_testz_si128(F0, F0) == 0) {
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
+                  } 
               } else {
-                  Q0 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 4 + 16),
-                                           Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 5 + 16),
-                                           Match));
-                  Q1 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 6 + 16),
-                                           Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 7 + 16),
-                                           Match));
-                  Q2 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 0 + 16),
-                                           Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 1 + 16),
-                                           Match));
-                  Q3 = _mm_or_si128(
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 2 + 16),
-                                           Match),
-                           _mm_cmpeq_epi32(_mm_loadu_si128(reinterpret_cast<const vec *>(freq) + 3 + 16),
-                                           Match));
+                  //there are 16 SSE registers in AVX architecture, we use 12 here + 1 + 1 + 1
+                  //if the compiler is good this code should just use 15 registers (could spill though)
+                  //these are all vectors we are comparing can get index from that (+8 = +8 vectors)
+                 //Match, r0-r7, Q0-Q3, lr Match (8+4+2)
+                  const size_t offset = 16;
+                  __m128i lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset);
+                  const __m128i r0 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 1);
+                  const __m128i r1 = _mm_cmpeq_epi32(lr, Match);
+                  Q0 = _mm_or_si128(r0,r1);
+                  
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 2);
+                  const __m128i r2 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 3);
+                  const __m128i r3 = _mm_cmpeq_epi32(lr, Match);
+                  Q1 = _mm_or_si128(r2,r3);
+
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 4);
+                  const __m128i r4 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 5);
+                  const __m128i r5 = _mm_cmpeq_epi32(lr, Match);
+                  Q2 = _mm_or_si128(r4,r5);
+
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 6);
+                  const __m128i r6 = _mm_cmpeq_epi32(lr, Match);
+                  lr = _mm_loadu_si128(reinterpret_cast<const vec *>(freq) + offset + 7);
+                  const __m128i r7 = _mm_cmpeq_epi32(lr, Match);
+                  Q3 = _mm_or_si128(r6,r7);
+
+                  lr = _mm_or_si128(Q0, Q1);
+                  const vec F0 = _mm_or_si128(lr, _mm_or_si128(Q2, Q3));
+        
+                  if (_mm_testz_si128(F0, F0) == 0) {
+                    const size_t freqOffset = offset*4 + N::check_registers(Q0,Q1,Q2,Q3,r0,r1,r2,r3,r4,r5,r6,r7);
+                    const size_t hit_amount = N::scalar(matchRare,out,f,(rare-startRare),((freq+freqOffset)-startFreq));
+                    out = N::advanceC(out,hit_amount);
+                    count += hit_amount;
+                  } 
               }
 
-          }
-          const vec F0 = _mm_or_si128(_mm_or_si128(Q0, Q1), _mm_or_si128(Q2, Q3));
-  #ifdef __SSE4_1__
-          if (_mm_testz_si128(F0, F0)) {
-  #else 
-          if (!_mm_movemask_epi8(F0)) {
-  #endif 
-          } else {
-              *out++ = matchRare;
           }
       }
 
   FINISH_SCALAR: 
-    const size_t final_count = (out - initout) + scalar(freq,stopFreq + freqspace - freq, rare, stopRare + rarespace - rare, out);
+    const size_t final_count = count + scalar<N>(rare, stopRare + rarespace - rare, freq,stopFreq + freqspace - freq, out, f, rare-startRare, freq-startFreq);
     const size_t density = 0.0;
     C_in->cardinality = final_count;
     C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
@@ -677,8 +969,9 @@ namespace ops{
     return C_in;
   }
 
-  inline Set<uinteger>* set_intersect_ibm(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
-    uint32_t * const C = (uint32_t*) C_in->data; 
+  template<class N,typename F>
+  inline Set<uinteger>* set_intersect_ibm(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
+    uint32_t * C = (uint32_t*) C_in->data; 
     const uint32_t * const A = (uint32_t*) A_in->data;
     const uint32_t * const B = (uint32_t*) B_in->data;
     const size_t s_a = A_in->cardinality;
@@ -746,7 +1039,9 @@ namespace ops{
           const size_t A_end = 8-start_index;
           const size_t B_pos = i_b;
           const size_t B_end = 8;
-          count += scalar(&A[A_pos],A_end,&B[B_pos],B_end,&C[count]);
+          const size_t adv_amount = scalar<N>(&A[A_pos],A_end,&B[B_pos],B_end,C,f,A_pos,B_pos);
+          count += adv_amount;
+          C = N::advanceC(C,adv_amount);
         }
       } 
       if(A[i_a+7] > B[i_b+7]){
@@ -769,7 +1064,7 @@ namespace ops{
     }
 
     // intersect the tail using scalar intersection
-    count += scalar(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,&C[count]);
+    count += scalar<N>(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,C,f,i_a,i_b);
 
     //XXX: Fix
     const double density = 0.0;//((count > 0) ? ((double)count/(C[count]-C[0])) : 0.0);
@@ -781,9 +1076,10 @@ namespace ops{
 
     return C_in;
   }
-  
-  inline Set<uinteger>* set_intersect_shuffle(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in){
-    uint32_t * const C = (uint32_t*) C_in->data; 
+
+  template<class N,typename F>
+  inline Set<uinteger>* set_intersect_shuffle(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f){
+    uint32_t * C = (uint32_t*) C_in->data; 
     const uint32_t * const A = (uint32_t*) A_in->data;
     const uint32_t * const B = (uint32_t*) B_in->data;
     const size_t s_a = A_in->cardinality;
@@ -806,53 +1102,63 @@ namespace ops{
       __m128i v_b = _mm_load_si128((__m128i*)&B[i_b]);
       //]
 
-      //[ move pointers
-      uint32_t a_max = A[i_a+3];
-      uint32_t b_max = B[i_b+3];
-      i_a += (a_max <= b_max) * 4;
-      i_b += (a_max >= b_max) * 4;
-      //]
-
       //[ compute mask of common elements
       const uint32_t right_cyclic_shift = _MM_SHUFFLE(0,3,2,1);
+
       __m128i cmp_mask1 = _mm_cmpeq_epi32(v_a, v_b);    // pairwise comparison
       v_b = _mm_shuffle_epi32(v_b, right_cyclic_shift);       // shuffling
+
       __m128i cmp_mask2 = _mm_cmpeq_epi32(v_a, v_b);    // again...
+      const uint32_t left_cyclic_shift = _MM_SHUFFLE(2,1,0,3);
+      __m128i cmp_mask2b = _mm_shuffle_epi32(cmp_mask2, left_cyclic_shift);
       v_b = _mm_shuffle_epi32(v_b, right_cyclic_shift);
+
       __m128i cmp_mask3 = _mm_cmpeq_epi32(v_a, v_b);    // and again...
+      const uint32_t left_cyclic_shift2 = _MM_SHUFFLE(1,0,3,2);
+      __m128i cmp_mask3b = _mm_shuffle_epi32(cmp_mask3, left_cyclic_shift2);
       v_b = _mm_shuffle_epi32(v_b, right_cyclic_shift);
+
       __m128i cmp_mask4 = _mm_cmpeq_epi32(v_a, v_b);    // and again.
+      const uint32_t left_cyclic_shift3 = _MM_SHUFFLE(0,3,2,1);
+      __m128i cmp_mask4b = _mm_shuffle_epi32(cmp_mask4, left_cyclic_shift3);
       __m128i cmp_mask = _mm_or_si128(
               _mm_or_si128(cmp_mask1, cmp_mask2),
               _mm_or_si128(cmp_mask3, cmp_mask4)
       ); // OR-ing of comparison masks
+      __m128i cmp_mask_b = _mm_or_si128(
+              _mm_or_si128(cmp_mask1, cmp_mask2b),
+              _mm_or_si128(cmp_mask3b, cmp_mask4b)
+      ); // OR-ing of comparison masks
+
       // convert the 128-bit mask to the 4-bit mask
-      uint32_t mask = _mm_movemask_ps((__m128)cmp_mask);
+      const uint32_t mask = _mm_movemask_ps((__m128)cmp_mask);
+      const uint32_t mask_b = _mm_movemask_ps((__m128)cmp_mask_b);
       //]
 
-      //[ copy out common elements
-      #if WRITE_VECTOR == 1
-      //std::cout << "mask: " << mask << std::endl;
-      __m128i p = _mm_shuffle_epi8(v_a, masks::shuffle_mask32[mask]);
-      _mm_storeu_si128((__m128i*)&C[count], p);
-      //std::cout << "C[" << count << "]: " << C[count] << std::endl;
+      __m128i a_offset = _mm_set1_epi32(i_a);
+      __m128i b_offset = _mm_set1_epi32(i_b);
+      
+      a_offset = _mm_add_epi32(_mm_shuffle_epi8(_mm_set_epi32(3,2,1,0),masks::shuffle_mask32[mask]),a_offset);
+      b_offset = _mm_add_epi32(_mm_shuffle_epi8(_mm_set_epi32(3,2,1,0),masks::shuffle_mask32[mask_b]),b_offset);
 
-      #endif
+      const __m128i p = _mm_shuffle_epi8(v_a, masks::shuffle_mask32[mask]);
+      const size_t num_hit = N::unpack(p,C,_mm_popcnt_u32(mask),f,a_offset,b_offset);
+      C = N::advanceC(C,num_hit); //to avoid NULL pointer exception on aggregate
+      count += num_hit;
 
-      count += _mm_popcnt_u32(mask); // a number of elements is a weight of the mask
-      //]
+      //advance pointers
+      const uint32_t a_max = A[i_a+3];
+      const uint32_t b_max = B[i_b+3];
+      i_a += (a_max <= b_max) * 4;
+      i_b += (a_max >= b_max) * 4;
     }
     #endif
 
     // intersect the tail using scalar intersection
-    count += scalar(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,&C[count]);
-
-    #if WRITE_VECTOR == 0
-    (void) C;
-    #endif
+    count += scalar<N>(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,C,f,i_a,i_b);
 
     //XXX: Fix
-    const double density = 0.0;//((count > 0) ? ((double)count/(C[count]-C[0])) : 0.0);
+    const double density = 0.0;
     
     C_in->cardinality = count;
     C_in->number_of_bytes = count*sizeof(uint32_t);
@@ -862,23 +1168,57 @@ namespace ops{
     return C_in;  
   }
 
+  template<class N, typename F>
+  inline Set<uinteger>* run_intersection(Set<uinteger> *C_in, const Set<uinteger> *rare, const Set<uinteger> *freq, F f){
+    #ifndef NO_ALGORITHM 
+        const unsigned long min_size = 1;
+        if(std::max(rare->cardinality,freq->cardinality) / std::max(min_size, std::min(rare->cardinality,freq->cardinality)) > 32)
+        #if VECTORIZE == 1
+          return set_intersect_galloping<N>(C_in, rare, freq, f);
+        #else 
+          return scalar_gallop<N>(C_in,rare,freq,f);
+        #endif
+        else
+    #endif
+      //return set_intersect_ibm<N>(C_in, rare, freq, f);
+      //return set_intersect_v3<N>(C_in, rare, freq, f);
+      //return set_intersect_v1<N>(C_in, rare, freq, f);
+      //return set_intersect_galloping<N>(C_in, rare, freq, f);
+      return set_intersect_shuffle<N>(C_in, rare, freq, f);
+  }
+
+  template<typename F>
+  inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f) {
+    if(A_in->cardinality > B_in->cardinality){
+      auto f_in = [&](uint32_t data, uint32_t a_i, uint32_t b_i){return f(data,b_i,a_i);};
+      return run_intersection<unpack_uinteger_materialize>(C_in,B_in,A_in,f_in);
+    } 
+    return run_intersection<unpack_uinteger_materialize>(C_in,A_in,B_in,f);
+  }
+
+  template<typename F>
+  inline size_t set_intersect(const Set<uinteger> *A_in, const Set<uinteger> *B_in, F f) {
+    Set<uinteger> C_in;
+    if(A_in->cardinality > B_in->cardinality){
+      auto f_in = [&](uint32_t data, uint32_t a_i, uint32_t b_i){return f(data,b_i,a_i);};
+      return run_intersection<unpack_uinteger_aggregate>(&C_in,B_in,A_in,f_in)->cardinality;
+    } 
+    return run_intersection<unpack_uinteger_aggregate>(&C_in,A_in,B_in,f)->cardinality;
+  }
+  
   inline Set<uinteger>* set_intersect(Set<uinteger> *C_in, const Set<uinteger> *A_in, const Set<uinteger> *B_in) {
     const Set<uinteger> *rare = (A_in->cardinality > B_in->cardinality) ? B_in:A_in;
     const Set<uinteger> *freq = (A_in->cardinality > B_in->cardinality) ? A_in:B_in;
+    auto f = [&](uint32_t data, const uint32_t i_a, const uint32_t i_b){(void) data; (void) i_a; (void) i_b; return;};
+    return run_intersection<unpack_materialize>(C_in,rare,freq,f);
+  }
 
-    //return set_intersect_standard(C_in, rare, freq);
-
-#ifndef NO_ALGORITHM 
-    const unsigned long min_size = 1;
-    if(std::max(A_in->cardinality,B_in->cardinality) / std::max(min_size, std::min(A_in->cardinality,B_in->cardinality)) > 32)
-    #if VECTORIZE == 1
-      return set_intersect_galloping(C_in, rare, freq);
-    #else 
-      return scalar_gallop(C_in,A_in,B_in);
-    #endif
-    else
-#endif
-      return set_intersect_shuffle(C_in, rare, freq);
+  inline size_t set_intersect(const Set<uinteger> *A_in, const Set<uinteger> *B_in) {
+    const Set<uinteger> *rare = (A_in->cardinality > B_in->cardinality) ? B_in:A_in;
+    const Set<uinteger> *freq = (A_in->cardinality > B_in->cardinality) ? A_in:B_in;
+    auto f = [&](uint32_t data, const uint32_t i_a, const uint32_t i_b){(void) data; (void) i_a; (void) i_b; return;};
+    Set<uinteger> C_in;
+    return run_intersection<unpack_aggregate>(&C_in,rare,freq,f)->cardinality;
   }
 }
 #endif
