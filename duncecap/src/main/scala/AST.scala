@@ -137,10 +137,10 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   }
 
   private def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, relsAttrs :  List[(String, List[String])]) : List[(String, List[String])]= {
-    val relsAttrsWithAttr = relsAttrs.filter(( rel : (String, List[String])) => rel._2.contains(attr)).unzip._1.distinct
+    val relsAttrsWithAttr = relsAttrs.filter(( rel : (String, List[String])) => rel._2.contains(attr)).unzip._1.distinct // no need to intersect same col in repeated relation
     assert(!relsAttrsWithAttr.isEmpty)
 
-    if (relsAttrsWithAttr.size == 1) { // TODO: no need to intersect same col in repeated relation
+    if (relsAttrsWithAttr.size == 1) {
       // no need to emit an intersection
       s.println( s"""Set<${layout}> ${attr} = ${relsAttrsWithAttr.head}->data;""")
      } else {
