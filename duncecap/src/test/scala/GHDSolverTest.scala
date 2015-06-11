@@ -23,6 +23,15 @@ class GHDSolverTest extends FunSuite {
     new Relation(List("b", "d", "f", "g", "h")),
     new Relation(List("f", "g", "h", "k", "b")),
     new Relation(List("f", "g", "h", "n", "b")))
+  final val BARBELL: List[Relation] = List(
+    new Relation(List("a", "b")),
+    new Relation(List("b", "c")),
+    new Relation(List("a", "c")),
+    new Relation(List("d", "e")),
+    new Relation(List("e", "f")),
+    new Relation(List("d", "f")),
+    new Relation(List("c", "d"))
+  )
 
   final val solver = GHDSolver
 
@@ -42,7 +51,7 @@ class GHDSolverTest extends FunSuite {
   }
 
   test("Finds all possible decompositions of len 2 path query)") {
-    val decompositions = solver.getMinFractionalWidthDecomposition(PATH2).toSet[GHDNode]
+    val decompositions = solver.getDecompositions(PATH2).toSet[GHDNode]
     /**
      * The decompositions we expect are [ABC] and [AB]--[BC] and [BC]--[AB]
      */
@@ -58,7 +67,7 @@ class GHDSolverTest extends FunSuite {
   }
 
   test("Decomps and scores triangle query correctly") {
-    val decompositions = solver.getMinFractionalWidthDecomposition(TADPOLE.take(3)) // drop the tail
+    val decompositions = solver.getDecompositions(TADPOLE.take(3)) // drop the tail
     /**
      * The decompositions we expect are
      * [ABC]
@@ -70,12 +79,33 @@ class GHDSolverTest extends FunSuite {
   }
 
   test("Find max bag size 5 decomposition of query") {
-    val decompositions2 = solver.getMinFractionalWidthDecomposition(SPLIT)
+    val decompositions2 = solver.getDecompositions(SPLIT)
     assert(!decompositions2.filter((root: GHDNode) => root.scoreTree <= 5).isEmpty)
   }
 
+  test("Finds an expected decomp of the barbell query") {
+    // make sure that we get partition correctly after we choose the root
+    val chosen = List(BARBELL.last)
+    val partitions: Option[List[List[Relation]]] = solver.getPartitions(
+      BARBELL.take(6), chosen, Set(), solver.getAttrSet(chosen))
+    assert(partitions.isDefined)
+    assert(partitions.get.size == 2)
+
+    // filtering to look for expectedDecomp with one edge as root, and two triangles as children
+    val decompositions = solver.getDecompositions(BARBELL)
+    var expectedDecomp = decompositions.filter((root : GHDNode) => root.rels.size == 1
+      && root.rels.contains(BARBELL.last)
+      && root.children.size == 2)
+    expectedDecomp = expectedDecomp.filter((root : GHDNode) =>
+      (root.children(0).attrSet.equals(Set("a", "b", "c")) && root.children(1).attrSet.equals(Set("d", "e", "f")))
+        || root.children(1).attrSet.equals(Set("a", "b", "c")) && root.children(0).attrSet.equals(Set("d", "e", "f")))
+    expectedDecomp = expectedDecomp.filter((root : GHDNode) => root.children(0).rels.size == 3 && root.children(1).rels.size == 3)
+
+    assertResult(1)(expectedDecomp.size)
+  }
+
   test("Finds all possible decompositions of tadpole query)") {
-    val decompositions = solver.getMinFractionalWidthDecomposition(TADPOLE)
+    val decompositions = solver.getDecompositions(TADPOLE)
     assert(decompositions.size == 21)
     assert(decompositions.filter((root: GHDNode) => root.rels.size == 1).size == 10)
     assert(decompositions.filter((root: GHDNode) => root.rels.size == 2).size == 6)

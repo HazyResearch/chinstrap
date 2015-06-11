@@ -6,7 +6,7 @@ object GHDWriter {
   def main(args: Array[String]): Unit = {
     //triangle()
     //tadpole3_1()
-    // tadpole4_1()
+    //tadpole4_1()
     //fourClique()
 
     val freebase: List[Relation] = List(
@@ -38,21 +38,10 @@ object GHDWriter {
   }
 
   def printAllMinWidthDecomps(rels : List[Relation], name : String): Unit = {
-    case class Precision(val p:Double)
-    class withAlmostEquals(d:Double) {
-      def ~=(d2:Double)(implicit p:Precision) = (d-d2).abs <= p.p
-    }
-    implicit def add_~=(d:Double) = new withAlmostEquals(d)
-    implicit val precision = Precision(0.001)
-
     val solver = GHDSolver
-    val decompositions = solver.getMinFractionalWidthDecomposition(rels)
-    val fhws = decompositions.map((root : GHDNode) => (root.fractionalScoreTree(), root))
-    val minScore = fhws.unzip._1.min
-    println(s"""minScore: ${minScore}""")
-    val minFhws = fhws.filter((scoreAndNode : (Double, GHDNode)) => scoreAndNode._1 ~= minScore)
-    minFhws.map({case (fhw, root)=> root.reorderAttributes()})
-    minFhws.unzip._2.zipWithIndex.map({case (root, index) => print(root, "../query_plans/gen/" + name +"_generated" + index + ".json")})
+    val decompositions = solver.getMinFHWDecompositions(rels)
+    decompositions.map((root : GHDNode) => root.reorderAttributes())
+    decompositions.zipWithIndex.map({case (root, index) => print(root, "../query_plans/gen/" + name +"_generated" + index + ".json")})
   }
 
   def tadpole3_1(): Unit = {
@@ -62,7 +51,7 @@ object GHDWriter {
       new Relation(List("b", "c")),
       new Relation(List("c", "a")),
       new Relation(List("a", "e")))
-    val decompositions = solver.getMinFractionalWidthDecomposition(TADPOLE)
+    val decompositions = solver.getDecompositions(TADPOLE)
     val fhws = decompositions.map((root : GHDNode) => root.fractionalScoreTree())
     decompositions.map((root : GHDNode) => root.reorderAttributes())
     decompositions.zip(fhws).map({case (root, fhw) => print(root, "../query_plans/gen/tadpole3_1_generated" + fhw + ".json")})
@@ -75,7 +64,7 @@ object GHDWriter {
       new Relation(List("b", "c")),
       new Relation(List("c", "a")),
       new Relation(List("a", "e")))
-    val decompositions = solver.getMinFractionalWidthDecomposition(TADPOLE)
+    val decompositions = solver.getDecompositions(TADPOLE)
     val fhws = decompositions.map((root : GHDNode) => root.fractionalScoreTree())
     decompositions.map((root : GHDNode) => root.reorderAttributes())
     decompositions.zip(fhws).zipWithIndex.map({case (plan_info, index) => print(plan_info._1, "../query_plans/gen/lollipop3_1_generated" + plan_info._2 + "_" + index + ".json")})
@@ -90,7 +79,7 @@ object GHDWriter {
       new Relation(List("b", "d")),
       new Relation(List("a", "d")),
       new Relation(List("d", "c")))
-    val decompositions = solver.getMinFractionalWidthDecomposition(CLIQUE)
+    val decompositions = solver.getDecompositions(CLIQUE)
     val fhws = decompositions.map((root : GHDNode) => root.fractionalScoreTree())
     decompositions.map((root : GHDNode) => root.reorderAttributes())
     decompositions.zip(fhws).map({case (root, fhw) => print(root, "../query_plans/gen/clique4_generated" + fhw + ".json")})
@@ -102,7 +91,7 @@ object GHDWriter {
       new Relation(List("a", "b")),
       new Relation(List("b", "c")),
       new Relation(List("c", "a")))
-    val decompositions = solver.getMinFractionalWidthDecomposition(TRI)
+    val decompositions = solver.getDecompositions(TRI)
     val fhws = decompositions.map((root : GHDNode) => root.fractionalScoreTree())
     decompositions.map((root : GHDNode) => root.reorderAttributes())
     decompositions.zip(fhws).map({case (root, fhw) => print(root, "../query_plans/gen/triangle_generated" + fhw + ".json")})

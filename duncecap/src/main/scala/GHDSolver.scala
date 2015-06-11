@@ -58,14 +58,21 @@ object GHDSolver {
    */
   private def getListsOfPossibleSubtrees(partitions: List[List[Relation]], parentAttrs: Set[String]): List[List[GHDNode]] = {
     assert(!partitions.isEmpty)
-    val subtreesPerPartition: List[List[GHDNode]] = partitions.map((l: List[Relation]) => getMinFractionalWidthDecomposition(l, parentAttrs))
+    val subtreesPerPartition: List[List[GHDNode]] = partitions.map((l: List[Relation]) => getDecompositions(l, parentAttrs))
+
     val foldFunc: (List[List[GHDNode]], List[GHDNode]) => List[List[GHDNode]]
-    = (accum: List[List[GHDNode]], subtreesForOnePartition: List[GHDNode]) => subtreesForOnePartition.map(
-      (subtreeForOnePartition: GHDNode) => accum.map((children: List[GHDNode]) => subtreeForOnePartition::children).flatten)
+    = (accum: List[List[GHDNode]], subtreesForOnePartition: List[GHDNode]) => {
+      accum.map((children : List[GHDNode]) => {
+        subtreesForOnePartition.map((subtree : GHDNode) => {
+          subtree::children
+        })
+      }).flatten
+    }
+
     return subtreesPerPartition.foldLeft(List[List[GHDNode]](List[GHDNode]()))(foldFunc)
   }
 
-  private def getMinFractionalWidthDecomposition(rels: List[Relation], parentAttrs: Set[String]): List[GHDNode] =  {
+  private def getDecompositions(rels: List[Relation], parentAttrs: Set[String]): List[GHDNode] =  {
     val treesFound = mutable.ListBuffer[GHDNode]()
     for (tryNumRelationsTogether <- (1 to rels.size).toList) {
       for (bag <- rels.combinations(tryNumRelationsTogether).toList) {
@@ -91,8 +98,24 @@ object GHDSolver {
     return treesFound.toList
   }
 
-  def getMinFractionalWidthDecomposition(rels: List[Relation]): List[GHDNode] = {
-    return getMinFractionalWidthDecomposition(rels, Set[String]())
+  def getDecompositions(rels: List[Relation]): List[GHDNode] = {
+    return getDecompositions(rels, Set[String]())
+  }
+
+  def getMinFHWDecompositions(rels: List[Relation]): List[GHDNode] = {
+    val decomps = getDecompositions(rels)
+    val fhwsAndDecomps = decomps.map((root : GHDNode) => (root.fractionalScoreTree(), root))
+    val minScore = fhwsAndDecomps.unzip._1.min
+
+    case class Precision(val p:Double)
+    class withAlmostEquals(d:Double) {
+      def ~=(d2:Double)(implicit p:Precision) = (d-d2).abs <= p.p
+    }
+    implicit def add_~=(d:Double) = new withAlmostEquals(d)
+    implicit val precision = Precision(0.001)
+
+    val minFhws = fhwsAndDecomps.filter((scoreAndNode : (Double, GHDNode)) => scoreAndNode._1 ~= minScore)
+    return minFhws.unzip._2
   }
 }
 
