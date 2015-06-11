@@ -59,9 +59,16 @@ object GHDSolver {
   private def getListsOfPossibleSubtrees(partitions: List[List[Relation]], parentAttrs: Set[String]): List[List[GHDNode]] = {
     assert(!partitions.isEmpty)
     val subtreesPerPartition: List[List[GHDNode]] = partitions.map((l: List[Relation]) => getDecompositions(l, parentAttrs))
+
     val foldFunc: (List[List[GHDNode]], List[GHDNode]) => List[List[GHDNode]]
-    = (accum: List[List[GHDNode]], subtreesForOnePartition: List[GHDNode]) => subtreesForOnePartition.map(
-      (subtreeForOnePartition: GHDNode) => accum.map((children: List[GHDNode]) => subtreeForOnePartition::children).flatten)
+    = (accum: List[List[GHDNode]], subtreesForOnePartition: List[GHDNode]) => {
+      accum.map((children : List[GHDNode]) => {
+        subtreesForOnePartition.map((subtree : GHDNode) => {
+          subtree::children
+        })
+      }).flatten
+    }
+
     return subtreesPerPartition.foldLeft(List[List[GHDNode]](List[GHDNode]()))(foldFunc)
   }
 

@@ -26,8 +26,6 @@ class GHDNode(val rels: List[Relation]) {
   val attrSet = rels.foldLeft(TreeSet[String]())(
     (accum: TreeSet[String], rel : Relation) => accum | TreeSet[String](rel.attrs : _*))
   var children: List[GHDNode] = List()
-  var subtreeWidth: Int = 0
-  var subtreeFractionalWidth: Double = 0
   var bagWidth: Int = 0
   var bagFractionalWidth: Double = 0
   var attributeReordering : Option[Map[String, Int]] = None

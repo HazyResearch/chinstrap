@@ -38,21 +38,10 @@ object GHDWriter {
   }
 
   def printAllMinWidthDecomps(rels : List[Relation], name : String): Unit = {
-    case class Precision(val p:Double)
-    class withAlmostEquals(d:Double) {
-      def ~=(d2:Double)(implicit p:Precision) = (d-d2).abs <= p.p
-    }
-    implicit def add_~=(d:Double) = new withAlmostEquals(d)
-    implicit val precision = Precision(0.001)
-
     val solver = GHDSolver
-    val decompositions = solver.getDecompositions(rels)
-    val fhws = decompositions.map((root : GHDNode) => (root.fractionalScoreTree(), root))
-    val minScore = fhws.unzip._1.min
-    println(s"""minScore: ${minScore}""")
-    val minFhws = fhws.filter((scoreAndNode : (Double, GHDNode)) => scoreAndNode._1 ~= minScore)
-    minFhws.map({case (fhw, root)=> root.reorderAttributes()})
-    minFhws.unzip._2.zipWithIndex.map({case (root, index) => print(root, "../query_plans/gen/" + name +"_generated" + index + ".json")})
+    val decompositions = solver.getMinFHWDecompositions(rels)
+    decompositions.map((root : GHDNode) => root.reorderAttributes())
+    decompositions.zipWithIndex.map({case (root, index) => print(root, "../query_plans/gen/" + name +"_generated" + index + ".json")})
   }
 
   def tadpole3_1(): Unit = {
