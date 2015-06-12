@@ -4,16 +4,20 @@ package DunceCap
  * All code generation should start from this object:
  */
 object CodeGen {
-  def emitHeaderAndCodeForAST(s: CodeStringBuilder, root: ASTNode) = {
-    s.println("#include <iostream>")
-    s.println("#include <unordered_map>")
-    s.println("#include \"emptyheaded.hpp\"")
-    s.println("#include \"utils/io.hpp\"")
 
+  /**
+   * This following method will get called in both compiler and repl mode
+   */
+  def emitHeaderAndCodeForAST(s: CodeStringBuilder, root: ASTNode) = {
+    s.println("#include \"main.hpp\"")
     s.println("extern \"C\" void run(std::unordered_map<std::string, void*>& relations) {")
     root.code(s)
     s.println("}")
   }
+
+  /**
+    * emitMainMethod will get called only in compiler mode
+    */
   def emitMainMethod(s : CodeStringBuilder): Unit = {
     s.println("int main() {")
     s.println("std::unordered_map<std::string, void*> relations;")
@@ -22,9 +26,20 @@ object CodeGen {
   }
 }
 
+
+/**
+ * Explanation of types below:
+ *
+ * Every node in the AST is an ASTNode. Some of these are ASTStatements,
+ * others are ASTExpressions.
+ *
+ * All ASTNodes emit code, and have an optimize method that might transform the AST rooted at that node.
+ * Since ASTStatements can have side effects, these have an updateEnvironment method.
+ */
 abstract trait ASTNode {
   val layout = "hybrid"
   def code(s: CodeStringBuilder)
+  def optimize
 }
 
 case class ASTStatements(statements : List[ASTStatement]) extends ASTNode {
@@ -35,15 +50,16 @@ case class ASTStatements(statements : List[ASTStatement]) extends ASTNode {
       s.println("}")
       statement.updateEnvironment
     })
-
   }
+
+  override def optimize: Unit = ???
 }
 
 abstract trait ASTStatement extends ASTNode {
   def updateEnvironment = {}
 }
 
-case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, format : String) extends ASTNode with ASTStatement {
+case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, format : String) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     s.println(s"""////////////////////////////////////////FILE LOADING////////////////////////////////////////""")
     val relationTypes = rel.attrs.values.toList.map((optTypes : Option[String]) => optTypes.get).mkString(",")
@@ -69,19 +85,22 @@ case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, form
   override def updateEnvironment: Unit = {
     Environment.addRelationBinding(rel.identifierName, rel.attrs.values.toList.map((optTypes : Option[String]) => optTypes.get))
   }
+
+  override def optimize: Unit = ???
 }
 
-case class ASTAssignStatement(identifier : ASTIdentifier, expression : ASTExpression) extends ASTNode with ASTStatement {
+case class ASTAssignStatement(identifier : ASTIdentifier, expression : ASTExpression) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     expression.code(s)
   }
+
+  override def optimize: Unit = ???
 }
 
 case class ASTPrintStatement(expression : ASTExpression) extends ASTNode with ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     expression match {
       case ASTScalar(identifierName) => {
-
         val typeString = Environment.getTypes(identifierName).mkString(", ")
         s.println(s"""Relation<${typeString}> * ${identifierName}= (Relation<${typeString}> *)relations["${identifierName}"];""")
         s.println(s"""std::cout << "${identifierName} has " << ${identifierName}->num_rows << " rows loaded." << std::endl;""")
@@ -89,11 +108,15 @@ case class ASTPrintStatement(expression : ASTExpression) extends ASTNode with AS
       case _ => println(expression)
     }
   }
+
+  override def optimize: Unit = ???
 }
 
 abstract trait ASTExpression extends ASTNode
 case class ASTCount(expression : ASTExpression) extends ASTExpression {
   override def code(s: CodeStringBuilder): Unit = ???
+
+  override def optimize: Unit = ???
 }
 
 case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTCriterion]) extends ASTExpression {
@@ -113,6 +136,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     })
   }
 
+<<<<<<< HEAD
   private def emitSelectionCondition(s:CodeStringBuilder, sel:ASTCriterion){
     (sel.attr1,sel.attr2) match{
       case (a:ASTScalar,b:ASTStringLiteral) =>
@@ -144,7 +168,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val relsAttrsWithAttr = relsAttrs.filter(( rel : (String, List[String])) => rel._2.contains(attr)).unzip._1.distinct
     assert(!relsAttrsWithAttr.isEmpty)
 
-    if (relsAttrsWithAttr.size == 1) { // TODO: no need to intersect same col in repeated relation
+    if (relsAttrsWithAttr.size == 1) {
       // no need to emit an intersection
       s.println( s"""Set<${layout}> ${attr} = ${relsAttrsWithAttr.head}->set;""")
      } else {
@@ -249,12 +273,20 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     )
   }
 
+  /**
+   * relations is a list of tuples, where the first element is the name, and the second is the list of attributes
+   */
+  val relations = rels.map((rel : ASTRelation) => new Relation(rel.attrs.keys.toList.reverse, rel.identifierName))
+
   override def code(s: CodeStringBuilder): Unit = {
+<<<<<<< HEAD
     s.println(s"""////////////////////////////////////////JOIN////////////////////////////////////////""")
     /**
      * relations is a list of tuples, where the first element is the name, and the second is the list of attributes
      */
     val relations = rels.map((rel : ASTRelation) => new Relation(rel.attrs.keys.toList.reverse, rel.identifierName))
+=======
+>>>>>>> 09d1c4d3011dc5b81f07cf7cfdc1c45fff86b155
 
     /**
      * We get a distinct list of them so we can look them up and have a pointer to them
@@ -306,12 +338,20 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     s.println("size_t result = num_triangles.evaluate(0);")
     s.println("std::cout << result << std::endl;")
   }
+
+  override def optimize: Unit = ???
 }
 
 case class ASTStringLiteral(str : String) extends ASTExpression {
+<<<<<<< HEAD
   override def code(s: CodeStringBuilder): Unit = {
     s.print("\"" + str + "\"")
   }
+=======
+  override def code(s: CodeStringBuilder): Unit = ???
+
+  override def optimize: Unit = ???
+>>>>>>> 09d1c4d3011dc5b81f07cf7cfdc1c45fff86b155
 }
 
 abstract trait ASTCriterion extends ASTExpression{
@@ -319,34 +359,58 @@ abstract trait ASTCriterion extends ASTExpression{
   val attr2:ASTExpression
 }
 case class ASTEq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion {
+<<<<<<< HEAD
   override def code(s: CodeStringBuilder): Unit = {
     attr1.code(s)
     s.print("==")
     attr2.code(s) 
   }
+=======
+  override def code(s: CodeStringBuilder): Unit = ???
+
+  override def optimize: Unit = ???
+>>>>>>> 09d1c4d3011dc5b81f07cf7cfdc1c45fff86b155
 }
 case class ASTLeq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion {
   override def code(s: CodeStringBuilder): Unit = ???
+
+  override def optimize: Unit = ???
 }
 case class ASTGeq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion {
   override def code(s: CodeStringBuilder): Unit = ???
+
+  override def optimize: Unit = ???
 }
 case class ASTLess(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion {
   override def code(s: CodeStringBuilder): Unit = ???
+
+  override def optimize: Unit = ???
 }
 case class ASTGreater(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion {
   override def code(s: CodeStringBuilder): Unit = ???
+
+  override def optimize: Unit = ???
 }
 case class ASTNeq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion {
   override def code(s: CodeStringBuilder): Unit = ???
+
+  override def optimize: Unit = ???
 }
 
 abstract trait ASTIdentifier extends ASTExpression
 case class ASTRelation(identifierName : String, attrs : Map[String, Option[String]]) extends ASTIdentifier {
   override def code(s: CodeStringBuilder): Unit = ???
+
+  override def optimize: Unit = ???
 } // attribute name to option with type, or no type if it can be inferred
 case class ASTScalar(identifierName : String) extends ASTIdentifier {
+<<<<<<< HEAD
   override def code(s: CodeStringBuilder): Unit = {
     s.print(identifierName)
   }
+=======
+  override def code(s: CodeStringBuilder): Unit = ???
+
+  override def optimize: Unit = ???
+>>>>>>> 09d1c4d3011dc5b81f07cf7cfdc1c45fff86b155
 }

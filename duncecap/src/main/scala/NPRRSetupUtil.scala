@@ -14,7 +14,6 @@ object NPRRSetupUtil {
   def buildEncodingEquivalenceClasses(relations : Relations): EquivalenceClasses = {
     val triples = relations.flatMap{(rel: Relation) => 
       (0 until rel.attrs.size).toList.map{ i:Int =>
-        System.out.println(rel.attrs(i))
         (rel.attrs(i),rel.name,i)
       }
     } //pairs will contain (attribute,relation,attribute_index)
