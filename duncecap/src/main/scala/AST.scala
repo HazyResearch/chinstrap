@@ -9,7 +9,7 @@ object CodeGen {
    * This following method will get called in both compiler and repl mode
    */
   def emitHeaderAndCodeForAST(s: CodeStringBuilder, root: ASTNode) = {
-    s.println("#include \"main.hpp\"")
+    s.println("#include \"emptyheaded.hpp\"")
     s.println("extern \"C\" void run(std::unordered_map<std::string, void*>& relations) {")
     root.code(s)
     s.println("}")
@@ -136,7 +136,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     })
   }
 
-<<<<<<< HEAD
   private def emitSelectionCondition(s:CodeStringBuilder, sel:ASTCriterion){
     (sel.attr1,sel.attr2) match{
       case (a:ASTScalar,b:ASTStringLiteral) =>
@@ -279,15 +278,11 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   val relations = rels.map((rel : ASTRelation) => new Relation(rel.attrs.keys.toList.reverse, rel.identifierName))
 
   override def code(s: CodeStringBuilder): Unit = {
-<<<<<<< HEAD
     s.println(s"""////////////////////////////////////////JOIN////////////////////////////////////////""")
     /**
      * relations is a list of tuples, where the first element is the name, and the second is the list of attributes
      */
     val relations = rels.map((rel : ASTRelation) => new Relation(rel.attrs.keys.toList.reverse, rel.identifierName))
-=======
->>>>>>> 09d1c4d3011dc5b81f07cf7cfdc1c45fff86b155
-
     /**
      * We get a distinct list of them so we can look them up and have a pointer to them
      */
@@ -343,15 +338,10 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 }
 
 case class ASTStringLiteral(str : String) extends ASTExpression {
-<<<<<<< HEAD
   override def code(s: CodeStringBuilder): Unit = {
     s.print("\"" + str + "\"")
   }
-=======
-  override def code(s: CodeStringBuilder): Unit = ???
-
   override def optimize: Unit = ???
->>>>>>> 09d1c4d3011dc5b81f07cf7cfdc1c45fff86b155
 }
 
 abstract trait ASTCriterion extends ASTExpression{
@@ -359,21 +349,15 @@ abstract trait ASTCriterion extends ASTExpression{
   val attr2:ASTExpression
 }
 case class ASTEq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion {
-<<<<<<< HEAD
   override def code(s: CodeStringBuilder): Unit = {
     attr1.code(s)
     s.print("==")
     attr2.code(s) 
   }
-=======
-  override def code(s: CodeStringBuilder): Unit = ???
-
   override def optimize: Unit = ???
->>>>>>> 09d1c4d3011dc5b81f07cf7cfdc1c45fff86b155
 }
 case class ASTLeq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion {
   override def code(s: CodeStringBuilder): Unit = ???
-
   override def optimize: Unit = ???
 }
 case class ASTGeq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion {
@@ -400,17 +384,11 @@ case class ASTNeq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCrite
 abstract trait ASTIdentifier extends ASTExpression
 case class ASTRelation(identifierName : String, attrs : Map[String, Option[String]]) extends ASTIdentifier {
   override def code(s: CodeStringBuilder): Unit = ???
-
   override def optimize: Unit = ???
 } // attribute name to option with type, or no type if it can be inferred
 case class ASTScalar(identifierName : String) extends ASTIdentifier {
-<<<<<<< HEAD
   override def code(s: CodeStringBuilder): Unit = {
     s.print(identifierName)
   }
-=======
-  override def code(s: CodeStringBuilder): Unit = ???
-
   override def optimize: Unit = ???
->>>>>>> 09d1c4d3011dc5b81f07cf7cfdc1c45fff86b155
 }
