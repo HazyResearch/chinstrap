@@ -37,6 +37,7 @@ BENCHMARKS_SOURCES=$(shell ls benchmarks)
 
 APPS=$(APPS_SOURCES:.cpp=)
 TOOLS=$(TOOLS_SOURCES:.cpp=)
+GENERATED=$(GENERATED_SOURCES:.cpp=)
 TESTS=$(TESTS_SOURCES:.cpp=)
 BENCHMARKS=$(BENCHMARKS_SOURCES:.cpp=)
 
@@ -45,6 +46,7 @@ APPS_EXES=$(APPS:%=$(EXEDIR)/%)
 TOOLS_EXES=$(TOOLS:%=$(EXEDIR)/%)
 TESTS_EXES=$(TESTS:%=$(EXEDIR)/%)
 BENCHMARKS_EXES=$(BENCHMARKS:%=$(EXEDIR)/%)
+GENERATED_EXES=$(GENERATED:%=$(EXEDIR)/%)
 
 LIBS=-ltbb -lpthread
 
@@ -66,17 +68,13 @@ $(BENCHMARKS_EXES): $(OBJECTS) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=benchmarks%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
 
 $(GENERATED_EXES): $(OBJECTS) $(EXEDIR)
+	$(CXX) $(CXXFLAGS) $(@:bin%=generated%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
 
 $(TESTS_EXES): $(OBJECTS) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=tests%.cpp) $(OBJECTS) $(EXT_OBJECTS) -lgtest $(LIBS) -o $@ $(INCLUDE_DIRS) -DGOOGLE_TEST -I./apps/
 
 $(OBJECTS): $(SOURCES) $(HEADERS) $(OBJDIR)
 	$(CXX) $(CXXFLAGS) $(LIB_INCS) -o $@ -c $(@:build%.o=src%.cpp) $(INCLUDE_DIRS)
-
-generated: $(OBJECTS) $(EXEDIR)
-	GENERATED=${GENERATED_SOURCES:.cpp=}
-	GENERATED_EXES=$(GENERATED:%=$(EXEDIR)/%)
-	$(CXX) $(CXXFLAGS) $(@:bin%=generated%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -ldl -o $bin/@ $(INCLUDE_DIRS)
 
 server: $(OBJECTS) $(EXEDIR)
 	SERVER=$(SERVER_SOURCES:.cpp=)

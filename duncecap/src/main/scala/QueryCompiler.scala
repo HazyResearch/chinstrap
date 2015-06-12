@@ -41,7 +41,7 @@ object QueryCompiler extends App {
         bw.close()
 
         sys.process.Process(Seq("make", "clean"), new File("../emptyheaded")).!
-        val result = sys.process.Process(Seq("make", "generated"), new File("../emptyheaded")).!
+        val result = sys.process.Process(Seq("make", s"""bin/${outputFilename}"""), new File("../emptyheaded")).!
 
         if (result != 0) {
           println("FAILURE: Compilation errors.")

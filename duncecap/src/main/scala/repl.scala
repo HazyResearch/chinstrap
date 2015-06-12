@@ -95,6 +95,9 @@ class CodeStringBuilder {
   def println(str : String): Unit = {
     buffer.append(str + "\n")
   }
+  def print(str : String): Unit = {
+    buffer.append(str)
+  }
 
   override def toString = {
     buffer.toString

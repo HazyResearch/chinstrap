@@ -45,6 +45,7 @@ abstract trait ASTStatement extends ASTNode {
 
 case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, format : String) extends ASTNode with ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
+    s.println(s"""////////////////////////////////////////FILE LOADING////////////////////////////////////////""")
     val relationTypes = rel.attrs.values.toList.map((optTypes : Option[String]) => optTypes.get).mkString(",")
     s.println(s"Relation<${relationTypes}>* ${rel.identifierName} = new Relation<${relationTypes}>();")
     assert(format == "tsv") // TODO : add in csv option
@@ -106,26 +107,59 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     })
   }
 
-  private def emitAttrIntersectionBuffers(s: CodeStringBuilder, attrs : List[String], relations : Relations, equivalanceClasses : List[EquivalenceClass]) = {
-    attrs.map((attr : String) => {
-      val encoding : Column= getEncodingRelevantToAttr(attr, relations, equivalanceClasses)
-      s.println(s"""allocator::memory<uint8_t> ${attr}_buffer(${mkEncodingName(encoding)}_encoding.key_to_value.size());""")
+  private def emitAttrIntersectionBuffers(s: CodeStringBuilder, equivalanceClasses : EquivalenceClasses) = {
+    equivalanceClasses.map((attr : EquivalenceClass) => {
+      s.println(s"""allocator::memory<uint8_t> ${attr._1}_buffer(${attr._1}_encoding.key_to_value.size());""")
     })
   }
 
-  private def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, relsAttrs :  List[(String, List[String])]) : List[(String, List[String])]= {
+  private def emitSelectionCondition(s:CodeStringBuilder, sel:ASTCriterion){
+    (sel.attr1,sel.attr2) match{
+      case (a:ASTScalar,b:ASTStringLiteral) =>
+        a.code(s)
+        s.print("_data == ")
+        a.code(s)
+        s.print("_selection")
+      case (a:ASTStringLiteral,b:ASTScalar) =>
+        b.code(s)
+        s.print("_data == ")
+        b.code(s)
+        s.print("_selection")
+    }
+  }
+
+  private def emitIntersectionSelection(s: CodeStringBuilder, attr:String, sel:List[ASTCriterion]): Unit = {
+    if(sel.size != 0){
+      s.print(s""",[&](uint32_t ${attr}_data, uint32_t _1, uint32_t _2){ return """)
+      emitSelectionCondition(s,sel.head)
+      sel.tail.foreach{ i =>
+        s.print(" && ")
+        emitSelectionCondition(s,i)
+      }
+      s.print(";})")
+    }
+  }
+
+  private def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, sel: List[ASTCriterion], relsAttrs :  List[(String, List[String])]) : List[(String, List[String])]= {
     val relsAttrsWithAttr = relsAttrs.filter(( rel : (String, List[String])) => rel._2.contains(attr)).unzip._1.distinct
     assert(!relsAttrsWithAttr.isEmpty)
 
     if (relsAttrsWithAttr.size == 1) { // TODO: no need to intersect same col in repeated relation
       // no need to emit an intersection
-      s.println( s"""Set<${layout}> ${attr} = ${relsAttrsWithAttr.head}->data;""")
+      s.println( s"""Set<${layout}> ${attr} = ${relsAttrsWithAttr.head}->set;""")
      } else {
       s.println(s"""Set<${layout}> ${attr}(${attr}_buffer.get_memory(tid)); //initialize the memory""")
       // emit an intersection for the first two relations
-      s.println(s"""${attr} = ops::set_intersect(&${attr},&${relsAttrsWithAttr.head}->data,&${relsAttrsWithAttr.tail.head}->data);""")
-      val restOfRelsAttrsWithAttr = relsAttrsWithAttr.tail.tail
-      restOfRelsAttrsWithAttr.map((rel : String) => s.println(s"""${attr} = ops::set_intersect(&${attr},&${attr},&${rel}->data);"""))
+      s.print(s"""${attr} = ops::set_intersect(&${attr},(const Set<${layout}> *)&${relsAttrsWithAttr.head}->set,(const Set<${layout}> *)&${relsAttrsWithAttr.tail.head}->set""")
+      emitIntersectionSelection(s,attr,sel)
+      s.println(");")
+
+      val restOfRelsAttrsWithAttr = relsAttrsWithAttr.tail.tail 
+      restOfRelsAttrsWithAttr.foreach{(rel : String) => 
+        s.print("""${attr} = ops::set_intersect(&${attr},&${attr},&${rel}->set""")
+        emitIntersectionSelection(s,attr,sel)
+        s.println(");")
+      }
     }
 
     if (lastIntersection) {
@@ -144,28 +178,28 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
   }
 
-  private def emitAttrLoopOverResult(s: CodeStringBuilder, outermostLoop : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])]) = {
+  private def emitAttrLoopOverResult(s: CodeStringBuilder, outermostLoop : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])], attrSelections:List[List[ASTCriterion]]) = {
     // this should include the walking down the trie, so that when you recursively call emitNPRR, you do so with different rel names
     if (outermostLoop) {
       s.println(s"""${attrs.head}.par_foreach([&](size_t tid, uint32_t ${attrs.head}_i){""")
-      emitNPRR(s, false, attrs.tail, relsAttrs)
+      emitNPRR(s, false, attrs.tail, relsAttrs,attrSelections.tail)
       s.println("});")
     } else {
       s.println(s"""${attrs.head}.foreach([&](uint32_t ${attrs.head}_i) {""")
-      emitNPRR(s, false, attrs.tail, relsAttrs)
+      emitNPRR(s, false, attrs.tail, relsAttrs,attrSelections.tail)
       s.println("});")
     }
   }
 
-  private def emitNPRR(s: CodeStringBuilder, initialCall : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])]) : Unit = {
+  private def emitNPRR(s: CodeStringBuilder, initialCall : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])], attrSelections:List[List[ASTCriterion]]) : Unit = {
     if (attrs.isEmpty) return
 
     val currAttr = attrs.head
     if (attrs.tail.isEmpty) {
-      emitAttrIntersection(s, true, currAttr, relsAttrs)
+      emitAttrIntersection(s, true, currAttr, attrSelections.head, relsAttrs)
     } else {
-      val updatedRelsAttrs = emitAttrIntersection(s, false, currAttr, relsAttrs)
-      emitAttrLoopOverResult(s, initialCall, attrs, updatedRelsAttrs)
+      val updatedRelsAttrs = emitAttrIntersection(s, false, currAttr, attrSelections.head, relsAttrs)
+      emitAttrLoopOverResult(s, initialCall, attrs, updatedRelsAttrs, attrSelections)
     }
   }
 
@@ -182,33 +216,41 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   }
 
   private def emitEncodingForEquivalenceClass(s : CodeStringBuilder, klass : EquivalenceClass) ={
-    val encodingName = klass.head._1 + "_" + klass.head._2
-    val encodingType = Environment.getTypes(klass.head._1)(klass.head._2)
+    val encodingName = klass._1
+    val encodingType = Environment.getTypes(klass._2.head._1)(klass._2.head._2)
     emitEncodingInitForAttr(s, encodingName, encodingType)
-    klass.map({ case (rName, index) => {
+    klass._2.map({ case (rName, index) => {
       emitAttrEncoding(s, encodingName, rName, index)
     }})
     emitBuildEncodingForAttr(s, encodingName, encodingType)
   }
 
-  def emitTrieBuilding(s: CodeStringBuilder, relsAttrs : RWRelations, equivalenceClasses: List[EquivalenceClass]) = {
+  def emitTrieBuilding(s: CodeStringBuilder, relsAttrs : Relations, equivalenceClasses: EquivalenceClasses) = {
     // emit code to specify the levels of the tries
-    relsAttrs.map((relAttrs : RWRelation) => {
-      s.println(s"""std::vector<Column<uint32_t>> *E${relAttrs.name} = new std::vector<Column<uint32_t>>();""")
-      relAttrs.attrs.map((index : Int) => {
-        val equivClass = equivalenceClasses.find((klass : EquivalenceClass) => klass.contains((relAttrs.name, index)))
-        assert(equivClass.isDefined)
-        val equivClassName = equivClass.get.head._1 + "_" + equivClass.get.head._2
-        val encodingIndex = equivClass.get.indexOf((relAttrs.name, index))
-        s.println(s"""E${relAttrs.name}->push_back(${equivClassName}_encoding.encoded.at(${encodingIndex}));""")
-      })
+    s.println(s"""////////////////////////////////////////TRIE  BUILDING////////////////////////////////////////""")
+    
+    relsAttrs.foreach((rel : Relation) => {
+      s.println(s"""std::vector<Column<uint32_t>> *E${rel.name} = new std::vector<Column<uint32_t>>();""")
+      s.println(s"""std::vector<size_t> *ranges_${rel.name} = new std::vector<size_t>();""")
+
+      rel.attrs.foreach{ a =>
+        equivalenceClasses(a).foreach{ c =>
+          if(c._1 == rel.name){
+            s.println(s"""E${rel.name}->push_back(${a}_encoding.encoded.at(${c._2}));""")
+            s.println(s"""ranges_${rel.name}->push_back(${a}_encoding.num_distinct);""")
+          }
+        }
+      }
     })
 
     // emit code to construct each of the tries
-    relsAttrs.map((relAttrs : RWRelation) => relAttrs.name).map((identifier : String) => s.println(s"""Trie<${layout}> *T${identifier} = Trie<${layout}>::build(E${identifier}, [&](size_t index){return true;});""") )
+    relsAttrs.foreach((relAttrs : Relation) => 
+      s.println(s"""Trie<${layout}> *T${relAttrs.name} = Trie<${layout}>::build(E${relAttrs.name}, ranges_${relAttrs.name}, [&](size_t index){return true;});""") 
+    )
   }
 
   override def code(s: CodeStringBuilder): Unit = {
+    s.println(s"""////////////////////////////////////////JOIN////////////////////////////////////////""")
     /**
      * relations is a list of tuples, where the first element is the name, and the second is the list of attributes
      */
@@ -217,8 +259,8 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     /**
      * We get a distinct list of them so we can look them up and have a pointer to them
      */
-    val distinctRewrittenRelations = getDistinctRelations(relations)
-    emitRelationLookupAndCast(s, distinctRewrittenRelations.map((rewrittenRelation : RWRelation) => rewrittenRelation.name))
+    val distinctRelations = relations.groupBy(_.name).map(_._2.head).toList //distinct
+    emitRelationLookupAndCast(s, distinctRelations.map(_.name))
 
     /**
      * Now emit the encodings of each of the attrs
@@ -231,32 +273,57 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     /**
      * emit the trie building
      */
-    emitTrieBuilding(s, distinctRewrittenRelations, equivalenceClasses)
+    emitTrieBuilding(s, distinctRelations, equivalenceClasses)
 
     /**
      * Emit the buffers that we will do intersections for each attr in
      */
-    val fullOriginalAttrList = relations.map((rel : Relation) => rel.attrs).flatten.distinct.sorted
-    emitAttrIntersectionBuffers(s, fullOriginalAttrList, relations, equivalenceClasses)
+    emitAttrIntersectionBuffers(s, equivalenceClasses)
+
+    //Prepare the attributes that will need to be selected on the fly
+    val attrSelections = equivalenceClasses.keys.toList.map((attr: String) => 
+      selectCriteria.filter{ sc =>
+        (sc.attr1,sc.attr2) match {
+          case (a:ASTScalar,b:ASTStringLiteral) => 
+            if(a.identifierName == attr){
+              s.print("uint32_t " + attr + "_selection = " + attr + "_encoding.value_to_key.at(") 
+              b.code(s)
+              s.println(");")
+              true
+            } else 
+              false
+          case _ => false
+        }
+      }
+    ) 
 
     s.println("par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){")
     s.println("return a + b;")
     s.println("});")
     s.println("int tid = 0;")
     val firstBlockOfTrie = relations.map(( rel: Relation) => ("T" + rel.name + "->head", rel.attrs))
-    emitNPRR(s, true, fullOriginalAttrList, firstBlockOfTrie)
+    emitNPRR(s, true, equivalenceClasses.keys.toList, firstBlockOfTrie, attrSelections)
     s.println("size_t result = num_triangles.evaluate(0);")
     s.println("std::cout << result << std::endl;")
   }
 }
 
 case class ASTStringLiteral(str : String) extends ASTExpression {
-  override def code(s: CodeStringBuilder): Unit = ???
+  override def code(s: CodeStringBuilder): Unit = {
+    s.print("\"" + str + "\"")
+  }
 }
 
-abstract trait ASTCriterion extends ASTExpression
+abstract trait ASTCriterion extends ASTExpression{
+  val attr1:ASTExpression
+  val attr2:ASTExpression
+}
 case class ASTEq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion {
-  override def code(s: CodeStringBuilder): Unit = ???
+  override def code(s: CodeStringBuilder): Unit = {
+    attr1.code(s)
+    s.print("==")
+    attr2.code(s) 
+  }
 }
 case class ASTLeq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCriterion {
   override def code(s: CodeStringBuilder): Unit = ???
@@ -279,5 +346,7 @@ case class ASTRelation(identifierName : String, attrs : Map[String, Option[Strin
   override def code(s: CodeStringBuilder): Unit = ???
 } // attribute name to option with type, or no type if it can be inferred
 case class ASTScalar(identifierName : String) extends ASTIdentifier {
-  override def code(s: CodeStringBuilder): Unit = ???
+  override def code(s: CodeStringBuilder): Unit = {
+    s.print(identifierName)
+  }
 }
