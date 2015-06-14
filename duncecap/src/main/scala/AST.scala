@@ -285,6 +285,24 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     )
   }
 
+  def emitAndDetectSelections(s:CodeStringBuilder, attribute_ordering:List[String]) : List[ASTCriterion] = {
+    attribute_ordering.map((attr: String) => 
+      selectCriteria.filter{ sc =>
+        (sc.attr1,sc.attr2) match {
+          case (a:ASTScalar,b:ASTStringLiteral) => 
+            if(a.identifierName == attr){
+              s.print("uint32_t " + attr + "_selection = " + attr + "_encoding.value_to_key.at(") 
+              b.code(s)
+              s.println(");")
+              true
+            } else 
+              false
+          case _ => false
+        }
+      }
+    )
+  }
+
   override def code(s: CodeStringBuilder): Unit = {
     /**
      * We get a distinct list of them so we can look them up and have a pointer to them
@@ -308,7 +326,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     solver.bottom_up(mutable.LinkedHashSet[GHDNode](myghd), myghd)
     //////////////////////////////////////////////////////////////////////
 
-  
     /**
      * emit the trie building
      */
@@ -320,21 +337,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     emitAttrIntersectionBuffers(s, attribute_ordering, equivalenceClasses)
 
     //Prepare the attributes that will need to be selected on the fly
-    val attrSelections = attribute_ordering.map((attr: String) => 
-      selectCriteria.filter{ sc =>
-        (sc.attr1,sc.attr2) match {
-          case (a:ASTScalar,b:ASTStringLiteral) => 
-            if(a.identifierName == attr){
-              s.print("uint32_t " + attr + "_selection = " + attr + "_encoding.value_to_key.at(") 
-              b.code(s)
-              s.println(");")
-              true
-            } else 
-              false
-          case _ => false
-        }
-      }
-    )
+    val attrSelections = emitAndDetectSelections(s,attribute_ordering)
     
     s.println("par::reducer<size_t> output_cardinality(0,[](size_t a, size_t b){")
     s.println("return a + b;")
