@@ -303,6 +303,19 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     )
   }
 
+  def emitNPRR(current:GHDNode) : Unit = {
+    println("Running NPRR")
+    /*
+    s.println("par::reducer<size_t> output_cardinality(0,[](size_t a, size_t b){")
+    s.println("return a + b;")
+    s.println("});")
+    val firstBlockOfTrie = distinctRelations.map(( rel: Relation) => ("T" + rel.name + "->head", rel.attrs))
+    emitNPRR(s, true, attribute_ordering, firstBlockOfTrie, attrSelections)
+    s.println("size_t result = output_cardinality.evaluate(0);")
+    s.println("std::cout << result << std::endl;")
+    */
+  }
+
   override def code(s: CodeStringBuilder): Unit = {
     /**
      * We get a distinct list of them so we can look them up and have a pointer to them
@@ -323,7 +336,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     //get minimum GHD's
     val myghd = solver.getGHD(distinctRelations)
     val attribute_ordering = solver.getAttributeOrdering(myghd)
-    solver.bottom_up(mutable.LinkedHashSet[GHDNode](myghd), myghd)
     //////////////////////////////////////////////////////////////////////
 
     /**
@@ -338,15 +350,8 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
     //Prepare the attributes that will need to be selected on the fly
     val attrSelections = emitAndDetectSelections(s,attribute_ordering)
-    
-    s.println("par::reducer<size_t> output_cardinality(0,[](size_t a, size_t b){")
-    s.println("return a + b;")
-    s.println("});")
-    val firstBlockOfTrie = distinctRelations.map(( rel: Relation) => ("T" + rel.name + "->head", rel.attrs))
-    emitNPRR(s, true, attribute_ordering, firstBlockOfTrie, attrSelections)
-    s.println("size_t result = output_cardinality.evaluate(0);")
-    s.println("std::cout << result << std::endl;")
 
+    solver.bottom_up(mutable.LinkedHashSet[GHDNode](myghd), myghd, emitNPRR)
   }
 
   override def optimize: Unit = ???

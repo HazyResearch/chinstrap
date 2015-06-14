@@ -46,7 +46,7 @@ object GHDSolver {
     return attr.toList
   }
 
-  def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode): Unit = {
+  def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, fn:(a:GHDNode) => Unit): Unit = {
     for (child <- curr.children) {
       if (!seen.contains(child)) {
         seen += child
