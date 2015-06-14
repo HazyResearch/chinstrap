@@ -4,6 +4,8 @@ import scala.collection.mutable
 import java.io.{FileWriter, BufferedWriter, File}
 
 object GHDSolver {
+  type EquivalenceClasses = (Map[(String,Int),(Int,Int,String)],Map[String,Int],Map[Int,String])
+
   def getAttrSet(rels: List[Relation]): Set[String] = {
     return rels.foldLeft(Set[String]())(
       (accum: Set[String], rel : Relation) => accum | rel.attrs.toSet[String])
@@ -13,6 +15,8 @@ object GHDSolver {
    * relations is a list of tuples, where the first element is the name, and the second is the list of attributes
    */
   private def get_attribute_ordering(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): List[String] = {
+    //Runs a BFS, adds attributes in that order with the special condition that those attributes
+    //that also exist in the children are added first
     var depth = 0
     var frontier = f_in
     var next_frontier = mutable.Set[GHDNode]()
@@ -20,12 +24,19 @@ object GHDSolver {
     while(frontier.size != 0){
       next_frontier.clear
       frontier.foreach{ cur:GHDNode =>
-        
-        cur.rels.foreach{ r:Relation =>
-          r.attrs.foreach{a:String =>
-            if(!attr.contains(a)){
-              attr += a
-            }
+
+        //first add attributes with elements in common with children, then add others        
+        val children_attrs = cur.children.flatMap{ c => c.rels.flatMap{r => r.attrs}.toList.distinct}
+        val cur_attrs = cur.rels.flatMap{r => r.attrs}
+        children_attrs.intersect(cur_attrs).foreach{ a =>
+          if(!attr.contains(a)){
+            attr += a
+          }
+        }
+        //add others
+        cur_attrs.foreach{ a =>
+          if(!attr.contains(a)){
+            attr += a
           }
         }
 
@@ -46,14 +57,17 @@ object GHDSolver {
     return attr.toList
   }
 
-  def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, fn:(GHDNode) => Unit): Unit = {
+  def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, fn:(CodeStringBuilder,GHDNode,List[String],List[List[ASTCriterion]],Boolean,EquivalenceClasses) => Unit, s:CodeStringBuilder, attribute_ordering:List[String], selections:List[List[ASTCriterion]], aggregate:Boolean, equivalenceClasses:EquivalenceClasses): Unit = {
     for (child <- curr.children) {
       if (!seen.contains(child)) {
         seen += child
-        bottom_up(seen, child, fn)
+        bottom_up(seen, child, fn, s, attribute_ordering, selections,aggregate,equivalenceClasses)
       }
     }
-    fn(curr)
+    val bag_attrs = curr.rels.flatMap(r => r.attrs).toList.distinct
+    val a_i = attribute_ordering.zipWithIndex.filter(a => bag_attrs.find(f => (f == a._1)) != None)
+    val s_in = a_i.map{ i => selections(i._2) }
+    fn(s,curr,a_i.map(_._1),selections,aggregate,equivalenceClasses)
   }
   private def breadth_first(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): Int = {
     var depth = 0
