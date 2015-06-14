@@ -285,7 +285,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     )
   }
 
-  def emitAndDetectSelections(s:CodeStringBuilder, attribute_ordering:List[String]) : List[ASTCriterion] = {
+  def emitAndDetectSelections(s:CodeStringBuilder, attribute_ordering:List[String]) : List[List[ASTCriterion]] = {
     attribute_ordering.map((attr: String) => 
       selectCriteria.filter{ sc =>
         (sc.attr1,sc.attr2) match {
