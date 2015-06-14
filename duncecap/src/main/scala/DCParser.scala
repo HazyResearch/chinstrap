@@ -1,25 +1,26 @@
 package DunceCap
 
+import scala.collection.immutable.List
 import scala.collection.immutable.ListMap
 import scala.util.parsing.combinator.RegexParsers
 
 object DCParser extends RegexParsers {
   
-  def identifierName = """[_\p{L}][_\p{L}\p{Nd}]*""".r
-  def typename = """uint64_t|string|float""".r // TODO: should I wrap this in another type or just let it be a string?
+  def identifierName:Parser[String] = """[_\p{L}][_\p{L}\p{Nd}]*""".r
+  def typename:Parser[String] = """uint64_t|string|float""".r // TODO: should I wrap this in another type or just let it be a string?
   def format = """csv|tsv""".r
 
   def typedRelationIdentifier = identifierName ~ (("(" ~> typedAttrList) <~ ")") ^^ {case id~attrs => ASTRelation(id, attrs)}
-  def typedAttrList : Parser[Map[String, Option[String]]] = notLastTypedAttr | lastTypedAttr
-  def notLastTypedAttr = identifierName ~ (":" ~> typename) ~ ("," ~> typedAttrList) ^^ {case a~t~rest => rest + (a -> Some(t))}
-  def lastTypedAttr = identifierName ~ (":" ~> typename) ^^ {case a~t => ListMap(a -> Some(t))}
+  def typedAttrList : Parser[List[String]] = notLastTypedAttr | lastTypedAttr
+  def notLastTypedAttr = typename ~ ("," ~> typedAttrList) ^^ {case t~rest => t +: rest}
+  def lastTypedAttr = typename ^^ {case t => List(t)}
 
   def identifier = relationIdentifier | scalarIdentifier
 
   def relationIdentifier = identifierName ~ (("(" ~> attrList) <~ ")") ^^ {case id~attrs => ASTRelation(id, attrs)}
-  def attrList : Parser[Map[String, Option[String]]] = notLastAttr | lastAttr
-  def notLastAttr = identifierName ~ ("," ~> attrList) ^^ {case a~rest => rest + (a -> None)}
-  def lastAttr = identifierName ^^ {case a => ListMap(a -> None)}
+  def attrList : Parser[List[String]] = notLastAttr | lastAttr
+  def notLastAttr = identifierName ~ ("," ~> attrList) ^^ {case a~rest => a +: rest}
+  def lastAttr = identifierName ^^ {case a => List(a)}
 
   def scalarIdentifier = identifierName ^^ { case id => ASTScalar(id)}
 
@@ -41,7 +42,7 @@ object DCParser extends RegexParsers {
   def string = "\"" ~> validStringContents <~ "\"" ^^ {case str => new ASTStringLiteral(str)}
 
   def loadStatement = ((typedRelationIdentifier <~ "<-") <~ "load") ~ ("(" ~> string) ~ (("," ~> format) <~ ")") ^^
-    {case id~file~fmt => ASTLoadStatement(id, file, fmt)}
+    {case id~file~fmt => ASTLoadFileStatement(id, file, fmt)}
 
   def expression : Parser[ASTExpression] = countExpression | joinAndSelectExpression | identifier | string
   def countExpression : Parser[ASTCount] = "COUNT" ~> "(" ~> (expression <~ ")") ^^ {case e => ASTCount(e)}

@@ -96,6 +96,6 @@ class GHDNode(val rels: List[Relation]) {
   }
 
   private def translateAttribute(attr : String) = {
-    attributeReordering.fold(attr)((reordering: Map[String, Int]) => "attr_" + reordering.get(attr).get.toString)
+    attributeReordering.fold(attr)((reordering: Map[String, Int]) => "attr_" + attr)
   }
 }

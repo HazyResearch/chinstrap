@@ -1,11 +1,103 @@
 package DunceCap
 
 import scala.collection.mutable
+import java.io.{FileWriter, BufferedWriter, File}
 
 object GHDSolver {
   def getAttrSet(rels: List[Relation]): Set[String] = {
     return rels.foldLeft(Set[String]())(
       (accum: Set[String], rel : Relation) => accum | rel.attrs.toSet[String])
+  }
+
+  /**
+   * relations is a list of tuples, where the first element is the name, and the second is the list of attributes
+   */
+  private def get_attribute_ordering(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): List[String] = {
+    var depth = 0
+    var frontier = f_in
+    var next_frontier = mutable.Set[GHDNode]()
+    var attr = scala.collection.mutable.ListBuffer.empty[String]
+    while(frontier.size != 0){
+      next_frontier.clear
+      frontier.foreach{ cur:GHDNode =>
+        
+        cur.rels.foreach{ r:Relation =>
+          r.attrs.foreach{a:String =>
+            if(!attr.contains(a)){
+              attr += a
+            }
+          }
+        }
+
+        cur.children.foreach{(child:GHDNode) =>
+          if(!seen.contains(child)){
+            seen += child
+            next_frontier += child
+          }
+        }
+      }
+
+      var tmp = frontier
+      frontier = next_frontier
+      next_frontier = tmp
+      
+      depth += 1
+    }
+    return attr.toList
+  }
+
+  def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode): Unit = {
+    for (child <- curr.children) {
+      if (!seen.contains(child)) {
+        seen += child
+        bottom_up(seen, child)
+      }
+    }
+    println("HERE")
+    curr.rels.foreach{r => println(r.name)}
+    println()
+  }
+  private def breadth_first(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): Int = {
+    var depth = 0
+    var frontier = f_in
+    var next_frontier = mutable.Set[GHDNode]()
+    while(frontier.size != 0){
+      next_frontier.clear
+      frontier.foreach{ cur:GHDNode =>
+        cur.children.foreach{(child:GHDNode) =>
+          if(!seen.contains(child)){
+            seen += child
+            next_frontier += child
+          }
+        }
+      }
+
+      var tmp = frontier
+      frontier = next_frontier
+      next_frontier = tmp
+
+      depth += 1
+    }
+    return depth
+  }
+  def getGHD(distinctRelations:List[Relation]) : GHDNode = {
+    val decompositions = getMinFHWDecompositions(distinctRelations) 
+    //compute fractional scores
+    val ordered_decomp = decompositions.sortBy{ root:GHDNode =>
+      breadth_first(mutable.LinkedHashSet[GHDNode](root),mutable.LinkedHashSet[GHDNode](root))
+    }
+    //pull out lowest depth FHWS 
+    val myghd = ordered_decomp.head
+    val fhws = myghd.fractionalScoreTree()
+    print(myghd, "query_plan_" + fhws + ".json")
+    return myghd
+  }
+  def getAttributeOrdering(myghd:GHDNode) : List[String] ={
+    val attribute_ordering = get_attribute_ordering(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd))
+    println("Attribute Ordering")
+    attribute_ordering.foreach{println}
+    println("Attribute Ordering")
+    return attribute_ordering
   }
 
   private def getConnectedComponents(rels: mutable.Set[Relation], comps: List[List[Relation]], ignoreAttrs: Set[String]): List[List[Relation]] = {
@@ -116,6 +208,14 @@ object GHDSolver {
 
     val minFhws = fhwsAndDecomps.filter((scoreAndNode : (Double, GHDNode)) => scoreAndNode._1 ~= minScore)
     return minFhws.unzip._2
+  }
+
+  def print(root: GHDNode, filename: String) = {
+    val json = root.toJson()
+    val file = new File(filename)
+    val bw = new BufferedWriter(new FileWriter(file))
+    bw.append(json.spaces2)
+    bw.close()
   }
 }
 

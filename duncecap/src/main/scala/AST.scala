@@ -1,5 +1,7 @@
 package DunceCap
 
+import scala.collection.mutable
+
 /**
  * All code generation should start from this object:
  */
@@ -45,6 +47,7 @@ abstract trait ASTNode {
 case class ASTStatements(statements : List[ASTStatement]) extends ASTNode {
   def code(s: CodeStringBuilder): Unit = {
     statements.map((statement : ASTStatement) => {
+      s.println(s"""////////////////////////////////////////////////////////////////////////////////""")
       s.println("{")
       statement.code(s)
       s.println("}")
@@ -59,10 +62,9 @@ abstract trait ASTStatement extends ASTNode {
   def updateEnvironment = {}
 }
 
-case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, format : String) extends ASTStatement {
+case class ASTLoadFileStatement(rel : ASTRelation, filename : ASTStringLiteral, format : String) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
-    s.println(s"""////////////////////////////////////////FILE LOADING////////////////////////////////////////""")
-    val relationTypes = rel.attrs.values.toList.map((optTypes : Option[String]) => optTypes.get).mkString(",")
+    val relationTypes = rel.attrs.mkString(",")
     s.println(s"Relation<${relationTypes}>* ${rel.identifierName} = new Relation<${relationTypes}>();")
     assert(format == "tsv") // TODO : add in csv option
     s.println(s"""tsv_reader f_reader("${(filename.str)}");""")
@@ -83,7 +85,7 @@ case class ASTLoadStatement(rel : ASTRelation, filename : ASTStringLiteral, form
   }
 
   override def updateEnvironment: Unit = {
-    Environment.addRelationBinding(rel.identifierName, rel.attrs.values.toList.map((optTypes : Option[String]) => optTypes.get))
+    Environment.addRelationBinding(rel.identifierName, rel.attrs)
   }
 
   override def optimize: Unit = ???
@@ -130,12 +132,14 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     })
   }
 
-  private def emitAttrIntersectionBuffers(s: CodeStringBuilder, equivalanceClasses : EquivalenceClasses) = {
-    equivalanceClasses.map((attr : EquivalenceClass) => {
-      s.println(s"""allocator::memory<uint8_t> ${attr._1}_buffer(${attr._1}_encoding.key_to_value.size());""")
+  private def emitAttrIntersectionBuffers(s: CodeStringBuilder, attrs : List[String], eq:EquivalenceClasses) = {
+    val (encodingMap,attrMap,encodingNames) = eq
+    attrs.map((attr : String) => {
+      val name = encodingNames(attrMap(attr))
+      s.println(s"""allocator::memory<uint8_t> ${attr}_buffer(${name}_encoding.key_to_value.size());""")
     })
   }
-
+  
   private def emitSelectionCondition(s:CodeStringBuilder, sel:ASTCriterion){
     (sel.attr1,sel.attr2) match{
       case (a:ASTScalar,b:ASTStringLiteral) =>
@@ -179,7 +183,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
       val restOfRelsAttrsWithAttr = relsAttrsWithAttr.tail.tail 
       restOfRelsAttrsWithAttr.foreach{(rel : String) => 
-        s.print("""${attr} = ops::set_intersect(&${attr},&${attr},&${rel}->set""")
+        s.print(s"""${attr} = ops::set_intersect(&${attr},&${attr},&${rel}->set""")
         emitIntersectionSelection(s,attr,sel)
         s.println(");")
       }
@@ -187,7 +191,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
     if (lastIntersection) {
       s.println(s"""const size_t count = ${attr}.cardinality;""")
-      s.println("num_triangles.update(tid,count);")
+      s.println("output_cardinality.update(tid,count);")
       List[(String, List[String])]()
     } else {
       // update relsAttrs by peeling attr off the attribute lists, and adding ->map.at(attr_i) to the relation name
@@ -238,77 +242,86 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     s.println(s"""Encoding<${attrType}> ${attr}_encoding(${attr}_attributes); // TODO heap allocate""")
   }
 
-  private def emitEncodingForEquivalenceClass(s : CodeStringBuilder, klass : EquivalenceClass) ={
-    val encodingName = klass._1
-    val encodingType = Environment.getTypes(klass._2.head._1)(klass._2.head._2)
-    emitEncodingInitForAttr(s, encodingName, encodingType)
-    klass._2.map({ case (rName, index) => {
-      emitAttrEncoding(s, encodingName, rName, index)
-    }})
-    emitBuildEncodingForAttr(s, encodingName, encodingType)
+  private def emitEncodingRelations(s:CodeStringBuilder, rel:Relation, encodingMap:EM, encodingNames:Map[Int,String]) = {
+    s.println(s"""std::vector<Column<uint32_t>> *E${rel.name} = new std::vector<Column<uint32_t>>();""")
+    s.println(s"""std::vector<size_t> *ranges_${rel.name} = new std::vector<size_t>();""")
+
+    (0 until rel.attrs.size).toList.foreach{ i =>
+      val eID = encodingMap((rel.name,i))
+      val e_name = encodingNames(eID._1)
+      val e_index = eID._2
+      val a = rel.attrs(i)
+      s.println(s"""E${rel.name}->push_back(${e_name}_encoding.encoded.at(${e_index}));""")
+      s.println(s"""ranges_${rel.name}->push_back(${a}_encoding.num_distinct);""")        
+    } 
   }
 
-  def emitTrieBuilding(s: CodeStringBuilder, relsAttrs : Relations, equivalenceClasses: EquivalenceClasses) = {
-    // emit code to specify the levels of the tries
-    s.println(s"""////////////////////////////////////////TRIE  BUILDING////////////////////////////////////////""")
-    
-    relsAttrs.foreach((rel : Relation) => {
-      s.println(s"""std::vector<Column<uint32_t>> *E${rel.name} = new std::vector<Column<uint32_t>>();""")
-      s.println(s"""std::vector<size_t> *ranges_${rel.name} = new std::vector<size_t>();""")
-
-      rel.attrs.foreach{ a =>
-        equivalenceClasses(a).foreach{ c =>
-          if(c._1 == rel.name){
-            s.println(s"""E${rel.name}->push_back(${a}_encoding.encoded.at(${c._2}));""")
-            s.println(s"""ranges_${rel.name}->push_back(${a}_encoding.num_distinct);""")
-          }
-        }
+  private def emitEncodingForEquivalenceClasses(s : CodeStringBuilder, klass : EquivalenceClasses, relsAttrs : Relations) = {
+    val (encodingMap,attrMap,encodingNames) = klass
+    val groupedTypes = encodingMap.groupBy(e => (e._2._1,e._2._3) ).map{e =>
+      //1st group By (encodingID,encodingType) then create new map (encodingID -> (encoding Type, (ordered relations))) 
+      (e._1._1,(e._1._2,e._2.keys.toList.sortBy(a => e._2(a)._2)))
+    }
+    encodingNames.foreach{n =>
+      emitEncodingInitForAttr(s, n._2, groupedTypes(n._1)._1)
+    }
+    groupedTypes.keys.foreach{ gt =>
+      groupedTypes(gt)._2.foreach{ ri =>
+        emitAttrEncoding(s, encodingNames(gt), ri._1, ri._2)
       }
+    }
+    encodingNames.foreach{n =>
+      emitBuildEncodingForAttr(s, n._2, groupedTypes(n._1)._1)
+    }
+    // emit code to specify the levels of the tries  
+    relsAttrs.foreach((rel : Relation) => {
+      emitEncodingRelations(s,rel,encodingMap,encodingNames)
     })
-
+  }
+  
+  def emitTrieBuilding(s: CodeStringBuilder, relsAttrs : Relations) = {
     // emit code to construct each of the tries
     relsAttrs.foreach((relAttrs : Relation) => 
       s.println(s"""Trie<${layout}> *T${relAttrs.name} = Trie<${layout}>::build(E${relAttrs.name}, ranges_${relAttrs.name}, [&](size_t index){return true;});""") 
     )
   }
 
-  /**
-   * relations is a list of tuples, where the first element is the name, and the second is the list of attributes
-   */
-  val relations = rels.map((rel : ASTRelation) => new Relation(rel.attrs.keys.toList.reverse, rel.identifierName))
-
   override def code(s: CodeStringBuilder): Unit = {
-    s.println(s"""////////////////////////////////////////JOIN////////////////////////////////////////""")
-    /**
-     * relations is a list of tuples, where the first element is the name, and the second is the list of attributes
-     */
-    val relations = rels.map((rel : ASTRelation) => new Relation(rel.attrs.keys.toList.reverse, rel.identifierName))
     /**
      * We get a distinct list of them so we can look them up and have a pointer to them
      */
-    val distinctRelations = relations.groupBy(_.name).map(_._2.head).toList //distinct
-    emitRelationLookupAndCast(s, distinctRelations.map(_.name))
+    val relations = rels.map((rel : ASTRelation) => new Relation(rel.attrs, rel.identifierName))
+    emitRelationLookupAndCast(s, relations.map(_.name))
 
     /**
      * Now emit the encodings of each of the attrs
      */
     val equivalenceClasses = buildEncodingEquivalenceClasses(relations)
-    equivalenceClasses.map((klass : EquivalenceClass) => {
-      emitEncodingForEquivalenceClass(s, klass)
-    })
+    val distinctRelations = relations.groupBy(_.name).map(_._2.head).toList.sortBy(a => a.name) //distinct
+    emitEncodingForEquivalenceClasses(s, equivalenceClasses, distinctRelations)
 
+    //////////////////////////////////////////////////////////////////////
+    //start solver stuff
+    val solver = GHDSolver
+    //get minimum GHD's
+    val myghd = solver.getGHD(distinctRelations)
+    val attribute_ordering = solver.getAttributeOrdering(myghd)
+    solver.bottom_up(mutable.LinkedHashSet[GHDNode](myghd), myghd)
+    //////////////////////////////////////////////////////////////////////
+
+  
     /**
      * emit the trie building
      */
-    emitTrieBuilding(s, distinctRelations, equivalenceClasses)
+    emitTrieBuilding(s, distinctRelations)
 
     /**
      * Emit the buffers that we will do intersections for each attr in
      */
-    emitAttrIntersectionBuffers(s, equivalenceClasses)
+    emitAttrIntersectionBuffers(s, attribute_ordering, equivalenceClasses)
 
     //Prepare the attributes that will need to be selected on the fly
-    val attrSelections = equivalenceClasses.keys.toList.map((attr: String) => 
+    val attrSelections = attribute_ordering.map((attr: String) => 
       selectCriteria.filter{ sc =>
         (sc.attr1,sc.attr2) match {
           case (a:ASTScalar,b:ASTStringLiteral) => 
@@ -322,16 +335,16 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
           case _ => false
         }
       }
-    ) 
-
-    s.println("par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){")
+    )
+    
+    s.println("par::reducer<size_t> output_cardinality(0,[](size_t a, size_t b){")
     s.println("return a + b;")
     s.println("});")
-    s.println("int tid = 0;")
-    val firstBlockOfTrie = relations.map(( rel: Relation) => ("T" + rel.name + "->head", rel.attrs))
-    emitNPRR(s, true, equivalenceClasses.keys.toList, firstBlockOfTrie, attrSelections)
-    s.println("size_t result = num_triangles.evaluate(0);")
+    val firstBlockOfTrie = distinctRelations.map(( rel: Relation) => ("T" + rel.name + "->head", rel.attrs))
+    emitNPRR(s, true, attribute_ordering, firstBlockOfTrie, attrSelections)
+    s.println("size_t result = output_cardinality.evaluate(0);")
     s.println("std::cout << result << std::endl;")
+
   }
 
   override def optimize: Unit = ???
@@ -382,7 +395,7 @@ case class ASTNeq(attr1 : ASTExpression, attr2 : ASTExpression) extends ASTCrite
 }
 
 abstract trait ASTIdentifier extends ASTExpression
-case class ASTRelation(identifierName : String, attrs : Map[String, Option[String]]) extends ASTIdentifier {
+case class ASTRelation(identifierName : String, attrs : List[String]) extends ASTIdentifier {
   override def code(s: CodeStringBuilder): Unit = ???
   override def optimize: Unit = ???
 } // attribute name to option with type, or no type if it can be inferred
