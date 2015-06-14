@@ -250,9 +250,8 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       val eID = encodingMap((rel.name,i))
       val e_name = encodingNames(eID._1)
       val e_index = eID._2
-      val a = rel.attrs(i)
       s.println(s"""E${rel.name}->push_back(${e_name}_encoding.encoded.at(${e_index}));""")
-      s.println(s"""ranges_${rel.name}->push_back(${a}_encoding.num_distinct);""")        
+      s.println(s"""ranges_${rel.name}->push_back(${e_name}_encoding.num_distinct);""")        
     } 
   }
 
@@ -291,13 +290,13 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
      * We get a distinct list of them so we can look them up and have a pointer to them
      */
     val relations = rels.map((rel : ASTRelation) => new Relation(rel.attrs, rel.identifierName))
-    emitRelationLookupAndCast(s, relations.map(_.name))
+    val distinctRelations = relations.groupBy(_.name).map(_._2.head).toList.sortBy(a => a.name) //distinct
+    emitRelationLookupAndCast(s, distinctRelations.map(_.name))
 
     /**
      * Now emit the encodings of each of the attrs
      */
     val equivalenceClasses = buildEncodingEquivalenceClasses(relations)
-    val distinctRelations = relations.groupBy(_.name).map(_._2.head).toList.sortBy(a => a.name) //distinct
     emitEncodingForEquivalenceClasses(s, equivalenceClasses, distinctRelations)
 
     //////////////////////////////////////////////////////////////////////
