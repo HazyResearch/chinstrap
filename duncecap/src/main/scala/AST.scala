@@ -305,6 +305,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
   def emitNPRR(current:GHDNode) : Unit = {
     println("Running NPRR")
+    current.rels.foreach{r => println(r.name)}
     /*
     s.println("par::reducer<size_t> output_cardinality(0,[](size_t a, size_t b){")
     s.println("return a + b;")

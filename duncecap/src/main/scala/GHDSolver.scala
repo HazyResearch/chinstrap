@@ -46,16 +46,14 @@ object GHDSolver {
     return attr.toList
   }
 
-  def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, fn:(a:GHDNode) => Unit): Unit = {
+  def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, fn:(GHDNode) => Unit): Unit = {
     for (child <- curr.children) {
       if (!seen.contains(child)) {
         seen += child
-        bottom_up(seen, child)
+        bottom_up(seen, child, fn)
       }
     }
-    println("HERE")
-    curr.rels.foreach{r => println(r.name)}
-    println()
+    fn(curr)
   }
   private def breadth_first(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): Int = {
     var depth = 0
