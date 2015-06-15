@@ -38,6 +38,10 @@ class GHDNode(val rels: List[Relation]) {
 
   override def hashCode = 41 * rels.hashCode() + children.hashCode()
 
+  def getName(attribute_ordering:List[String]): String = {
+    this.rels.map(r => r.name).distinct.mkString("") + "_" + attribute_ordering.mkString("")
+  }
+
   def getNumBags(): Int = {
     1 + children.foldLeft(0)((accum : Int, child : GHDNode) => accum + child.getNumBags())
   }

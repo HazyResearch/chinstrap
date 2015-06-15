@@ -65,7 +65,7 @@ object GHDSolver {
       }
     }
     val bag_attrs = curr.rels.flatMap(r => r.attrs).toList.distinct
-    val a_i = attribute_ordering.zipWithIndex.filter(a => bag_attrs.find(f => (f == a._1)) != None)
+    val a_i = attribute_ordering.zipWithIndex.filter(a => bag_attrs.contains(a._1))
     val s_in = a_i.map{ i => selections(i._2) }
     fn(s,curr,a_i.map(_._1),selections,aggregate,equivalenceClasses)
   }
