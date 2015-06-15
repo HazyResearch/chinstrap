@@ -159,18 +159,15 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
   }
 
-  private def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, sel: List[ASTCriterion], relsAttrs :  List[(String, List[String])], aggregate:Boolean, equivalenceClasses:EquivalenceClasses, prev_a:String, prev_t:String, name:String, yanna:List[List[List[(String, String)]]]) : List[(String, List[String])]= {
+  private def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, sel: List[ASTCriterion], relsAttrs :  List[(String, List[String])], aggregate:Boolean, equivalenceClasses:EquivalenceClasses, prev_a:String, prev_t:String, name:String, yanna:List[(String, String)]) : List[(String, List[String])]= {
     val (encodingMap,attrMap,encodingNames) = equivalenceClasses
     val encodingName = encodingNames(attrMap(attr))
 
     val relAttrsA = relsAttrs.filter(( rel : (String, List[String])) => rel._2.contains(attr)).unzip._1.distinct
-    val passedUp = yanna.flatMap{c => 
-      c.flatMap{r =>
-        r.filter{a =>
-          a._1 == attr
-        }.distinct.map(_._2)
-      }
-    }.distinct
+    val passedUp = yanna.filter{a =>
+      a._1 == attr
+    }.distinct.map(_._2)
+
     val relsAttrsWithAttr= relAttrsA ++ passedUp
     assert(!relsAttrsWithAttr.isEmpty)
 
@@ -259,7 +256,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
   }
 
-  private def emitAttrLoopOverResult(s: CodeStringBuilder, outermostLoop : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])], attrSelections:List[List[ASTCriterion]], aggregate:Boolean, equivalenceClasses:EquivalenceClasses, prev_a:String, prev_t:String, name:String, yanna:List[List[List[(String, String)]]]) = {
+  private def emitAttrLoopOverResult(s: CodeStringBuilder, outermostLoop : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])], attrSelections:List[List[ASTCriterion]], aggregate:Boolean, equivalenceClasses:EquivalenceClasses, prev_a:String, prev_t:String, name:String, yanna:List[(String, String)]) = {
     // this should include the walking down the trie, so that when you recursively call emitNPRR, you do so with different rel names
     if (outermostLoop) {
       if(aggregate)
@@ -278,7 +275,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
   }
 
-  private def emitNPRR(s: CodeStringBuilder, initialCall : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])], attrSelections:List[List[ASTCriterion]], aggregate:Boolean, equivalenceClasses:EquivalenceClasses, prev_a:String, prev_t:String, name:String, yanna:List[List[List[(String, String)]]]) : Unit = {
+  private def emitNPRR(s: CodeStringBuilder, initialCall : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])], attrSelections:List[List[ASTCriterion]], aggregate:Boolean, equivalenceClasses:EquivalenceClasses, prev_a:String, prev_t:String, name:String, yanna:List[(String, String)]) : Unit = {
     if (attrs.isEmpty) return
 
     val currAttr = attrs.head
@@ -366,6 +363,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
   def emitNPRR(s:CodeStringBuilder, current:GHDNode, attribute_ordering:List[String], attrSelections:List[List[ASTCriterion]], aggregate:Boolean, equivalenceClasses:EquivalenceClasses) : Unit = {
     println("Bag ordering")
+    current.attribute_ordering = attribute_ordering
     attribute_ordering.foreach{
       println
     }
@@ -381,32 +379,29 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
 
     val name = current.getName(attribute_ordering)
+    current.name = name
 
-    val yanna = current.children.map{c =>
-      c.rels.map{ r =>
-        r.attrs.zip((0 until r.attrs.size).map{ i =>
-          val result = name + "_block"
-          result + (0 until i).map{s =>
-            "->get_block(" + r.attrs(s) + "_d)" 
-          }.mkString("")
-        })
-      }
-    }
+    val yanna = attribute_ordering.zip( (0 until attribute_ordering.size).map{ i =>
+      val result = name + "_block"
+      result + (0 until i).map{ s =>
+        "->get_block(" + attribute_ordering(s) + "_d)" 
+      }.mkString("")
+    }.toList )
 
     //println("WORK: " + work)
     //if(work != 0){
-      println("Running NPRR")
-      current.rels.foreach{r => println(r.name)}
-      s.println(s"""par::reducer<size_t> ${name}_cardinality(0,[](size_t a, size_t b){""")
-      s.println("return a + b;")
-      s.println("});")
-      s.println("//////////NPRR")
-      s.println(s"""TrieBlock<${layout}> *${name}_block;""")
-      s.println("{")
-      val firstBlockOfTrie = current.rels.map(( rel: Relation) => ("T" + rel.name + "->head", rel.attrs))
-      emitNPRR(s, true, attribute_ordering, firstBlockOfTrie, attrSelections, aggregate,equivalenceClasses,"","",name,yanna)
-      s.println("}")
-      s.println(s"std::cout << ${name}_cardinality.evaluate(0) << std::endl;")
+    println("Running NPRR")
+    current.rels.foreach{r => println(r.name)}
+    s.println(s"""par::reducer<size_t> ${name}_cardinality(0,[](size_t a, size_t b){""")
+    s.println("return a + b;")
+    s.println("});")
+    s.println("//////////NPRR")
+    s.println(s"""TrieBlock<${layout}> *${name}_block;""")
+    s.println("{")
+    val firstBlockOfTrie = current.rels.map(( rel: Relation) => ("T" + rel.name + "->head", rel.attrs))
+    emitNPRR(s, true, attribute_ordering, firstBlockOfTrie, attrSelections, aggregate,equivalenceClasses,"","",name,yanna)
+    s.println("}")
+    s.println(s"std::cout << ${name}_cardinality.evaluate(0) << std::endl;")
     //} 
     /*
     else{
@@ -414,6 +409,54 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       println("NAME: " + name)
     }
     */
+  }
+
+  def emitTopDown(s:CodeStringBuilder, accessor:Map[String,String], checks:Map[String,mutable.Set[String]], attribute_ordering:List[String], eq:EquivalenceClasses) = {
+    val (encodingMap,attrMap,encodingNames) = eq
+    val visited_attributes = mutable.Set[String]()
+    (0 until attribute_ordering.size).foreach{ i =>
+      val a = attribute_ordering(i)
+      val access = accessor(a)
+      val prev = if(i == 0) "" else attribute_ordering(i-1)
+      if(!visited_attributes.contains(a)){
+        s.println(s"""TrieBlock<${layout}> *${a}_block = ${access};""")
+        visited_attributes += a
+
+        if(checks.contains(prev)){
+          checks(prev).foreach{ check =>
+            if(!visited_attributes.contains(check)){
+              val next = accessor(check)
+              s.println(s"""TrieBlock<${layout}> *${check}_block = ${next};""")
+              visited_attributes += check
+            }
+          }
+        }
+      }
+      if(i != (attribute_ordering.size-1)){
+        s.print("if(" + a + "_block")
+        if(checks.contains(prev)){
+          checks(prev).foreach{check =>
+            s.print(" && ")
+            s.print(s"${check}_block")
+          }
+        }
+        s.println("){")
+      }
+
+      if(i != 0){
+        s.println(s"""${prev}_block->set_block(${prev}_i,${prev}_d,${a}_block);""")
+        if(i != (attribute_ordering.size-1)){
+          val ename = encodingNames(attrMap(a))
+          s.println(s"""${a}_block->init_pointers(tid, &output_buffer, ${ename}_encoding.num_distinct);""")
+          s.println(s"""${a}_block->set.foreach_index([&](uint32_t ${a}_i, uint32_t ${a}_d) {""")
+        }
+      } else 
+        s.println(s"""${a}_block->set.par_foreach_index([&](size_t tid, uint32_t ${a}_i, uint32_t ${a}_d) {""")
+      
+    }
+    (0 until attribute_ordering.size-1).foreach{ i =>
+      s.println("""});}""")
+    }
   }
 
   override def code(s: CodeStringBuilder): Unit = {
@@ -454,6 +497,8 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val attrSelections = emitAndDetectSelections(s,attribute_ordering)
 
     solver.bottom_up(mutable.LinkedHashSet[GHDNode](myghd), myghd, emitNPRR, s, attribute_ordering, attrSelections, aggregate, equivalenceClasses)
+    val (accessor,checks) = solver.top_down(mutable.LinkedHashSet[GHDNode](myghd), mutable.LinkedHashSet(myghd))
+    emitTopDown(s,accessor,checks,attribute_ordering,equivalenceClasses)
   }
 
   override def optimize: Unit = ???

@@ -69,6 +69,67 @@ object GHDSolver {
     val s_in = a_i.map{ i => selections(i._2) }
     fn(s,curr,a_i.map(_._1),selections,aggregate,equivalenceClasses)
   }
+  def top_down(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): (Map[String,String],Map[String,mutable.Set[String]]) = {
+    var depth = 0
+    var frontier = f_in
+    var next_frontier = mutable.Set[GHDNode]()
+
+    var visited_attributes = mutable.Set[String]()
+    var final_accessor = mutable.Map[String,String]()
+    var final_checks = mutable.Map[String,mutable.Set[String]]()
+
+    while(frontier.size != 0){
+      next_frontier.clear
+
+      frontier.foreach{ cur:GHDNode =>
+
+        (0 until cur.attribute_ordering.size).foreach{i =>
+          if(!visited_attributes.contains(cur.attribute_ordering(i))){
+            visited_attributes += cur.attribute_ordering(i)
+            val a1 = cur.attribute_ordering(i)
+            val a2 = cur.name + "_block" + (0 until i).map{s =>
+              "->get_block(" + cur.attribute_ordering(s) + "_d)" 
+            }.mkString("")
+            final_accessor += ((a1,a2))
+          }
+          if((i+1) < cur.attribute_ordering.size){
+            if(!final_checks.contains(cur.attribute_ordering(i))){
+              final_checks += ((cur.attribute_ordering(i),mutable.Set[String]()))
+            }
+            final_checks(cur.attribute_ordering(i)) += cur.attribute_ordering(i+1)
+          }
+        }
+
+        cur.children.foreach{(child:GHDNode) =>
+          var name = ""
+          (0 until 1).foreach{ i =>
+            //can only be first level...past that we have a dependency
+            if((i+1) < child.attribute_ordering.size){
+              if(!final_checks.contains(child.attribute_ordering(i))){
+                final_checks += ((child.attribute_ordering(i),mutable.Set[String]()))
+              }
+              final_checks(child.attribute_ordering(i)) += child.attribute_ordering(i+1)
+            }
+          }
+          if(!seen.contains(child)){
+            seen += child
+            next_frontier += child
+          }
+        }
+      }
+
+      var tmp = frontier
+      frontier = next_frontier
+      next_frontier = tmp
+
+      depth += 1
+    }
+
+    final_accessor.foreach{println}
+    println("FINAL CHECKS")
+    final_checks.foreach{println}
+    (final_accessor.toMap,final_checks.toMap)
+  }
   private def breadth_first(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): Int = {
     var depth = 0
     var frontier = f_in

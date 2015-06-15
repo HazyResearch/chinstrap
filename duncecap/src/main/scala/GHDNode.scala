@@ -30,6 +30,8 @@ class GHDNode(val rels: List[Relation]) {
   var bagFractionalWidth: Double = 0
   var attributeReordering : Option[Map[String, Int]] = None
   final val ATTRIBUTE_NUMBERING_START = 0
+  var name:String = ""
+  var attribute_ordering:List[String] = List ()
 
   override def equals(o: Any) = o match {
     case that: GHDNode => that.rels.equals(rels) && that.children.equals(children)
