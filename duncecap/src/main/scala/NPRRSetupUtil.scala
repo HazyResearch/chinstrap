@@ -45,15 +45,19 @@ object NPRRSetupUtil {
 
       }
       
+      equivalentAttributeSets.foreach{println}
+
       //Merge all equivalent sets with an equivalent attribute
       //Should just be a list of disjoint sets at the end these are our equivalence classes
       var done = false
       while(!done){
         done = true
         var new_set = mutable.Set[mutable.Set[String]]()
-        equivalentAttributeSets.foreach{ a1 =>
+        while(equivalentAttributeSets.size != 0){
+          val a1 = equivalentAttributeSets.head
           var a1_set = mutable.Set[String]()
           a1_set ++= a1
+
           equivalentAttributeSets -= a1
           equivalentAttributeSets.foreach{ a2 =>
             if(a1.intersect(a2).size != 0){
@@ -88,6 +92,7 @@ object NPRRSetupUtil {
         (0 until rel.attrs.size).foreach{i =>
           val ei = e_to_index(attributeToEncoding(rel.attrs(i)))
           val a = (rel.name,i)
+          println(rel.attrs(i))
           val b = (attributeToEncoding(rel.attrs(i)),ei,Environment.getTypes(rel.name)(i))
           if(!e_to_index2.contains(a)){
             e_to_index2 += ( a -> b )

@@ -370,11 +370,11 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
     //Figure out if an attribute is shared amongst relations...ie if we have to do work
     //Ask Kevin how you would write this functionally (seems like a common pattern)
-    var work = 0
-    current.rels.foreach{r1 =>
-      current.rels.foreach{r2 =>
-        if(r1.name != r2.name)
-          work += r1.attrs.intersect(r2.attrs).size
+    var work_to_do = true
+    if(current.rels.size == 1){
+      val r = current.rels.head
+      if(r.attrs == attribute_ordering){
+        work_to_do = false
       }
     }
 
@@ -391,27 +391,26 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     //println("WORK: " + work)
     //if(work != 0){
     println("Running NPRR")
-    current.rels.foreach{r => println(r.name)}
-    s.println(s"""par::reducer<size_t> ${name}_cardinality(0,[](size_t a, size_t b){""")
-    s.println("return a + b;")
-    s.println("});")
     s.println("//////////NPRR")
-    s.println(s"""TrieBlock<${layout}> *${name}_block;""")
-    s.println("{")
-    val firstBlockOfTrie = current.rels.map(( rel: Relation) => ("T" + rel.name + "->head", rel.attrs))
-    emitNPRR(s, true, attribute_ordering, firstBlockOfTrie, attrSelections, aggregate,equivalenceClasses,"","",name,yanna)
-    s.println("}")
-    s.println(s"std::cout << ${name}_cardinality.evaluate(0) << std::endl;")
-    //} 
-    /*
-    else{
-      s.println(s"""TrieBlock<${layout}> ${name} = """)
-      println("NAME: " + name)
+    current.rels.foreach{r => println(r.name)}
+    if(work_to_do){
+      s.println(s"""par::reducer<size_t> ${name}_cardinality(0,[](size_t a, size_t b){""")
+      s.println("return a + b;")
+      s.println("});")
+      s.println(s"""TrieBlock<${layout}> *${name}_block;""")
+      s.println("{")
+      val firstBlockOfTrie = current.rels.map(( rel: Relation) => ("T" + rel.name + "->head", rel.attrs))
+      emitNPRR(s, true, attribute_ordering, firstBlockOfTrie, attrSelections, aggregate,equivalenceClasses,"","",name,yanna)
+      s.println("}")
+      s.println(s"std::cout << ${name}_cardinality.evaluate(0) << std::endl;")
+    } else{
+      val r_name = current.rels.head.name
+      s.println(s"""TrieBlock<${layout}> *${name}_block = (TrieBlock<${layout}>*) T${r_name};""")
     }
-    */
   }
 
   def emitTopDown(s:CodeStringBuilder, accessor:Map[String,String], checks:Map[String,mutable.Set[String]], attribute_ordering:List[String], eq:EquivalenceClasses) = {
+    s.println("///////////////////TOP DOWN")
     val (encodingMap,attrMap,encodingNames) = eq
     val visited_attributes = mutable.Set[String]()
     (0 until attribute_ordering.size).foreach{ i =>
@@ -421,27 +420,26 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       if(!visited_attributes.contains(a)){
         s.println(s"""TrieBlock<${layout}> *${a}_block = ${access};""")
         visited_attributes += a
-
-        if(checks.contains(prev)){
-          checks(prev).foreach{ check =>
-            if(!visited_attributes.contains(check)){
-              val next = accessor(check)
-              s.println(s"""TrieBlock<${layout}> *${check}_block = ${next};""")
-              visited_attributes += check
+      }
+      if(checks.contains(prev)){
+        checks(prev).foreach{ check =>
+          if(!visited_attributes.contains(check)){
+            val next = accessor(check)
+            s.println(s"""TrieBlock<${layout}> *${check}_block = ${next};""")
+            visited_attributes += check
+          }
+        }
+      }
+        s.print("if(" + a + "_block")
+        if(i != (attribute_ordering.size-1) && checks.contains(prev)){
+          checks(prev).foreach{check =>
+            if(check != a){
+              s.print(" && ")
+              s.print(s"${check}_block")
             }
           }
         }
-      }
-      if(i != (attribute_ordering.size-1)){
-        s.print("if(" + a + "_block")
-        if(checks.contains(prev)){
-          checks(prev).foreach{check =>
-            s.print(" && ")
-            s.print(s"${check}_block")
-          }
-        }
         s.println("){")
-      }
 
       if(i != 0){
         s.println(s"""${prev}_block->set_block(${prev}_i,${prev}_d,${a}_block);""")
@@ -455,6 +453,10 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       
     }
     (0 until attribute_ordering.size-1).foreach{ i =>
+      //closes out if
+      if(i == 0)
+        s.println("}")
+      //closes out if and foreach
       s.println("""});}""")
     }
   }
