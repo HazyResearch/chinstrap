@@ -67,7 +67,7 @@ object GHDSolver {
     val bag_attrs = curr.rels.flatMap(r => r.attrs).toList.distinct
     val a_i = attribute_ordering.zipWithIndex.filter(a => bag_attrs.contains(a._1))
     val s_in = a_i.map{ i => selections(i._2) }
-    fn(s,curr,a_i.map(_._1),selections,aggregate,equivalenceClasses)
+    fn(s,curr,a_i.map(_._1),s_in,aggregate,equivalenceClasses)
   }
   def top_down(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): (Map[String,String],Map[String,mutable.Set[String]]) = {
     var depth = 0

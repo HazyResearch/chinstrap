@@ -155,7 +155,29 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.print(" && ")
         emitSelectionCondition(s,i)
       }
-      s.print(";})")
+      s.print(";}")
+    }
+  }
+
+  def emitSetSelection(s: CodeStringBuilder, attr:String, sel:List[ASTCriterion], tid:String, layout:String): Unit = {
+    //FIXME: Implement a filter operation
+    if(sel.size != 0){
+      s.println(s"""uint32_t *ob_${attr} = (uint32_t*) output_buffer.get_next(${tid},${attr}_block->set.cardinality*sizeof(uint32_t));""")
+      s.println(s"""uint8_t *sd_${attr} = output_buffer.get_next(${tid},${attr}_block->set.cardinality*sizeof(uint32_t)); //initialize the memory""")
+      s.println(s""" size_t ob_i_${attr} = 0;""")
+      s.println(s"""${attr}_block->set.foreach([&](uint32_t ${attr}_data){""")
+      s.print(s"""if(""")
+      emitSelectionCondition(s,sel.head)
+      sel.tail.foreach{ i =>
+        s.print(" && ")
+        emitSelectionCondition(s,i)
+      }
+      s.println(")")
+      s.println(s""" ob_${attr}[ob_i_${attr}++] = ${attr}_data;""")
+      s.println("});")
+      s.println(s"""${attr} = Set<${layout}>::from_array(sd_${attr},ob_${attr},ob_i_${attr});""")
+      s.println(s"""output_buffer.roll_back(${tid},${attr}_block->set.cardinality*sizeof(uint32_t));""")
+      s.println(s"""${attr}_block->set= &${attr};""")
     }
   }
 
@@ -164,6 +186,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val encodingName = encodingNames(attrMap(attr))
 
     val relAttrsA = relsAttrs.filter(( rel : (String, List[String])) => rel._2.contains(attr)).unzip._1.distinct
+    println("HER YE SIZE: " + relAttrsA.size)
     val passedUp = yanna.filter{a =>
       a._1 == attr
     }.distinct.map(_._2)
@@ -175,19 +198,24 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     if(prev_a == "")
       tid = "0"
 
+      println("SIZE 2: " + relsAttrsWithAttr.size)
+
     if (relsAttrsWithAttr.size == 1) {
       // no need to emit an intersection
       s.println( s"""Set<${layout}> ${attr} = ${relsAttrsWithAttr.head}->set;""")
       if(!aggregate){
         if(prev_a == ""){
           s.println(s"""${name}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${relsAttrsWithAttr.head});""")
-          s.println(s"""${name}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct);""")      
+          s.println(s"""${name}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct);""")
+          if(prev_a != "")
+            s.println(s"""${prev_t}_block->set_block(${prev_a}_i,${prev_a}_d,${attr}_block);""")      
         }
         else{
           s.println(s"""TrieBlock<${layout}> *${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${relsAttrsWithAttr.head});""")
           s.println(s"""${attr}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct);""")      
         }
       }
+      emitSetSelection(s,attr,sel,tid,layout)    
      } else {
       if(!aggregate){
         if(prev_a == "")
@@ -207,8 +235,9 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       val restOfRelsAttrsWithAttr = relsAttrsWithAttr.tail.tail 
       if(restOfRelsAttrsWithAttr.size != 0)
         s.println(s"""Set<${layout}> ${attr}_tmp(output_buffer.get_next(${tid},alloc_size)); //initialize the memory""")
-      var tmp = false
+      var tmp = true
       restOfRelsAttrsWithAttr.foreach{(rel : String) => 
+        tmp = !tmp
         if(!tmp){
           s.print(s"""${attr}_tmp = *ops::set_intersect(&${attr}_tmp,(const Set<${layout}> *)&${attr},(const Set<${layout}> *)&${rel}->set""")
         }
@@ -343,13 +372,14 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     )
   }
 
-  def emitAndDetectSelections(s:CodeStringBuilder, attribute_ordering:List[String]) : List[List[ASTCriterion]] = {
+  def emitAndDetectSelections(s:CodeStringBuilder, attribute_ordering:List[String], eq:EquivalenceClasses) : List[List[ASTCriterion]] = {
+    val (encodingMap,attrMap,encodingNames) = eq
     attribute_ordering.map((attr: String) => 
       selectCriteria.filter{ sc =>
         (sc.attr1,sc.attr2) match {
           case (a:ASTScalar,b:ASTStringLiteral) => 
             if(a.identifierName == attr){
-              s.print("uint32_t " + attr + "_selection = " + attr + "_encoding.value_to_key.at(") 
+              s.print("uint32_t " + attr + "_selection = " + encodingNames(attrMap(attr)) + "_encoding.value_to_key.at(") 
               b.code(s)
               s.println(");")
               true
@@ -377,16 +407,22 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         work_to_do = false
       }
     }
+    work_to_do |= (attrSelections.map(e => e.size).reduce((a,b) => a + b) != 0)
 
     val name = current.getName(attribute_ordering)
     current.name = name
 
-    val yanna = attribute_ordering.zip( (0 until attribute_ordering.size).map{ i =>
-      val result = name + "_block"
-      result + (0 until i).map{ s =>
-        "->get_block(" + attribute_ordering(s) + "_d)" 
-      }.mkString("")
-    }.toList )
+    val yanna = attribute_ordering.flatMap{ a =>
+      current.children.flatMap{ c =>
+        (0 until c.attribute_ordering.size).filter(c.attribute_ordering(_) == a).map{ i =>
+          val result = c.name + "_block"
+          (a,result + (0 until i).map{ s =>
+            "->get_block(" + c.attribute_ordering(s) + "_d)" 
+          }.mkString(""))
+        }
+      }
+    }
+    work_to_do |= yanna.size != 0
 
     //println("WORK: " + work)
     //if(work != 0){
@@ -462,10 +498,19 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   }
 
   override def code(s: CodeStringBuilder): Unit = {
+    //////////////////////////////////////////////////////////////////////
+    //start solver stuff
+    var relations = rels.map((rel : ASTRelation) => new Relation(rel.attrs, rel.identifierName))
+    val solver = GHDSolver
+    //get minimum GHD's
+    val myghd = solver.getGHD(relations)
+    val attribute_ordering = solver.getAttributeOrdering(myghd)
+    //////////////////////////////////////////////////////////////////////
+
     /**
      * We get a distinct list of them so we can look them up and have a pointer to them
      */
-    val relations = rels.map((rel : ASTRelation) => new Relation(rel.attrs, rel.identifierName))
+    relations = rels.map((rel : ASTRelation) => new Relation(rel.attrs.sortBy(e => attribute_ordering.indexOf(e)), rel.identifierName))
     val distinctRelations = relations.groupBy(_.name).map(_._2.head).toList.sortBy(a => a.name) //distinct
     emitRelationLookupAndCast(s, distinctRelations.map(_.name))
 
@@ -474,14 +519,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
      */
     val equivalenceClasses = buildEncodingEquivalenceClasses(relations)
     emitEncodingForEquivalenceClasses(s, equivalenceClasses, distinctRelations)
-
-    //////////////////////////////////////////////////////////////////////
-    //start solver stuff
-    val solver = GHDSolver
-    //get minimum GHD's
-    val myghd = solver.getGHD(relations)
-    val attribute_ordering = solver.getAttributeOrdering(myghd)
-    //////////////////////////////////////////////////////////////////////
 
     /**
      * emit the trie building
@@ -496,7 +533,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     s.println(s"""allocator::memory<uint8_t> output_buffer(100000000);""")
 
     //Prepare the attributes that will need to be selected on the fly
-    val attrSelections = emitAndDetectSelections(s,attribute_ordering)
+    val attrSelections = emitAndDetectSelections(s,attribute_ordering,equivalenceClasses)
 
     solver.bottom_up(mutable.LinkedHashSet[GHDNode](myghd), myghd, emitNPRR, s, attribute_ordering, attrSelections, aggregate, equivalenceClasses)
     val (accessor,checks) = solver.top_down(mutable.LinkedHashSet[GHDNode](myghd), mutable.LinkedHashSet(myghd))

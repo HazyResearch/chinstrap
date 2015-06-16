@@ -7,7 +7,7 @@ import scala.util.parsing.combinator.RegexParsers
 object DCParser extends RegexParsers {
   
   def identifierName:Parser[String] = """[_\p{L}][_\p{L}\p{Nd}]*""".r
-  def typename:Parser[String] = """uint64_t|string|float""".r // TODO: should I wrap this in another type or just let it be a string?
+  def typename:Parser[String] = """uint64_t|std::string|float""".r // TODO: should I wrap this in another type or just let it be a string?
   def format = """csv|tsv""".r
 
   def typedRelationIdentifier = identifierName ~ (("(" ~> typedAttrList) <~ ")") ^^ {case id~attrs => ASTRelation(id, attrs)}

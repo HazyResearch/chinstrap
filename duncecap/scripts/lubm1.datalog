@@ -1,0 +1,3 @@
+takesCourse(std::string,std::string) <- load("ADD ACTUAL PATH", tsv)
+type(std::string,std::string) <- load("ADD ACTUAL PATH", tsv)
+result(b) <- takesCourse(a,b),type(b,c),a="Univ0Course0",b="GraduateStudent"

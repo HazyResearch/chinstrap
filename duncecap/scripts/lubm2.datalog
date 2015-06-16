@@ -1,0 +1,5 @@
+undegraduateDegreeFrom(std::string,std::string) <- load("ADD ACTUAL PATH", tsv)
+memberOf(std::string,std::string) <- load("ADD ACTUAL PATH", tsv)
+subOrganizationOf(std::string,std::string) <- load("ADD ACTUAL PATH", tsv)
+type(std::string,std::string) <- load("ADD ACTUAL PATH", tsv)
+result(a,b,c) <- memberOf(a,b),subOrganizationOf(b,c),undegraduateDegreeFrom(a,c),type(a,x),type(b,y),type(c,z),x="GraduateStudent",y="Department",z="University"

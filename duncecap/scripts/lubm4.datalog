@@ -1,0 +1,6 @@
+worksFor(std::string,std::string) <- load("ADD ACTUAL PATH", tsv)
+name(std::string,std::string) <- load("ADD ACTUAL PATH", tsv)
+emailAddress(std::string,std::string) <- load("ADD ACTUAL PATH", tsv)
+telephone(std::string,std::string) <- load("ADD ACTUAL PATH", tsv)
+type(std::string,std::string) <- load("ADD ACTUAL PATH", tsv)
+result(a,c,d,e) <- worksFor(a,b),name(a,c),emailAddress(a,d),telephone(a,e),type(a,f),b="Univ0Dept0",f="Professor"

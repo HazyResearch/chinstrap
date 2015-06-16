@@ -1,0 +1,2 @@
+R(uint64_t, uint64_t) <- load("/dfs/scratch0/caberger/datasets/facebook/edgelist/replicated.tsv",tsv)
+RESULT(a,b,c) <- R(a,b),R(b,c),R(a,c),R(d,e),R(e,f),R(d,f),R(a,d)
