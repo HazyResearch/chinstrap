@@ -59,6 +59,7 @@ namespace allocator{
     size_t num_elems;
     std::vector<size_t> indicies;
     std::vector<std::vector<elem<T>>> elements;
+    memory(){}
     memory(size_t num_elems_in){
       num_elems = num_elems_in;
       for(size_t i = 0; i < NUM_THREADS; i++){

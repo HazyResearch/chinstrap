@@ -130,7 +130,7 @@ object GHDSolver {
     final_checks.foreach{println}
     (final_accessor.toMap,final_checks.toMap)
   }
-  private def breadth_first(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): Int = {
+  private def breadth_first(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): (Int,Int) = {
     var depth = 0
     var frontier = f_in
     var next_frontier = mutable.Set[GHDNode]()
@@ -151,13 +151,16 @@ object GHDSolver {
 
       depth += 1
     }
-    return depth
+    return (depth,seen.size)
   }
   def getGHD(distinctRelations:List[Relation]) : GHDNode = {
     val decompositions = getMinFHWDecompositions(distinctRelations) 
     //compute fractional scores
     val ordered_decomp = decompositions.sortBy{ root:GHDNode =>
-      breadth_first(mutable.LinkedHashSet[GHDNode](root),mutable.LinkedHashSet[GHDNode](root))
+      val tup = breadth_first(mutable.LinkedHashSet[GHDNode](root),mutable.LinkedHashSet[GHDNode](root))
+      root.depth = tup._1
+      root.num_bags = tup._2
+      root.depth
     }
     //pull out lowest depth FHWS 
     val myghd = ordered_decomp.head

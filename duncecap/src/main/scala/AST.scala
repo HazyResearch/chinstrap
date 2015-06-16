@@ -529,8 +529,11 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
      * Emit the buffers that we will do intersections for each attr in
      */
     var aggregate = false;
-    //FIXME
-    s.println(s"""allocator::memory<uint8_t> output_buffer(100000000);""")
+    val (e_to_index2,attributeToEncoding,encodingIDToName) = equivalenceClasses
+    val size_string = encodingIDToName.head._2 + "_encoding.num_distinct" + encodingIDToName.tail.map{ e =>
+      s"""+${e._2}_encoding.num_distinct"""
+    }.mkString("")
+    s.println(s"""allocator::memory<uint8_t> output_buffer(${myghd.num_bags}*${attribute_ordering.size}*sizeof(uint64_t)*(${size_string}));""")
 
     //Prepare the attributes that will need to be selected on the fly
     val attrSelections = emitAndDetectSelections(s,attribute_ordering,equivalenceClasses)
