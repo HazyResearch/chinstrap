@@ -1,3 +1,3 @@
-takesCourse(std::string,std::string) <- load("ADD ACTUAL PATH", tsv)
-type(std::string,std::string) <- load("ADD ACTUAL PATH", tsv)
-result(b) <- takesCourse(a,b),type(b,c),a="Univ0Course0",b="GraduateStudent"
+takesCourse(std::string,std::string) <- load("/dfs/scratch0/caberger/systems/chinstrap/duncecap/takesCourse.txt", tsv)
+type(std::string,std::string) <- load("/dfs/scratch0/caberger/systems/chinstrap/duncecap/type.txt", tsv)
+result(a,b,c) <- takesCourse(a,b),type(a,c),b="Univ0Course0",c="GraduateStudent"

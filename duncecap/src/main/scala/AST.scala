@@ -93,6 +93,7 @@ case class ASTLoadFileStatement(rel : ASTRelation, filename : ASTStringLiteral, 
 
 case class ASTAssignStatement(identifier : ASTIdentifier, expression : ASTExpression) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
+    println("ASSIGN")
     expression.code(s)
   }
 
@@ -162,10 +163,10 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   def emitSetSelection(s: CodeStringBuilder, attr:String, sel:List[ASTCriterion], tid:String, layout:String): Unit = {
     //FIXME: Implement a filter operation
     if(sel.size != 0){
-      s.println(s"""uint32_t *ob_${attr} = (uint32_t*) output_buffer.get_next(${tid},${attr}_block->set.cardinality*sizeof(uint32_t));""")
       s.println(s"""uint8_t *sd_${attr} = output_buffer.get_next(${tid},${attr}_block->set.cardinality*sizeof(uint32_t)); //initialize the memory""")
+      s.println(s"""uint32_t *ob_${attr} = (uint32_t*) output_buffer.get_next(${tid},${attr}_block->set.cardinality*sizeof(uint32_t));""")
       s.println(s""" size_t ob_i_${attr} = 0;""")
-      s.println(s"""${attr}_block->set.foreach([&](uint32_t ${attr}_data){""")
+      s.println(s"""${attr}.foreach([&](uint32_t ${attr}_data){""")
       s.print(s"""if(""")
       emitSelectionCondition(s,sel.head)
       sel.tail.foreach{ i =>
@@ -206,22 +207,25 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       if(!aggregate){
         if(prev_a == ""){
           s.println(s"""${name}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${relsAttrsWithAttr.head});""")
-          s.println(s"""${name}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct);""")
+          emitSetSelection(s,attr,sel,tid,layout)
+          //s.println(s"""${name}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct);""")
           if(prev_a != "")
             s.println(s"""${prev_t}_block->set_block(${prev_a}_i,${prev_a}_d,${attr}_block);""")      
         }
         else{
           s.println(s"""TrieBlock<${layout}> *${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${relsAttrsWithAttr.head});""")
-          s.println(s"""${attr}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct);""")      
+          emitSetSelection(s,attr,sel,tid,layout)    
+          s.println(s"""${attr}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct,${attr}.type == type::UINTEGER);""")      
+          if(prev_a != "")
+            s.println(s"""${prev_t}_block->set_block(${prev_a}_i,${prev_a}_d,${attr}_block);""")  
         }
       }
-      emitSetSelection(s,attr,sel,tid,layout)    
      } else {
       if(!aggregate){
         if(prev_a == "")
-          s.println(s"""${name}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(true);""")
+          s.println(s"""${name}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>();""")
         else
-          s.println(s"""TrieBlock<${layout}> *${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(true);""")
+          s.println(s"""TrieBlock<${layout}> *${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>();""")
       }
       s.println(s"""const size_t alloc_size = sizeof(uint64_t)*${encodingName}_encoding.num_distinct*2;""")
       s.println(s"""Set<${layout}> ${attr}(output_buffer.get_next(${tid},alloc_size)); //initialize the memory""")
@@ -258,12 +262,12 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       s.println(s"""output_buffer.roll_back(${tid},alloc_size - ${attr}.number_of_bytes);""")
       if(!aggregate){
         if(prev_a != ""){
-          s.println(s"""${attr}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct);""")
+          s.println(s"""${attr}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct,${attr}.type == type::UINTEGER);""")
           s.println(s"""${attr}_block->set= &${attr};""")
           s.println(s"""${prev_t}_block->set_block(${prev_a}_i,${prev_a}_d,${attr}_block);""")      
         }
         else{
-          s.println(s"""${name}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct);""")
+          s.println(s"""${name}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct,${attr}.type == type::UINTEGER);""")
           s.println(s"""${name}_block->set= &${attr};""")
         }
       }
@@ -447,6 +451,11 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
   def emitTopDown(s:CodeStringBuilder, accessor:Map[String,String], checks:Map[String,mutable.Set[String]], attribute_ordering:List[String], eq:EquivalenceClasses) = {
     s.println("///////////////////TOP DOWN")
+    //FIXME ADD A REAL OUTPUT TRIE
+    s.println(s"""par::reducer<size_t> result_cardinality(0,[](size_t a, size_t b){""")
+    s.println("return a + b;")
+    s.println("});")
+
     val (encodingMap,attrMap,encodingNames) = eq
     val visited_attributes = mutable.Set[String]()
     (0 until attribute_ordering.size).foreach{ i =>
@@ -481,8 +490,12 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.println(s"""${prev}_block->set_block(${prev}_i,${prev}_d,${a}_block);""")
         if(i != (attribute_ordering.size-1)){
           val ename = encodingNames(attrMap(a))
-          s.println(s"""${a}_block->init_pointers(tid, &output_buffer, ${ename}_encoding.num_distinct);""")
+          s.println(s"""${a}_block->init_pointers(tid, &output_buffer, ${ename}_encoding.num_distinct,${a}_block->set.type == type::UINTEGER);""")
           s.println(s"""${a}_block->set.foreach_index([&](uint32_t ${a}_i, uint32_t ${a}_d) {""")
+        } else{
+          //FIXME ADD A REAL TRIE OUTPUT NAME
+          s.println(s"""const size_t count = ${a}_block->set.cardinality;""")
+          s.println(s"""result_cardinality.update(tid,count);""")
         }
       } else 
         s.println(s"""${a}_block->set.par_foreach_index([&](size_t tid, uint32_t ${a}_i, uint32_t ${a}_d) {""")
@@ -495,6 +508,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       //closes out if and foreach
       s.println("""});}""")
     }
+    s.println(s"std::cout << result_cardinality.evaluate(0) << std::endl;")
   }
 
   override def code(s: CodeStringBuilder): Unit = {

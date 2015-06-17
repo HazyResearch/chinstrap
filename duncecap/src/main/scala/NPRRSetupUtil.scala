@@ -45,6 +45,7 @@ object NPRRSetupUtil {
 
       }
       
+      println("EQUIV ATTRIBUTES")
       equivalentAttributeSets.foreach{println}
 
       //Merge all equivalent sets with an equivalent attribute
@@ -71,10 +72,13 @@ object NPRRSetupUtil {
         equivalentAttributeSets = new_set
       }
 
+      println("EQUIV ATTRIBUTES")
+      equivalentAttributeSets.foreach{println}
+
       //maps each attribute to an encoding ID
       var attributeToEncoding = mutable.Map[String,Int]()
       equivalentAttributeSets.foreach{ mys =>
-        var index = 0
+        var index = attributeToEncoding.size
         mys.toList.sorted.foreach{ a =>
           attributeToEncoding += (a -> index)
         }
