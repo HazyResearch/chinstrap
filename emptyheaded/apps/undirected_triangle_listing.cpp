@@ -42,15 +42,12 @@ struct undirected_triangle_listing: public application<T> {
     //encoding each level in the Trie should map to.
     
     auto bt = debug::start_clock();
-    std::vector<size_t> *ranges_ab = new std::vector<size_t>();
     std::vector<Column<uint32_t>> *ER_ab = new std::vector<Column<uint32_t>>();
     ER_ab->push_back(a_encoding->encoded.at(0)); //perform filter, selection
-    ranges_ab->push_back(a_encoding->num_distinct);
     ER_ab->push_back(a_encoding->encoded.at(1));
-    ranges_ab->push_back(a_encoding->num_distinct);
 
     //add some sort of lambda to do selections 
-    Trie<T> *TR_ab = Trie<T>::build(ER_ab,ranges_ab,[&](size_t index){
+    Trie<T> *TR_ab = Trie<T>::build(ER_ab,[&](size_t index){
       return ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
     });
     
@@ -69,7 +66,7 @@ struct undirected_triangle_listing: public application<T> {
     const TrieBlock<T> H = *TR_ab->head;
     const Set<T> A = H.set;
     TrieBlock<T>* a_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T>))) TrieBlock<T>(H);
-    a_block->init_pointers(0,&output_buffer,A.cardinality,TR_ab->ranges->at(0),false); 
+    a_block->init_pointers(0,&output_buffer,A.cardinality,a_encoding->num_distinct,false); 
 
     par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
       return a + b;
@@ -85,7 +82,7 @@ struct undirected_triangle_listing: public application<T> {
 
       //build output B block
       TrieBlock<T>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
-      const size_t alloc_size = sizeof(uint64_t)*TR_ab->ranges->at(0)*2;
+      const size_t alloc_size = sizeof(uint64_t)*a_encoding->num_distinct*2;
 
       Set<T> B(output_buffer.get_next(tid, alloc_size));
 
@@ -94,7 +91,7 @@ struct undirected_triangle_listing: public application<T> {
       t_intersection += debug::stop_clock(it);
 
       output_buffer.roll_back(tid, alloc_size - b_block->set.number_of_bytes);
-      b_block->init_pointers(tid, &output_buffer, b_block->set.cardinality,TR_ab->ranges->at(1),true); //find out the range of level 1
+      b_block->init_pointers(tid, &output_buffer, b_block->set.cardinality,a_encoding->num_distinct,true); //find out the range of level 1
 
       //Set a block pointer to new b block
       a_block->set_block(a_d,a_d,b_block); 

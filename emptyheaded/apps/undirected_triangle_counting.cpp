@@ -43,15 +43,11 @@ struct undirected_triangle_counting: public application<T> {
     
     auto bt = debug::start_clock();
     std::vector<Column<uint32_t>> *ER_ab = new std::vector<Column<uint32_t>>();
-    std::vector<size_t> *ranges_ab = new std::vector<size_t>();
-
     ER_ab->push_back(a_encoding->encoded.at(0)); //perform filter, selection
-    ranges_ab->push_back(a_encoding->num_distinct);
     ER_ab->push_back(a_encoding->encoded.at(1));
-    ranges_ab->push_back(a_encoding->num_distinct);
 
     //add some sort of lambda to do selections 
-    Trie<T> *TR_ab = Trie<T>::build(ER_ab,ranges_ab,[&](size_t index){
+    Trie<T> *TR_ab = Trie<T>::build(ER_ab,[&](size_t index){
       return ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
     });
     
