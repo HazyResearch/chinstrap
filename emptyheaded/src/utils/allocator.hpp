@@ -85,8 +85,9 @@ namespace allocator{
     inline T* get_next(size_t tid, size_t num){
       T* val = elements.at(tid).at(indicies.at(tid)).get_next(num);
       if(val == NULL){
-        while(num > num_elems)
-          num_elems *= multplier;
+        while(num > num_elems){
+          num_elems = (num_elems+1)*multplier;
+        }
 
         std::cout << "Allocating more memory: try a larger allocation size for better performance." << std::endl;
         assert(num < num_elems);
@@ -100,8 +101,9 @@ namespace allocator{
     inline T* get_next(size_t tid, size_t num, size_t align){
       T* val = elements.at(tid).at(indicies.at(tid)).get_next(num,align);
       if(val == NULL){
-        while((num+align) > num_elems)
-          num_elems = num_elems*multplier;
+        while((num+align) > num_elems){
+          num_elems = (num_elems+1)*multplier;
+        }
 
         std::cout << "Allocating more memory: try a larger allocation size for better performance." << std::endl;
         assert(num < num_elems);

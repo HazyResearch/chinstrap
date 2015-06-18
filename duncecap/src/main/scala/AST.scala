@@ -424,6 +424,20 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     )
   }
 
+  def emitResultTrie(s:CodeStringBuilder, identifierName:String, blockName:String, attribute_ordering:List[String], eq:EquivalenceClasses) : Unit = {
+    val (encodingMap,attrMap,encodingNames,attributeToType) = eq
+    s.println(s"""Trie<${layout}> *T${identifierName} = new Trie<${layout}>(${blockName}_block);""")
+    s.println(s"""tries["${identifierName}"] = T${identifierName};""")
+    s.println(s"""std::vector<void*> *encodings_${identifierName} = new std::vector<void*>();""")
+    attribute_ordering.foreach{a =>
+      val ename = encodingNames(attrMap(a))
+      s.println(s"""encodings_${identifierName}->push_back(${ename}_encoding);""")
+    }
+    s.println(s"""encodings["${identifierName}"] =  encodings_${identifierName};""")
+    val newTypes = attribute_ordering.map(attributeToType(_))
+    Environment.addRelationBinding(lhs.identifierName,newTypes)
+  }
+
   def emitNPRR(s:CodeStringBuilder, current:GHDNode, attribute_ordering:List[String], attrSelections:List[List[ASTCriterion]], aggregate:Boolean, equivalenceClasses:EquivalenceClasses) : Unit = {
     println("Bag ordering")
     current.attribute_ordering = attribute_ordering
@@ -479,8 +493,9 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   }
 
   def emitTopDown(s:CodeStringBuilder, accessor:Map[String,String], checks:Map[String,mutable.Set[String]], attribute_ordering:List[String], eq:EquivalenceClasses) = {
-    s.println("///////////////////TOP DOWN")
     val lhs_name = lhs.getName()
+    val (encodingMap,attrMap,encodingNames,attributeToType) = eq
+    s.println("///////////////////TOP DOWN")
     //FIXME ADD A REAL OUTPUT TRIE
     s.println(s"""par::reducer<size_t> ${lhs_name}_cardinality(0,[](size_t a, size_t b){""")
     s.println("return a + b;")
@@ -488,7 +503,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     s.println(s"""TrieBlock<${layout}> *${lhs_name}_block;""")
 
     s.println("{")
-    val (encodingMap,attrMap,encodingNames,attributeToType) = eq
     val visited_attributes = mutable.Set[String]()
     (0 until attribute_ordering.size).foreach{ i =>
       val a = attribute_ordering(i)
@@ -545,19 +559,9 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       //closes out if and foreach
       s.println("""});}""")
     }
-    s.println(s"""Trie<${layout}> *T${lhs.identifierName} = new Trie<${layout}>(${lhs_name}_block);""")
-    s.println(s"""tries["${lhs.identifierName}"] = T${lhs.identifierName};""")
-    s.println(s"""std::vector<void*> *encodings_${lhs.identifierName} = new std::vector<void*>();""")
-    attribute_ordering.foreach{a =>
-      val ename = encodingNames(attrMap(a))
-      s.println(s"""encodings_${lhs.identifierName}->push_back(${ename}_encoding);""")
-    }
-    s.println(s"""encodings["${lhs.identifierName}"] =  encodings_${lhs.identifierName};""")
+    emitResultTrie(s, lhs.identifierName, lhs_name, attribute_ordering, eq)
     s.println("}")
     s.println(s"std::cout << ${lhs_name}_cardinality.evaluate(0) << std::endl;")
-
-    val newTypes = attribute_ordering.map(attributeToType(_))
-    Environment.addRelationBinding(lhs.identifierName,newTypes)
   }
 
   override def code(s: CodeStringBuilder): Unit = {
@@ -602,8 +606,13 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val attrSelections = emitAndDetectSelections(s,attribute_ordering,equivalenceClasses)
 
     solver.bottom_up(mutable.LinkedHashSet[GHDNode](myghd), myghd, emitNPRR, s, attribute_ordering, attrSelections, aggregate, equivalenceClasses)
-    val (accessor,checks) = solver.top_down(mutable.LinkedHashSet[GHDNode](myghd), mutable.LinkedHashSet(myghd))
-    emitTopDown(s,accessor,checks,attribute_ordering,equivalenceClasses)
+    if(myghd.children.size != 0){
+      val (accessor,checks) = solver.top_down(mutable.LinkedHashSet[GHDNode](myghd), mutable.LinkedHashSet(myghd))
+      emitTopDown(s,accessor,checks,attribute_ordering,equivalenceClasses) 
+    } else{
+      emitResultTrie(s, lhs.identifierName, myghd.name, myghd.attribute_ordering, equivalenceClasses)
+    }
+
   }
 
   override def optimize: Unit = ???

@@ -1,4 +1,3 @@
-R(a:uint64_t, b:uint64_t) <- load("data/small.txt", tsv)
-S(b:uint64_t, c:uint64_t) <- load("data/small.txt", tsv)
-T(a:uint64_t, c:uint64_t) <- load("data/small.txt", tsv)
-U(a,b,c) <- R(a,b),S(b,c),T(a,c)
+R(uint64_t,uint64_t) <- load("data/1_triangle.txt", tsv)
+U(a,b,c) <- R(a,b),R(b,c),R(a,c)
+print U(a,b,c)

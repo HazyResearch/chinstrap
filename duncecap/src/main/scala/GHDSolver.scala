@@ -134,6 +134,7 @@ object GHDSolver {
     var depth = 0
     var frontier = f_in
     var next_frontier = mutable.Set[GHDNode]()
+    println("SEEN SEEN SEEN SEEN: " + seen.size)
     while(frontier.size != 0){
       next_frontier.clear
       frontier.foreach{ cur:GHDNode =>
@@ -159,11 +160,13 @@ object GHDSolver {
     val ordered_decomp = decompositions.sortBy{ root:GHDNode =>
       val tup = breadth_first(mutable.LinkedHashSet[GHDNode](root),mutable.LinkedHashSet[GHDNode](root))
       root.depth = tup._1
-      root.num_bags = tup._2
       root.depth
     }
+
     //pull out lowest depth FHWS 
     val myghd = ordered_decomp.head
+    myghd.num_bags = breadth_first(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd))._2
+    assert(myghd.num_bags != 0)
     val fhws = myghd.fractionalScoreTree()
     print(myghd, "query_plan_" + fhws + ".json")
     return myghd
