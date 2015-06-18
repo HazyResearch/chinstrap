@@ -23,16 +23,14 @@ struct SortColumns{
 
 template<class T>
 struct Trie{
-  std::vector<size_t> *ranges; //indexed by level
   TrieBlock<T> *head;
 
-  Trie<T>(TrieBlock<T> *head_in, std::vector<size_t> *ranges_in){
+  Trie<T>(TrieBlock<T> *head_in){
     head = head_in;
-    ranges = ranges_in;
   };
 
   template<typename F>
-  static Trie<T>* build(std::vector<Column<uint32_t>> *attr_in, std::vector<size_t> *ranges_in, F f);
+  static Trie<T>* build(std::vector<Column<uint32_t>> *attr_in, F f);
 };
 
 size_t produce_ranges(size_t start, size_t end, 
@@ -120,7 +118,7 @@ void recursive_build(const size_t index, const size_t start, const size_t end, c
 }
 
 template<class T> template <typename F>
-inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, std::vector<size_t> *ranges_in, F f){
+inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
   const size_t num_levels = attr_in->size();
   const size_t num_rows = attr_in->at(0).size();
 
@@ -187,6 +185,6 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, std::vect
   //should be a 1-1 between pointers in block and next ranges
   //also a 1-1 between blocks and numbers of next ranges
 
-  return new Trie(new_head,ranges_in);
+  return new Trie(new_head);
 }
 #endif

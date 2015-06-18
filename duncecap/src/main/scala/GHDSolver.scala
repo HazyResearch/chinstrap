@@ -4,7 +4,7 @@ import scala.collection.mutable
 import java.io.{FileWriter, BufferedWriter, File}
 
 object GHDSolver {
-  type EquivalenceClasses = (Map[(String,Int),(Int,Int,String)],Map[String,Int],Map[Int,String])
+  type EquivalenceClasses = (Map[(String,Int),(Int,Int,String)],Map[String,Int],Map[Int,String],Map[String,String])
 
   def getAttrSet(rels: List[Relation]): Set[String] = {
     return rels.foldLeft(Set[String]())(

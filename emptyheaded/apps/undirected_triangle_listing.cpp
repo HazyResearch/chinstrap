@@ -69,7 +69,7 @@ struct undirected_triangle_listing: public application<T> {
     const TrieBlock<T> H = *TR_ab->head;
     const Set<T> A = H.set;
     TrieBlock<T>* a_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T>))) TrieBlock<T>(H);
-    a_block->init_pointers(0,&output_buffer,TR_ab->ranges->at(0),false); 
+    a_block->init_pointers(0,&output_buffer,A.cardinality,TR_ab->ranges->at(0),false); 
 
     par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
       return a + b;
@@ -94,7 +94,7 @@ struct undirected_triangle_listing: public application<T> {
       t_intersection += debug::stop_clock(it);
 
       output_buffer.roll_back(tid, alloc_size - b_block->set.number_of_bytes);
-      b_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1),true); //find out the range of level 1
+      b_block->init_pointers(tid, &output_buffer, b_block->set.cardinality,TR_ab->ranges->at(1),true); //find out the range of level 1
 
       //Set a block pointer to new b block
       a_block->set_block(a_d,a_d,b_block); 

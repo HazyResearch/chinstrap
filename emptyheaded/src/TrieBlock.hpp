@@ -20,12 +20,12 @@ struct TrieBlock{
     is_sparse = sparse;
   }
 
-  void init_pointers(size_t tid, allocator::memory<uint8_t> *allocator_in, const size_t range, const bool is_sparse_in){
+  void init_pointers(size_t tid, allocator::memory<uint8_t> *allocator_in, const size_t cardinality, const size_t range, const bool is_sparse_in){
     is_sparse = is_sparse_in;
     if(!is_sparse){
       next_level = (TrieBlock<T>**)allocator_in->get_next(tid, sizeof(TrieBlock<T>*)*range);
     } else{
-      next_level = (TrieBlock<T>**)allocator_in->get_next(tid, sizeof(TrieBlock<T>*)*set.cardinality);
+      next_level = (TrieBlock<T>**) allocator_in->get_next(tid, sizeof(TrieBlock<T>*)*cardinality);
     }
   }
 

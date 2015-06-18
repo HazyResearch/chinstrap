@@ -63,7 +63,7 @@ object DCParser extends RegexParsers {
   def neqSelect = expression ~ ("!=" ~> expression) ^^ {case e1~e2 => ASTNeq(e1, e2)}
 
   def assignStatement = identifier ~ ("<-" ~> expression) ^^ { case id~e => ASTAssignStatement(id, e) }
-  def printStatement = "print" ~> expression ^^ {case e => ASTPrintStatement(e)}
+  def printStatement = "print" ~> relationIdentifier ^^ {case e => ASTPrintStatement(e)}
   def statement = loadStatement | assignStatement | printStatement
   def statements = rep(statement) ^^ {case list => new ASTStatements(list)}
 }

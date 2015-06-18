@@ -8,13 +8,14 @@ object NPRRSetupUtil {
   type RIndex = Int
   type Column = (RName, RIndex)
   type EM = Map[(String,Int),(Int,Int,String)]
-  type EquivalenceClasses = (Map[(String,Int),(Int,Int,String)],Map[String,Int],Map[Int,String])
+  type EquivalenceClasses = (Map[(String,Int),(Int,Int,String)],Map[String,Int],Map[Int,String],Map[String,String])
 
   def buildEncodingEquivalenceClasses(relations : Relations): EquivalenceClasses = {
       /**
      * Figures out aliases amongst relations and attributes, sets up for encoding
      * Code is absolutely horrible
      */
+     var attributeToType = mutable.Map[String,String]()
      var equivalentAttributeSets = mutable.Set[mutable.Set[String]]()
      relations.groupBy(r => r.name).foreach{ grp =>
         //stores the index of matching attributes
@@ -25,8 +26,11 @@ object NPRRSetupUtil {
         //build r & s (could probably be written functionally)
         //group by index and group by attribute name
         grp._2.foreach{rel =>
+          val types = Environment.getTypes(rel.name)
           (0 until rel.attrs.size).toList.map{ i:Int =>
             val a = rel.attrs(i)
+            if(!attributeToType.contains(a))
+              attributeToType += (a -> types(i))
             if(!r.contains(i))
               r += (i -> mutable.Set[String]())
             if(!s.contains(a))
@@ -112,6 +116,6 @@ object NPRRSetupUtil {
       println("Relations to Index")
       e_to_index2.foreach{println}
 
-      (e_to_index2.toMap,attributeToEncoding.toMap,encodingIDToName.toMap)    
+      (e_to_index2.toMap,attributeToEncoding.toMap,encodingIDToName.toMap,attributeToType.toMap)    
   }
 }

@@ -39,6 +39,7 @@ object QueryCompiler extends App {
         val bw = new BufferedWriter(new FileWriter(file))
         bw.write(codeStringBuilder.toString)
         bw.close()
+        s"""clang-format -i ${file}""" !
 
         sys.process.Process(Seq("make", "clean"), new File("../emptyheaded")).!
         val result = sys.process.Process(Seq("make", s"""bin/${outputFilename}"""), new File("../emptyheaded")).!

@@ -6,13 +6,14 @@ import scala.collection.mutable
  * All code generation should start from this object:
  */
 object CodeGen {
+  val layout = "hybrid"
 
   /**
    * This following method will get called in both compiler and repl mode
    */
   def emitHeaderAndCodeForAST(s: CodeStringBuilder, root: ASTNode) = {
     s.println("#include \"emptyheaded.hpp\"")
-    s.println("extern \"C\" void run(std::unordered_map<std::string, void*>& relations) {")
+    s.println(s"""extern \"C\" void run(std::unordered_map<std::string, void*>& relations, std::unordered_map<std::string, Trie<${layout}>*> tries, std::unordered_map<std::string, std::vector<void*>*> encodings) {""")
     root.code(s)
     s.println("}")
   }
@@ -23,7 +24,9 @@ object CodeGen {
   def emitMainMethod(s : CodeStringBuilder): Unit = {
     s.println("int main() {")
     s.println("std::unordered_map<std::string, void*> relations;")
-    s.println("run(relations);")
+    s.println(s"std::unordered_map<std::string, Trie<${layout}>*> tries;")
+    s.println(s"std::unordered_map<std::string, std::vector<void*>*> encodings;")
+    s.println("run(relations,tries,encodings);")
     s.println("}")
   }
 }
@@ -39,7 +42,7 @@ object CodeGen {
  * Since ASTStatements can have side effects, these have an updateEnvironment method.
  */
 abstract trait ASTNode {
-  val layout = "hybrid"
+  val layout = CodeGen.layout
   def code(s: CodeStringBuilder)
   def optimize
 }
@@ -80,7 +83,6 @@ case class ASTLoadFileStatement(rel : ASTRelation, filename : ASTStringLiteral, 
 
     // make sure to add the relation and encoding we've just made to the maps the server keeps track of
     s.println(s"""relations["${rel.identifierName}"] = ${rel.identifierName};""")
-
     s.println(s"""std::cout << ${rel.identifierName}->num_rows << " rows loaded." << std::endl;""")
   }
 
@@ -94,21 +96,45 @@ case class ASTLoadFileStatement(rel : ASTRelation, filename : ASTStringLiteral, 
 case class ASTAssignStatement(identifier : ASTIdentifier, expression : ASTExpression) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     println("ASSIGN")
+    //FIXME: this is a hack
+    (identifier,expression) match {
+      case (a:ASTRelation,b:ASTJoinAndSelect) => {
+        b.lhs = a
+      }
+    }
     expression.code(s)
   }
 
   override def optimize: Unit = ???
 }
 
-case class ASTPrintStatement(expression : ASTExpression) extends ASTNode with ASTStatement {
+case class ASTPrintStatement(r : ASTRelation) extends ASTNode with ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
-    expression match {
-      case ASTScalar(identifierName) => {
-        val typeString = Environment.getTypes(identifierName).mkString(", ")
-        s.println(s"""Relation<${typeString}> * ${identifierName}= (Relation<${typeString}> *)relations["${identifierName}"];""")
-        s.println(s"""std::cout << "${identifierName} has " << ${identifierName}->num_rows << " rows loaded." << std::endl;""")
+    s.println(s"""Trie<${layout}> *T${r.identifierName} = tries["${r.identifierName}"] ;""")
+    s.println(s"""std::vector<void*> *encodings_${r.identifierName} = encodings["${r.identifierName}"] ;""")
+
+    val name = r.getName()
+    val types = Environment.getTypes(r.identifierName)
+    (0 until r.attrs.size).foreach{i =>
+      val name_string = s"T${r.identifierName}->head" + (0 until i).map{i2 =>
+        val a = r.attrs(i2)
+        s"->get_block(${a}_d)"
+      }.mkString("")
+      s.println(s"""${name_string}->set.foreach_index([&](uint32_t ${r.attrs(i)}_i, uint32_t ${r.attrs(i)}_d){""")
+      s.println(s"""(void) ${r.attrs(i)}_i;""")
+      if(i == (r.attrs.size-1)){
+        s.print("""std::cout """)
+        (0 until r.attrs.size).foreach{i2 =>
+          val a = r.attrs(i2)
+          s.print(s""" << ((Encoding<${types(i2)}>*)encodings_${r.identifierName}->at(${i2}))->key_to_value[${a}_d]""")
+          if(i2 != r.attrs.size-1)
+            s.print("""<< "\t" """)
+        }
+        s.println(""" << std::endl; """)
       }
-      case _ => println(expression)
+    }
+    (0 until (r.attrs.size)).foreach{ i =>
+      s.println("""});""")
     }
   }
 
@@ -123,7 +149,8 @@ case class ASTCount(expression : ASTExpression) extends ASTExpression {
 }
 
 case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTCriterion]) extends ASTExpression {
-
+  //FIXME: should re-factor how this is put in 
+  var lhs:ASTRelation = ASTRelation("",List())
   import NPRRSetupUtil._
 
   private def emitRelationLookupAndCast(s: CodeStringBuilder, rels : List[String]) = {
@@ -183,7 +210,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   }
 
   private def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, sel: List[ASTCriterion], relsAttrs :  List[(String, List[String])], aggregate:Boolean, equivalenceClasses:EquivalenceClasses, prev_a:String, prev_t:String, name:String, yanna:List[(String, String)]) : List[(String, List[String])]= {
-    val (encodingMap,attrMap,encodingNames) = equivalenceClasses
+    val (encodingMap,attrMap,encodingNames,attributeToType) = equivalenceClasses
     val encodingName = encodingNames(attrMap(attr))
 
     val relAttrsA = relsAttrs.filter(( rel : (String, List[String])) => rel._2.contains(attr)).unzip._1.distinct
@@ -215,7 +242,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         else{
           s.println(s"""TrieBlock<${layout}> *${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${relsAttrsWithAttr.head});""")
           emitSetSelection(s,attr,sel,tid,layout)    
-          s.println(s"""${attr}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct,${attr}.type == type::UINTEGER);""")      
+          s.println(s"""${attr}_block->init_pointers(${tid},&output_buffer,${attr}.cardinality,${encodingName}_encoding->num_distinct,${attr}.type == type::UINTEGER);""")      
           if(prev_a != "")
             s.println(s"""${prev_t}_block->set_block(${prev_a}_i,${prev_a}_d,${attr}_block);""")  
         }
@@ -227,7 +254,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         else
           s.println(s"""TrieBlock<${layout}> *${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>();""")
       }
-      s.println(s"""const size_t alloc_size = sizeof(uint64_t)*${encodingName}_encoding.num_distinct*2;""")
+      s.println(s"""const size_t alloc_size = sizeof(uint64_t)*${encodingName}_encoding->num_distinct*2;""")
       s.println(s"""Set<${layout}> ${attr}(output_buffer.get_next(${tid},alloc_size)); //initialize the memory""")
       s.print(s"""${attr} = *ops::set_intersect(&${attr},(const Set<${layout}> *)&${relsAttrsWithAttr.head}->set,(const Set<${layout}> *)&${relsAttrsWithAttr.tail.head}->set""")
 
@@ -262,13 +289,13 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       s.println(s"""output_buffer.roll_back(${tid},alloc_size - ${attr}.number_of_bytes);""")
       if(!aggregate){
         if(prev_a != ""){
-          s.println(s"""${attr}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct,${attr}.type == type::UINTEGER);""")
           s.println(s"""${attr}_block->set= &${attr};""")
+          s.println(s"""${attr}_block->init_pointers(${tid},&output_buffer,${attr}.cardinality,${encodingName}_encoding->num_distinct,${attr}.type == type::UINTEGER);""")
           s.println(s"""${prev_t}_block->set_block(${prev_a}_i,${prev_a}_d,${attr}_block);""")      
         }
         else{
-          s.println(s"""${name}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct,${attr}.type == type::UINTEGER);""")
           s.println(s"""${name}_block->set= &${attr};""")
+          s.println(s"""${name}_block->init_pointers(${tid},&output_buffer,${attr}.cardinality,${encodingName}_encoding->num_distinct,${attr}.type == type::UINTEGER);""")
         }
       }
     }
@@ -330,24 +357,24 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   }
 
   private def emitBuildEncodingForAttr(s: CodeStringBuilder,  attr : String, attrType: String) = {
-    s.println(s"""Encoding<${attrType}> ${attr}_encoding(${attr}_attributes); // TODO heap allocate""")
+    s.println(s"""Encoding<${attrType}> *${attr}_encoding = new Encoding<${attrType}>(${attr}_attributes);""")
   }
 
   private def emitEncodingRelations(s:CodeStringBuilder, rel:Relation, encodingMap:EM, encodingNames:Map[Int,String]) = {
     s.println(s"""std::vector<Column<uint32_t>> *E${rel.name} = new std::vector<Column<uint32_t>>();""")
-    s.println(s"""std::vector<size_t> *ranges_${rel.name} = new std::vector<size_t>();""")
+    s.println(s"""std::vector<void *> *encodings_${rel.name} = new std::vector<void*>();""")
 
     (0 until rel.attrs.size).toList.foreach{ i =>
       val eID = encodingMap((rel.name,i))
       val e_name = encodingNames(eID._1)
       val e_index = eID._2
-      s.println(s"""E${rel.name}->push_back(${e_name}_encoding.encoded.at(${e_index}));""")
-      s.println(s"""ranges_${rel.name}->push_back(${e_name}_encoding.num_distinct);""")        
+      s.println(s"""E${rel.name}->push_back(${e_name}_encoding->encoded.at(${e_index}));""")
+      s.println(s"""encodings_${rel.name}->push_back((void*)${e_name}_encoding);""")
     } 
   }
 
   private def emitEncodingForEquivalenceClasses(s : CodeStringBuilder, klass : EquivalenceClasses, relsAttrs : Relations) = {
-    val (encodingMap,attrMap,encodingNames) = klass
+    val (encodingMap,attrMap,encodingNames,attributeToType) = klass
     val groupedTypes = encodingMap.groupBy(e => (e._2._1,e._2._3) ).map{e =>
       //1st group By (encodingID,encodingType) then create new map (encodingID -> (encoding Type, (ordered relations))) 
       (e._1._1,(e._1._2,e._2.keys.toList.sortBy(a => e._2(a)._2)))
@@ -371,19 +398,21 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   
   def emitTrieBuilding(s: CodeStringBuilder, relsAttrs : Relations) = {
     // emit code to construct each of the tries
-    relsAttrs.foreach((relAttrs : Relation) => 
-      s.println(s"""Trie<${layout}> *T${relAttrs.name} = Trie<${layout}>::build(E${relAttrs.name}, ranges_${relAttrs.name}, [&](size_t index){return true;});""") 
-    )
+    relsAttrs.foreach{(relAttrs : Relation) => 
+      s.println(s"""Trie<${layout}> *T${relAttrs.name} = Trie<${layout}>::build(E${relAttrs.name}, [&](size_t index){(void) index; return true;});""") 
+      s.println(s"""tries["${relAttrs.name}"] = T${relAttrs.name};""")
+      s.println(s"""encodings["${relAttrs.name}"] = encodings_${relAttrs.name};""") 
+    }
   }
 
   def emitAndDetectSelections(s:CodeStringBuilder, attribute_ordering:List[String], eq:EquivalenceClasses) : List[List[ASTCriterion]] = {
-    val (encodingMap,attrMap,encodingNames) = eq
+    val (encodingMap,attrMap,encodingNames,attributeToType) = eq
     attribute_ordering.map((attr: String) => 
       selectCriteria.filter{ sc =>
         (sc.attr1,sc.attr2) match {
           case (a:ASTScalar,b:ASTStringLiteral) => 
             if(a.identifierName == attr){
-              s.print("uint32_t " + attr + "_selection = " + encodingNames(attrMap(attr)) + "_encoding.value_to_key.at(") 
+              s.print("uint32_t " + attr + "_selection = " + encodingNames(attrMap(attr)) + "_encoding->value_to_key.at(") 
               b.code(s)
               s.println(");")
               true
@@ -451,19 +480,27 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
   def emitTopDown(s:CodeStringBuilder, accessor:Map[String,String], checks:Map[String,mutable.Set[String]], attribute_ordering:List[String], eq:EquivalenceClasses) = {
     s.println("///////////////////TOP DOWN")
+    val lhs_name = lhs.getName()
     //FIXME ADD A REAL OUTPUT TRIE
-    s.println(s"""par::reducer<size_t> result_cardinality(0,[](size_t a, size_t b){""")
+    s.println(s"""par::reducer<size_t> ${lhs_name}_cardinality(0,[](size_t a, size_t b){""")
     s.println("return a + b;")
     s.println("});")
+    s.println(s"""TrieBlock<${layout}> *${lhs_name}_block;""")
 
-    val (encodingMap,attrMap,encodingNames) = eq
+    s.println("{")
+    val (encodingMap,attrMap,encodingNames,attributeToType) = eq
     val visited_attributes = mutable.Set[String]()
     (0 until attribute_ordering.size).foreach{ i =>
       val a = attribute_ordering(i)
+      val a_name = if(i != 0) a else lhs_name
       val access = accessor(a)
       val prev = if(i == 0) "" else attribute_ordering(i-1)
+      val prev_name = if(i == 0) "" else if(i == 1) lhs_name else attribute_ordering(i-1)
       if(!visited_attributes.contains(a)){
-        s.println(s"""TrieBlock<${layout}> *${a}_block = ${access};""")
+        if(i != 0)
+          s.println(s"""TrieBlock<${layout}> *${a}_block = ${access};""")
+        else
+          s.println(s"""${lhs_name}_block = ${access};""")
         visited_attributes += a
       }
       if(checks.contains(prev)){
@@ -475,7 +512,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
           }
         }
       }
-        s.print("if(" + a + "_block")
+        s.print("if(" + a_name + "_block")
         if(i != (attribute_ordering.size-1) && checks.contains(prev)){
           checks(prev).foreach{check =>
             if(check != a){
@@ -487,18 +524,18 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.println("){")
 
       if(i != 0){
-        s.println(s"""${prev}_block->set_block(${prev}_i,${prev}_d,${a}_block);""")
+        s.println(s"""${prev_name}_block->set_block(${prev}_i,${prev}_d,${a}_block);""")
         if(i != (attribute_ordering.size-1)){
           val ename = encodingNames(attrMap(a))
-          s.println(s"""${a}_block->init_pointers(tid, &output_buffer, ${ename}_encoding.num_distinct,${a}_block->set.type == type::UINTEGER);""")
-          s.println(s"""${a}_block->set.foreach_index([&](uint32_t ${a}_i, uint32_t ${a}_d) {""")
+          s.println(s"""${a_name}_block->init_pointers(tid, &output_buffer,${a_name}_block->set.cardinality,${ename}_encoding->num_distinct,${a}_block->set.type == type::UINTEGER);""")
+          s.println(s"""${a_name}_block->set.foreach_index([&](uint32_t ${a}_i, uint32_t ${a}_d) {""")
         } else{
           //FIXME ADD A REAL TRIE OUTPUT NAME
           s.println(s"""const size_t count = ${a}_block->set.cardinality;""")
-          s.println(s"""result_cardinality.update(tid,count);""")
+          s.println(s"""${lhs_name}_cardinality.update(tid,count);""")
         }
       } else 
-        s.println(s"""${a}_block->set.par_foreach_index([&](size_t tid, uint32_t ${a}_i, uint32_t ${a}_d) {""")
+        s.println(s"""${a_name}_block->set.par_foreach_index([&](size_t tid, uint32_t ${a}_i, uint32_t ${a}_d) {""")
       
     }
     (0 until attribute_ordering.size-1).foreach{ i =>
@@ -508,7 +545,19 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       //closes out if and foreach
       s.println("""});}""")
     }
-    s.println(s"std::cout << result_cardinality.evaluate(0) << std::endl;")
+    s.println(s"""Trie<${layout}> *T${lhs.identifierName} = new Trie<${layout}>(${lhs_name}_block);""")
+    s.println(s"""tries["${lhs.identifierName}"] = T${lhs.identifierName};""")
+    s.println(s"""std::vector<void*> *encodings_${lhs.identifierName} = new std::vector<void*>();""")
+    attribute_ordering.foreach{a =>
+      val ename = encodingNames(attrMap(a))
+      s.println(s"""encodings_${lhs.identifierName}->push_back(${ename}_encoding);""")
+    }
+    s.println(s"""encodings["${lhs.identifierName}"] =  encodings_${lhs.identifierName};""")
+    s.println("}")
+    s.println(s"std::cout << ${lhs_name}_cardinality.evaluate(0) << std::endl;")
+
+    val newTypes = attribute_ordering.map(attributeToType(_))
+    Environment.addRelationBinding(lhs.identifierName,newTypes)
   }
 
   override def code(s: CodeStringBuilder): Unit = {
@@ -543,9 +592,9 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
      * Emit the buffers that we will do intersections for each attr in
      */
     var aggregate = false;
-    val (e_to_index2,attributeToEncoding,encodingIDToName) = equivalenceClasses
-    val size_string = encodingIDToName.head._2 + "_encoding.num_distinct" + encodingIDToName.tail.map{ e =>
-      s"""+${e._2}_encoding.num_distinct"""
+    val (e_to_index2,attributeToEncoding,encodingIDToName,attributeToType) = equivalenceClasses
+    val size_string = encodingIDToName.head._2 + "_encoding->num_distinct" + encodingIDToName.tail.map{ e =>
+      s"""+${e._2}_encoding->num_distinct"""
     }.mkString("")
     s.println(s"""allocator::memory<uint8_t> output_buffer(${myghd.num_bags}*${attribute_ordering.size}*sizeof(uint64_t)*(${size_string}));""")
 
@@ -608,6 +657,9 @@ abstract trait ASTIdentifier extends ASTExpression
 case class ASTRelation(identifierName : String, attrs : List[String]) extends ASTIdentifier {
   override def code(s: CodeStringBuilder): Unit = ???
   override def optimize: Unit = ???
+  def getName() : String = {
+    identifierName + "_" + attrs.mkString("")
+  }
 } // attribute name to option with type, or no type if it can be inferred
 case class ASTScalar(identifierName : String) extends ASTIdentifier {
   override def code(s: CodeStringBuilder): Unit = {
