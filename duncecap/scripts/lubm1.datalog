@@ -1,4 +1,4 @@
-takesCourse(std::string,std::string) <- load("/dfs/scratch0/caberger/systems/chinstrap/duncecap/takesCourse.txt", tsv)
-type(std::string,std::string) <- load("/dfs/scratch0/caberger/systems/chinstrap/duncecap/type.txt", tsv)
+takesCourse(std::string,std::string) <- load("/dfs/scratch0/caberger/systems/lubm/out_data/takesCourse.txt", tsv)
+type(std::string,std::string) <- load("/dfs/scratch0/caberger/systems/lubm/out_data/type.txt", tsv)
 result(a,b,c) <- takesCourse(a,b),type(a,c),b="Univ0Course0",c="GraduateStudent"
 print result(a,b,c)

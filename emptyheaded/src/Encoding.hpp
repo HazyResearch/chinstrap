@@ -56,7 +56,6 @@ struct Encoding{
     }
     //debug::stop_clock("serial",a);
 
-
     //a = debug::start_clock();
     //sort by the frequency
     tbb::task_scheduler_init init(NUM_THREADS);

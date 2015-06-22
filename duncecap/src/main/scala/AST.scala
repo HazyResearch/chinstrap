@@ -107,7 +107,6 @@ case class ASTAssignStatement(identifier : ASTIdentifier, expression : ASTExpres
 
   override def optimize: Unit = ???
 }
-
 case class ASTPrintStatement(r : ASTRelation) extends ASTNode with ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     s.println(s"""Trie<${layout}> *T${r.identifierName} = tries["${r.identifierName}"] ;""")
@@ -538,6 +537,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.println("){")
 
       if(i != 0){
+        s.println(s"""${a_name}_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${a_name}_block);""")
         s.println(s"""${prev_name}_block->set_block(${prev}_i,${prev}_d,${a}_block);""")
         if(i != (attribute_ordering.size-1)){
           val ename = encodingNames(attrMap(a))
@@ -600,7 +600,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val size_string = encodingIDToName.head._2 + "_encoding->num_distinct" + encodingIDToName.tail.map{ e =>
       s"""+${e._2}_encoding->num_distinct"""
     }.mkString("")
-    s.println(s"""allocator::memory<uint8_t> output_buffer(${myghd.num_bags}*${attribute_ordering.size}*sizeof(uint64_t)*(${size_string}));""")
+    s.println(s"""allocator::memory<uint8_t> output_buffer(${myghd.num_bags}*${attribute_ordering.size}*2*sizeof(TrieBlock<${layout}>)*(${size_string}));""")
 
     //Prepare the attributes that will need to be selected on the fly
     val attrSelections = emitAndDetectSelections(s,attribute_ordering,equivalenceClasses)

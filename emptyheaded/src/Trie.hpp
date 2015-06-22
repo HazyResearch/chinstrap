@@ -130,19 +130,17 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
   tbb::parallel_sort(indicies,iterator,SortColumns(attr_in));
 
   //Where all real data goes
-  const size_t alloc_size = (num_rows*num_levels*sizeof(uint64_t)*sizeof(TrieBlock<T>))/NUM_THREADS;
+  const size_t alloc_size = (8*num_rows*num_levels*sizeof(uint64_t)*sizeof(TrieBlock<T>))/NUM_THREADS;
   allocator::memory<uint8_t> data_allocator(alloc_size);
   //always just need two buffers(that swap)
   std::vector<allocator::memory<size_t>> *ranges_buffer = new std::vector<allocator::memory<size_t>>();
   std::vector<allocator::memory<uint32_t>> *set_data_buffer = new std::vector<allocator::memory<uint32_t>>();
   for(size_t i = 0; i < num_levels; i++){
-    allocator::memory<size_t> ranges(num_rows_post_filter+1);
-    allocator::memory<uint32_t> sd(num_rows_post_filter+1);
+    allocator::memory<size_t> ranges((num_rows_post_filter+1));
+    allocator::memory<uint32_t> sd((num_rows_post_filter+1));
     ranges_buffer->push_back(ranges);
     set_data_buffer->push_back(sd); 
   }
-
-  std::cout << "PRODUCING RANGES" << std::endl;
 
   //Find the ranges for distinct values in the head
   const size_t head_size = produce_ranges(0,
@@ -152,8 +150,6 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
     indicies,
     &attr_in->at(0));
 
-  std::cout << "BUILD HEAD" << std::endl;
-
   //Build the head set.
   TrieBlock<T>* new_head = build_block<TrieBlock<T>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer->at(0).get_memory(0));
   new_head->is_sparse = false;
@@ -162,8 +158,6 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
     (void) tid;
     new_head->next_level[i] = NULL;
   });
-
-  std::cout << "par build" << std::endl;
 
   size_t cur_level = 1;
   par::for_range(0,head_size,100,[&](size_t tid, size_t i){
@@ -176,6 +170,7 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
       &data_allocator,num_rows,ranges_buffer,set_data_buffer,indicies);
 
   });
+
   for(size_t i = 0; i < num_levels; i++){
     ranges_buffer->at(i).free();
     set_data_buffer->at(i).free();
