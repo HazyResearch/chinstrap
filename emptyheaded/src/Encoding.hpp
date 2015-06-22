@@ -41,8 +41,10 @@ struct Encoding{
     value_to_key.reserve(num_rows*num_attributes);
 
     //TODO: Parallelize, cleanup memory usage.
+    size_t alloc_size = 0;
     for(size_t i = 0; i < num_attributes; i++){
       const Column<T> input = attr_in->at(i);
+      alloc_size += input.size();
       for(size_t j = 0; j < input.size(); j++){
         const T value = input.at(j);
         if(!value_to_key.count(value)){
@@ -62,7 +64,6 @@ struct Encoding{
     tbb::parallel_sort(sorted_values.begin(),sorted_values.end(),OrderByFrequency<T>(&frequency));
 
     //reassign id's
-
     T *k2v = new T[sorted_values.size()];
     key_to_value.assign(k2v,k2v+sorted_values.size());
     par::for_range(0,sorted_values.size(),100,[&](size_t tid, size_t i){
@@ -72,15 +73,14 @@ struct Encoding{
     });
 
     //create new encoded column
-    encoded.reserve(num_attributes);
+    //encoded.reserve(num_attributes);
 
-    const size_t alloc_size = num_attributes*num_rows;
     uint32_t *new_columns = new uint32_t[alloc_size];
 
     for(size_t i = 0; i < num_attributes; i++){
       const Column<T> input = attr_in->at(i);
       Column<uint32_t> output;
-      output.assign(new_columns+(i*num_rows),new_columns+((i+1)*num_rows));
+      output.assign(new_columns+(i*input.size()),new_columns+((i+1)*input.size()));
       par::for_range(0,input.size(),100,[&](size_t tid, size_t j){
         (void) tid;
         const T value = input.at(j);

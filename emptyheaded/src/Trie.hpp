@@ -11,13 +11,13 @@ struct SortColumns{
   SortColumns(std::vector<Column<uint32_t>> *columns_in){
     columns = columns_in;
   }
-  bool operator()(size_t i, size_t j) const {
+  bool operator()(uint32_t i, uint32_t j) const {
     for(size_t c = 0; c < columns->size(); c++){
       if(columns->at(c).at(i) != columns->at(c).at(j)){
         return columns->at(c).at(i) < columns->at(c).at(j);
       }
     }
-    return true;
+    return false;
   }
 };
 
@@ -126,6 +126,7 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
   uint32_t *indicies = new uint32_t[num_rows];
   uint32_t *iterator = perform_selection(indicies,num_rows,f);
   const size_t num_rows_post_filter = iterator-indicies;
+
   tbb::task_scheduler_init init(NUM_THREADS);
   tbb::parallel_sort(indicies,iterator,SortColumns(attr_in));
 
@@ -135,6 +136,7 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
   //always just need two buffers(that swap)
   std::vector<allocator::memory<size_t>> *ranges_buffer = new std::vector<allocator::memory<size_t>>();
   std::vector<allocator::memory<uint32_t>> *set_data_buffer = new std::vector<allocator::memory<uint32_t>>();
+  
   for(size_t i = 0; i < num_levels; i++){
     allocator::memory<size_t> ranges((num_rows_post_filter+1));
     allocator::memory<uint32_t> sd((num_rows_post_filter+1));

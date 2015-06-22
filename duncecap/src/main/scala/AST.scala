@@ -119,6 +119,7 @@ case class ASTPrintStatement(r : ASTRelation) extends ASTNode with ASTStatement 
         val a = r.attrs(i2)
         s"->get_block(${a}_d)"
       }.mkString("")
+      s.println(s"""if(${name_string}){""")
       s.println(s"""${name_string}->set.foreach_index([&](uint32_t ${r.attrs(i)}_i, uint32_t ${r.attrs(i)}_d){""")
       s.println(s"""(void) ${r.attrs(i)}_i;""")
       if(i == (r.attrs.size-1)){
@@ -133,7 +134,7 @@ case class ASTPrintStatement(r : ASTRelation) extends ASTNode with ASTStatement 
       }
     }
     (0 until (r.attrs.size)).foreach{ i =>
-      s.println("""});""")
+      s.println("""});};""")
     }
   }
 
@@ -235,15 +236,19 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
           s.println(s"""${name}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${relsAttrsWithAttr.head});""")
           emitSetSelection(s,attr,sel,tid,layout)
           //s.println(s"""${name}_block->init_pointers(${tid},&output_buffer,${encodingName}_encoding.num_distinct);""")
-          if(prev_a != "")
+          if(prev_a != ""){
+            s.println(s"""if(${attr}.cardinality != 0)""")
             s.println(s"""${prev_t}_block->set_block(${prev_a}_i,${prev_a}_d,${attr}_block);""")      
+          }
         }
         else{
           s.println(s"""TrieBlock<${layout}> *${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${relsAttrsWithAttr.head});""")
           emitSetSelection(s,attr,sel,tid,layout)    
           s.println(s"""${attr}_block->init_pointers(${tid},&output_buffer,${attr}.cardinality,${encodingName}_encoding->num_distinct,${attr}.type == type::UINTEGER);""")      
-          if(prev_a != "")
+          if(prev_a != ""){
+            s.println(s"""if(${attr}.cardinality != 0)""")
             s.println(s"""${prev_t}_block->set_block(${prev_a}_i,${prev_a}_d,${attr}_block);""")  
+          }
         }
       }
      } else {
@@ -290,6 +295,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         if(prev_a != ""){
           s.println(s"""${attr}_block->set= &${attr};""")
           s.println(s"""${attr}_block->init_pointers(${tid},&output_buffer,${attr}.cardinality,${encodingName}_encoding->num_distinct,${attr}.type == type::UINTEGER);""")
+          s.println(s"""if(${attr}.cardinality != 0)""")
           s.println(s"""${prev_t}_block->set_block(${prev_a}_i,${prev_a}_d,${attr}_block);""")      
         }
         else{
@@ -538,6 +544,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
       if(i != 0){
         s.println(s"""${a_name}_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${a_name}_block);""")
+        s.println(s"""if(${a}_block->set.cardinality != 0)""")
         s.println(s"""${prev_name}_block->set_block(${prev}_i,${prev}_d,${a}_block);""")
         if(i != (attribute_ordering.size-1)){
           val ename = encodingNames(attrMap(a))

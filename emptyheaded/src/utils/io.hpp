@@ -27,10 +27,10 @@ public:
     buffer[result] = '\0';
   }
   inline char* tsv_get_first(){
-    return strtok(buffer," |\t\nA");
+    return strtok(buffer," \t\n");
   }
   inline char* tsv_get_next(){
-    return strtok(NULL," |\t\nA");
+    return strtok(NULL," \t\n");
   }
 
 };
