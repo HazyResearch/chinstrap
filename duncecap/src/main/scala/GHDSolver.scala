@@ -164,7 +164,7 @@ object GHDSolver {
     }
 
     //pull out lowest depth FHWS 
-    val myghd = ordered_decomp.head
+    val myghd = if(Environment.yanna) ordered_decomp.head else getDecompositions(distinctRelations).last
     myghd.num_bags = breadth_first(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd))._2
     assert(myghd.num_bags != 0)
     val fhws = myghd.fractionalScoreTree()

@@ -612,6 +612,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     //Prepare the attributes that will need to be selected on the fly
     val attrSelections = emitAndDetectSelections(s,attribute_ordering,equivalenceClasses)
 
+    s.println(s"""auto join_timer = debug::start_clock();""")
     solver.bottom_up(mutable.LinkedHashSet[GHDNode](myghd), myghd, emitNPRR, s, attribute_ordering, attrSelections, aggregate, equivalenceClasses)
     if(myghd.children.size != 0){
       val (accessor,checks) = solver.top_down(mutable.LinkedHashSet[GHDNode](myghd), mutable.LinkedHashSet(myghd))
@@ -619,6 +620,8 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     } else{
       emitResultTrie(s, lhs.identifierName, myghd.name, myghd.attribute_ordering, equivalenceClasses)
     }
+    s.println(s"""debug::stop_clock("JOIN",join_timer);""")
+
 
   }
 
