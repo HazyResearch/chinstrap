@@ -1088,8 +1088,8 @@ namespace ops{
     size_t count = 0;
     size_t i_a = 0, i_b = 0;
 
-    assert( ((size_t) A % 16) == 0 );
-    assert( ((size_t) B % 16) == 0 );
+    //assert( ((size_t) A % 16) == 0 );
+    //assert( ((size_t) B % 16) == 0 );
 
     // trim lengths to be a multiple of 4
     #if VECTORIZE == 1
@@ -1098,8 +1098,8 @@ namespace ops{
 
     while(i_a < st_a && i_b < st_b) {
       //[ load segments of four 32-bit elements
-      __m128i v_a = _mm_load_si128((__m128i*)&A[i_a]);
-      __m128i v_b = _mm_load_si128((__m128i*)&B[i_b]);
+      __m128i v_a = _mm_loadu_si128((__m128i*)&A[i_a]);
+      __m128i v_b = _mm_loadu_si128((__m128i*)&B[i_b]);
       //]
 
       //[ compute mask of common elements
