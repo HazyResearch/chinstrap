@@ -260,34 +260,33 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       }
       s.println(s"""const size_t alloc_size = sizeof(uint64_t)*${encodingName}_encoding->num_distinct*2;""")
       s.println(s"""Set<${layout}> ${attr}(output_buffer.get_next(${tid},alloc_size)); //initialize the memory""")
-      s.print(s"""${attr} = *ops::set_intersect(&${attr},(const Set<${layout}> *)&${relsAttrsWithAttr.head}->set,(const Set<${layout}> *)&${relsAttrsWithAttr.tail.head}->set""")
-
+      
+      //have buffers you switch between for intersecting the rest (FIXME can leak memory)
+      
+      //intersection
+      val restOfRelsAttrsWithAttr = relsAttrsWithAttr.tail.tail 
+      //even number of intersections means tmp should be second, odd means temp should be first
+      //even number of intersections corresponds to an odd relsAttrisWithAttr size
+      //second condition tells us if even need a temp buffer or not
+      var tmp = ((relsAttrsWithAttr.size % 2) != 0) && (restOfRelsAttrsWithAttr.size != 0)
+      if(restOfRelsAttrsWithAttr.size != 0)
+        s.println(s"""Set<${layout}> ${attr}_tmp(tmp_buffer.get_next(${tid},alloc_size)); //initialize the memory""")
+      var a_name = if(tmp) attr + "_tmp" else attr
+      s.print(s"""${a_name} = *ops::set_intersect(&${a_name},(const Set<${layout}> *)&${relsAttrsWithAttr.head}->set,(const Set<${layout}> *)&${relsAttrsWithAttr.tail.head}->set""")
       emitIntersectionSelection(s,attr,sel)
       s.println(");")
 
-      
-      //have buffers you switch between for intersecting the rest (FIXME can leak memory)
-      val restOfRelsAttrsWithAttr = relsAttrsWithAttr.tail.tail 
-      if(restOfRelsAttrsWithAttr.size != 0)
-        s.println(s"""Set<${layout}> ${attr}_tmp(output_buffer.get_next(${tid},alloc_size)); //initialize the memory""")
-      var tmp = true
       restOfRelsAttrsWithAttr.foreach{(rel : String) => 
         tmp = !tmp
-        if(!tmp){
-          s.print(s"""${attr}_tmp = *ops::set_intersect(&${attr}_tmp,(const Set<${layout}> *)&${attr},(const Set<${layout}> *)&${rel}->set""")
+        if(tmp){
+          s.print(s"""${attr}_tmp = *ops::set_intersect(&${attr}_tmp,(const Set<${layout}> *)&${attr},(const Set<${layout}> *)&${rel}->set);""")
         }
         else{
-          s.print(s"""${attr} = *ops::set_intersect(&${attr},(const Set<${layout}> *)&${attr}_tmp,(const Set<${layout}> *)&${rel}->set""")
+          s.print(s"""${attr} = *ops::set_intersect(&${attr},(const Set<${layout}> *)&${attr}_tmp,(const Set<${layout}> *)&${rel}->set);""")
         }
-
-        emitIntersectionSelection(s,attr,sel)
-        s.println(");")
       }
       if(restOfRelsAttrsWithAttr.size != 0){
-        if(tmp)
-          s.println(s"""output_buffer.roll_back(${tid},alloc_size);""")
-        else
-          s.println(s"""${attr} = ${attr}_tmp;""")
+        s.println(s"""tmp_buffer.roll_back(${tid},alloc_size);""")
       }
 
       s.println(s"""output_buffer.roll_back(${tid},alloc_size - ${attr}.number_of_bytes);""")
@@ -608,6 +607,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       s"""+${e._2}_encoding->num_distinct"""
     }.mkString("")
     s.println(s"""allocator::memory<uint8_t> output_buffer(${myghd.num_bags}*${attribute_ordering.size}*2*sizeof(TrieBlock<${layout}>)*(${size_string}));""")
+    s.println(s"""allocator::memory<uint8_t> tmp_buffer(${myghd.num_bags}*${attribute_ordering.size}*2*sizeof(TrieBlock<${layout}>)*(${size_string}));""")
 
     //Prepare the attributes that will need to be selected on the fly
     val attrSelections = emitAndDetectSelections(s,attribute_ordering,equivalenceClasses)
@@ -621,6 +621,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       emitResultTrie(s, lhs.identifierName, myghd.name, myghd.attribute_ordering, equivalenceClasses)
     }
     s.println(s"""debug::stop_clock("JOIN",join_timer);""")
+    s.println(s"""tmp_buffer.free();""")
 
 
   }

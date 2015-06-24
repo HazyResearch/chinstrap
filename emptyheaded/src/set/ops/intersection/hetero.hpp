@@ -37,10 +37,6 @@ namespace ops{
     const uint64_t * const B = (uint64_t*)(B_in->data+sizeof(uint64_t));
     const uint32_t * const B_index = (uint32_t*)(B+s_b);
 
-    #if WRITE_VECTOR == 0
-    (void) C;
-    #endif
-
     size_t count = 0;
     for(size_t i = 0; i < s_a; i++){
       const uint32_t cur = A[i];

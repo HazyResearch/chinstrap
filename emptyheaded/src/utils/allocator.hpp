@@ -12,16 +12,16 @@ namespace allocator{
     elem(size_t num_elems){
       ptr = (uint8_t*)malloc(num_elems*sizeof(T));
       if(ptr == NULL){
-        std::cout << "ERROR: Malloc failed" << std::endl;
+        std::cout << "ERROR: Malloc failed - " << num_elems*sizeof(T) << std::endl;
         exit(1);
       }
-      max_ptr = ptr+num_elems*sizeof(T);
+      max_ptr = ptr+(num_elems*sizeof(T));
       cur = ptr;
     }
     inline T* get_next(size_t num){
       if((cur+num*sizeof(T)) < max_ptr){
         T* val = (T*)cur;
-        cur += num*sizeof(T);
+        cur += (num*sizeof(T));
         return val;
       }
       return NULL;
@@ -85,11 +85,12 @@ namespace allocator{
     inline T* get_next(size_t tid, size_t num){
       T* val = elements.at(tid).at(indicies.at(tid)).get_next(num);
       if(val == NULL){
+        num_elems = (num_elems+1)*multplier;
         while(num > num_elems){
           num_elems = (num_elems+1)*multplier;
         }
 
-        std::cout << "Allocating more memory: try a larger allocation size for better performance." << std::endl;
+        std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems << std::endl;
         assert(num < num_elems);
         elements.at(tid).push_back(elem<T>(num_elems));
         indicies.at(tid)++;
@@ -101,11 +102,12 @@ namespace allocator{
     inline T* get_next(size_t tid, size_t num, size_t align){
       T* val = elements.at(tid).at(indicies.at(tid)).get_next(num,align);
       if(val == NULL){
+        num_elems = (num_elems+1)*multplier;
         while((num+align) > num_elems){
           num_elems = (num_elems+1)*multplier;
         }
 
-        std::cout << "Allocating more memory: try a larger allocation size for better performance." << std::endl;
+        std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems << std::endl;
         assert(num < num_elems);
         elements.at(tid).push_back(elem<T>(num_elems));
         indicies.at(tid)++;

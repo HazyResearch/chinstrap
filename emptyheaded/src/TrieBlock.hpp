@@ -25,7 +25,7 @@ struct TrieBlock{
     if(!is_sparse){
       next_level = (TrieBlock<T>**)allocator_in->get_next(tid, sizeof(TrieBlock<T>*)*range);
     } else{
-      next_level = (TrieBlock<T>**) allocator_in->get_next(tid, sizeof(TrieBlock<T>*)*cardinality);
+      next_level = (TrieBlock<T>**)allocator_in->get_next(tid, sizeof(TrieBlock<T>*)*cardinality);
     }
   }
 

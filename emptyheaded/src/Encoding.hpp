@@ -76,11 +76,14 @@ struct Encoding{
     //encoded.reserve(num_attributes);
 
     uint32_t *new_columns = new uint32_t[alloc_size];
-
+    uint32_t *pointer_start = new_columns;
+    uint32_t *pointer_end = new_columns;
     for(size_t i = 0; i < num_attributes; i++){
       const Column<T> input = attr_in->at(i);
       Column<uint32_t> output;
-      output.assign(new_columns+(i*input.size()),new_columns+((i+1)*input.size()));
+      pointer_start = pointer_end;
+      pointer_end = pointer_start+input.size();
+      output.assign(pointer_start,pointer_end);
       par::for_range(0,input.size(),100,[&](size_t tid, size_t j){
         (void) tid;
         const T value = input.at(j);

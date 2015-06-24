@@ -67,7 +67,7 @@ namespace ops{
     std::cout << "ERROR" << std::endl;
     return C_in;
   }
-  inline Set<hybrid>* set_intersect(Set<hybrid> *C_in,const Set<hybrid> *A_in,const Set<hybrid> *B_in){
+  inline Set<hybrid>* set_intersect(Set<hybrid> *C_in, const Set<hybrid> *A_in, const Set<hybrid> *B_in){
     if(A_in->cardinality == 0 || B_in->cardinality == 0){
       C_in->cardinality = 0;
       C_in->number_of_bytes = 0;
@@ -123,6 +123,7 @@ namespace ops{
         default:
         break;
     }
+    std::cout << (uint32_t)A_in->type << " " << (uint32_t)B_in->type << std::endl;
 
     std::cout << "ERROR" << std::endl;
     return C_in;

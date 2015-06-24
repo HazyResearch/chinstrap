@@ -33,9 +33,11 @@ struct Trie{
   static Trie<T>* build(std::vector<Column<uint32_t>> *attr_in, F f);
 };
 
-size_t produce_ranges(size_t start, size_t end, 
+std::tuple<size_t,size_t> produce_ranges(size_t start, size_t end, 
   size_t *next_ranges, uint32_t *data,
   uint32_t *indicies, Column<uint32_t> * current){
+
+  size_t range = 0;
 
   size_t num_distinct = 0;
   size_t i = start;
@@ -48,17 +50,17 @@ size_t produce_ranges(size_t start, size_t end,
     data[num_distinct] = cur;
 
     ++num_distinct;
+    range = cur;
 
     while(cur == prev){
       if((i+1) >= end)
         goto FINISH;
       prev = current->at(indicies[++i]);
     }
-
   }
   FINISH:
   next_ranges[num_distinct] = end;
-  return num_distinct; //should be all you need.
+  return std::tuple<size_t,size_t>(num_distinct,range+1); //should be all you need.
 }
 
 void encode_tail(size_t start, size_t end, uint32_t *data, Column<uint32_t> *current, uint32_t *indicies){
@@ -82,7 +84,7 @@ B* build_block(const size_t tid, allocator::memory<uint8_t> *data_allocator,
   const size_t max_set_size, const size_t set_size, uint32_t *set_data_buffer){
 
   B *block = (B*)data_allocator->get_next(tid,sizeof(B),BYTES_PER_CACHELINE);
-  const size_t set_alloc_size =  max_set_size*sizeof(uint64_t)+100;
+  const size_t set_alloc_size =  max_set_size*16;
   uint8_t* set_data_in = data_allocator->get_next(tid,set_alloc_size,BYTES_PER_REG);
   block->set = Set<T>::from_array(set_data_in,set_data_buffer,set_size);
     
@@ -99,7 +101,7 @@ void recursive_build(const size_t index, const size_t start, const size_t end, c
   std::vector<allocator::memory<size_t>> *ranges_buffer, 
   std::vector<allocator::memory<uint32_t>> *set_data_buffer, 
   uint32_t *indicies){
-  
+
   uint32_t *sb = set_data_buffer->at(level).get_memory(tid);
   encode_tail(start,end,sb,&attr_in->at(level),indicies);
 
@@ -107,7 +109,10 @@ void recursive_build(const size_t index, const size_t start, const size_t end, c
   prev_block->set_block(index,data,tail);
 
   if(level < (num_levels-1)){
-    const size_t set_size = produce_ranges(start,end,ranges_buffer->at(level).get_memory(tid),set_data_buffer->at(level).get_memory(tid),indicies,&attr_in->at(level));
+    auto tup = produce_ranges(start,end,ranges_buffer->at(level).get_memory(tid),set_data_buffer->at(level).get_memory(tid),indicies,&attr_in->at(level));
+    const size_t set_size = std::get<0>(tup);
+    const size_t set_range = std::get<1>(tup);
+    tail->init_pointers(0,data_allocator,set_size,set_range,true);
     for(size_t i = 0; i < set_size; i++){
       const size_t next_start = ranges_buffer->at(level).get_memory(tid)[i];
       const size_t next_end = ranges_buffer->at(level).get_memory(tid)[i+1];
@@ -145,18 +150,20 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
   }
 
   //Find the ranges for distinct values in the head
-  const size_t head_size = produce_ranges(0,
+  auto tup = produce_ranges(0,
     num_rows_post_filter,
     ranges_buffer->at(0).get_memory(0),
     set_data_buffer->at(0).get_memory(0),
     indicies,
     &attr_in->at(0));
+  const size_t head_size = std::get<0>(tup);
+  const size_t head_range = std::get<1>(tup);
 
   //Build the head set.
   TrieBlock<T>* new_head = build_block<TrieBlock<T>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer->at(0).get_memory(0));
-  new_head->is_sparse = false;
-  new_head->next_level = (TrieBlock<T>**)data_allocator.get_next(0,num_rows*sizeof(TrieBlock<T>*));
-  par::for_range(0,num_rows,100,[&](size_t tid, size_t i){
+  new_head->init_pointers(0,&data_allocator,head_size,head_range,false);
+
+  par::for_range(0,head_range,100,[&](size_t tid, size_t i){
     (void) tid;
     new_head->next_level[i] = NULL;
   });
@@ -172,7 +179,7 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
       &data_allocator,num_rows,ranges_buffer,set_data_buffer,indicies);
 
   });
-
+  
   for(size_t i = 0; i < num_levels; i++){
     ranges_buffer->at(i).free();
     set_data_buffer->at(i).free();

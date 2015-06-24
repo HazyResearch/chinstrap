@@ -134,7 +134,6 @@ object GHDSolver {
     var depth = 0
     var frontier = f_in
     var next_frontier = mutable.Set[GHDNode]()
-    println("SEEN SEEN SEEN SEEN: " + seen.size)
     while(frontier.size != 0){
       next_frontier.clear
       frontier.foreach{ cur:GHDNode =>
