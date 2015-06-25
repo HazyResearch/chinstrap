@@ -100,7 +100,6 @@ object NPRRSetupUtil {
         (0 until rel.attrs.size).foreach{i =>
           val ei = e_to_index(attributeToEncoding(rel.attrs(i)))
           val a = (rel.name,i)
-          println(rel.attrs(i))
           val b = (attributeToEncoding(rel.attrs(i)),ei,Environment.getTypes(rel.name)(i))
           if(!e_to_index2.contains(a)){
             e_to_index2 += ( a -> b )

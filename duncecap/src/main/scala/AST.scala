@@ -95,7 +95,6 @@ case class ASTLoadFileStatement(rel : ASTRelation, filename : ASTStringLiteral, 
 
 case class ASTAssignStatement(identifier : ASTIdentifier, expression : ASTExpression) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
-    println("ASSIGN")
     //FIXME: this is a hack
     (identifier,expression) match {
       case (a:ASTRelation,b:ASTJoinAndSelect) => {
@@ -214,7 +213,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val encodingName = encodingNames(attrMap(attr))
 
     val relAttrsA = relsAttrs.filter(( rel : (String, List[String])) => rel._2.contains(attr)).unzip._1.distinct
-    println("HER YE SIZE: " + relAttrsA.size)
     val passedUp = yanna.filter{a =>
       a._1 == attr
     }.distinct.map(_._2)
@@ -225,8 +223,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     var tid = "tid"
     if(prev_a == "")
       tid = "0"
-
-      println("SIZE 2: " + relsAttrsWithAttr.size)
 
     if (relsAttrsWithAttr.size == 1) {
       // no need to emit an intersection
@@ -258,8 +254,8 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         else
           s.println(s"""TrieBlock<${layout}> *${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>();""")
       }
-      s.println(s"""const size_t alloc_size = sizeof(uint64_t)*${encodingName}_encoding->num_distinct*2;""")
-      s.println(s"""Set<${layout}> ${attr}(output_buffer.get_next(${tid},alloc_size)); //initialize the memory""")
+      s.println(s"""const size_t alloc_size_${attr} = sizeof(uint64_t)*${encodingName}_encoding->num_distinct*2;""")
+      s.println(s"""Set<${layout}> ${attr}(output_buffer.get_next(${tid},alloc_size_${attr})); //initialize the memory""")
       
       //have buffers you switch between for intersecting the rest (FIXME can leak memory)
       
@@ -270,7 +266,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       //second condition tells us if even need a temp buffer or not
       var tmp = ((relsAttrsWithAttr.size % 2) != 0) && (restOfRelsAttrsWithAttr.size != 0)
       if(restOfRelsAttrsWithAttr.size != 0)
-        s.println(s"""Set<${layout}> ${attr}_tmp(tmp_buffer.get_next(${tid},alloc_size)); //initialize the memory""")
+        s.println(s"""Set<${layout}> ${attr}_tmp(tmp_buffer.get_next(${tid},alloc_size_${attr})); //initialize the memory""")
       var a_name = if(tmp) attr + "_tmp" else attr
       s.print(s"""${a_name} = *ops::set_intersect(&${a_name},(const Set<${layout}> *)&${relsAttrsWithAttr.head}->set,(const Set<${layout}> *)&${relsAttrsWithAttr.tail.head}->set""")
       emitIntersectionSelection(s,attr,sel)
@@ -286,10 +282,10 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         }
       }
       if(restOfRelsAttrsWithAttr.size != 0){
-        s.println(s"""tmp_buffer.roll_back(${tid},alloc_size);""")
+        s.println(s"""tmp_buffer.roll_back(${tid},alloc_size_${attr});""")
       }
 
-      s.println(s"""output_buffer.roll_back(${tid},alloc_size - ${attr}.number_of_bytes);""")
+      s.println(s"""output_buffer.roll_back(${tid},alloc_size_${attr} - ${attr}.number_of_bytes);""")
       if(!aggregate){
         if(prev_a != ""){
           s.println(s"""${attr}_block->set= &${attr};""")
@@ -477,9 +473,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
     //println("WORK: " + work)
     //if(work != 0){
-    println("Running NPRR")
     s.println("//////////NPRR")
-    current.rels.foreach{r => println(r.name)}
     if(work_to_do){
       s.println(s"""par::reducer<size_t> ${name}_cardinality(0,[](size_t a, size_t b){""")
       s.println("return a + b;")
@@ -554,9 +548,20 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
           s.println(s"""const size_t count = ${a}_block->set.cardinality;""")
           s.println(s"""${lhs_name}_cardinality.update(tid,count);""")
         }
-      } else 
-        s.println(s"""${a_name}_block->set.par_foreach_index([&](size_t tid, uint32_t ${a}_i, uint32_t ${a}_d) {""")
-      
+      } else {
+        val ename = encodingNames(attrMap(a))
+        s.println(s"""${a_name}_block = new(output_buffer.get_next(0, sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${a_name}_block);""")
+        s.println(s"""if(${a_name}_block->set.cardinality != 0)""")
+        if(i != (attribute_ordering.size-1)){
+          val ename = encodingNames(attrMap(a))
+          s.println(s"""${a_name}_block->init_pointers(0, &output_buffer,${a_name}_block->set.cardinality,${ename}_encoding->num_distinct,${a_name}_block->set.type == type::UINTEGER);""")
+          s.println(s"""${a_name}_block->set.par_foreach_index([&](size_t tid, uint32_t ${a}_i, uint32_t ${a}_d) {""")
+        } else{
+          //FIXME ADD A REAL TRIE OUTPUT NAME
+          s.println(s"""const size_t count = ${a}_block->set.cardinality;""")
+          s.println(s"""${lhs_name}_cardinality.update(tid,count);""")
+        }
+      }
     }
     (0 until attribute_ordering.size-1).foreach{ i =>
       //closes out if
@@ -577,7 +582,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val solver = GHDSolver
     //get minimum GHD's
     val myghd = solver.getGHD(relations)
-    val attribute_ordering = solver.getAttributeOrdering(myghd)
+    val attribute_ordering = solver.getAttributeOrdering(myghd,lhs.attrs)
     //////////////////////////////////////////////////////////////////////
 
     /**

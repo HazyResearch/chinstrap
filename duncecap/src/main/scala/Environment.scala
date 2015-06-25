@@ -3,7 +3,7 @@ package DunceCap
 import scala.collection.mutable
 
 object Environment {
-  val yanna = false
+  val yanna = true
   val relationTypes = mutable.Map[String, List[String]]()
 
   def addRelationBinding(identifier : String, types : List[String]): Unit = {

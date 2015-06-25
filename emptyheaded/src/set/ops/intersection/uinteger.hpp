@@ -257,6 +257,7 @@ namespace ops{
       if (0 == smalllength){
         C_in->cardinality = 0;
         C_in->number_of_bytes = 0;
+        C_in->type = type::UINTEGER;
         return C_in;
       }
 

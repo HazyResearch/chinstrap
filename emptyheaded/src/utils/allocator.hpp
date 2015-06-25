@@ -43,7 +43,7 @@ namespace allocator{
       return NULL;
     }
     inline void roll_back(size_t num){
-      cur -= sizeof(T)*num;
+      cur -= (sizeof(T)*num);
     }
     inline void adjust(long num){
       cur += long(sizeof(T))*num;

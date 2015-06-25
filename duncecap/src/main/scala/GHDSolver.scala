@@ -14,21 +14,32 @@ object GHDSolver {
   /**
    * relations is a list of tuples, where the first element is the name, and the second is the list of attributes
    */
-  private def get_attribute_ordering(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): List[String] = {
+  private def get_attribute_ordering(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode],resultAttrs:List[String]): List[String] = {
     //Runs a BFS, adds attributes in that order with the special condition that those attributes
-    //that also exist in the children are added first
+    //that also exist in the children are added first, we also sort by the frequency of the attribute
     var depth = 0
     var frontier = f_in
     var next_frontier = mutable.Set[GHDNode]()
     var attr = scala.collection.mutable.ListBuffer.empty[String]
+
+    println("RESULT ATTRIBUTES")
+    resultAttrs.foreach{
+      println
+    }
+
     while(frontier.size != 0){
       next_frontier.clear
       frontier.foreach{ cur:GHDNode =>
 
+        var tmp_attr = scala.collection.mutable.ListBuffer.empty[(String,Int)]
         //first add attributes with elements in common with children, then add others        
-        val children_attrs = cur.children.flatMap{ c => c.rels.flatMap{r => r.attrs}.toList.distinct}
+        val children_attrs = cur.children.flatMap{ c => c.rels.flatMap{r => r.attrs}.toList}
+        val children_attrs_sorted = children_attrs.sortBy(e => if(resultAttrs.contains(e)) resultAttrs.indexOf(e) else resultAttrs.size+1)
+
         val cur_attrs = cur.rels.flatMap{r => r.attrs}
-        children_attrs.intersect(cur_attrs).foreach{ a =>
+        val cur_attrs_sorted = cur_attrs.sortBy(e => if(resultAttrs.contains(e)) resultAttrs.indexOf(e) else resultAttrs.size+1)
+
+        cur_attrs_sorted.intersect(children_attrs_sorted).foreach{ a =>
           if(!attr.contains(a)){
             attr += a
           }
@@ -170,8 +181,8 @@ object GHDSolver {
     print(myghd, "query_plan_" + fhws + ".json")
     return myghd
   }
-  def getAttributeOrdering(myghd:GHDNode) : List[String] ={
-    val attribute_ordering = get_attribute_ordering(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd))
+  def getAttributeOrdering(myghd:GHDNode, resultAttrs:List[String]) : List[String] ={
+    val attribute_ordering = get_attribute_ordering(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd),resultAttrs)
     println("Attribute Ordering")
     attribute_ordering.foreach{println}
     println("Attribute Ordering")
