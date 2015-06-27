@@ -1,4 +1,4 @@
 type(std::string,std::string) <- load("/dfs/scratch0/caberger/systems/lubm/out_data/type.txt", tsv)
 teacherOf(std::string,std::string) <- load("/dfs/scratch0/caberger/systems/lubm/out_data/teacherOf.txt", tsv)
 takesCourse(std::string,std::string) <- load("/dfs/scratch0/caberger/systems/lubm/out_data/takesCourse.txt", tsv)
-result(a,b) <- teacherOf(a,b),takesCourse(c,b),type(c,d),a="http://www.Department12.University8.edu/AssociateProfessor2",c="http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#UndergraduateStudent",d="http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#Course"
+result(a,b,c,d,e) <- teacherOf(a,b),takesCourse(c,b),type(b,d),type(c,e),a="http://www.Department12.University8.edu/AssociateProfessor2",d="http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#Course",e="http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#UndergraduateStudent"

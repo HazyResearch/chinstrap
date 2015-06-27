@@ -1,4 +1,4 @@
 worksFor(std::string,std::string) <- load("/dfs/scratch0/caberger/systems/lubm/out_data/worksFor.txt", tsv)
 type(std::string,std::string) <- load("/dfs/scratch0/caberger/systems/lubm/out_data/type.txt", tsv)
-subOrganizationOf(std::string,std::string) <- load("/dfs/scratch0/caberger/systems/lubm/out_data/type.txt", tsv)
-result(a,b) <- worksFor(a,b),type(a,c),subOrganizationOf(b,d),type(b,e),c="",d="",e=""
+subOrganizationOf(std::string,std::string) <- load("/dfs/scratch0/caberger/systems/lubm/out_data/subOrganizationOf.txt", tsv)
+result(a,b) <- worksFor(a,b),type(a,c),subOrganizationOf(b,d),type(b,e),c="http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#FullProfessor",d="http://www.Department12.University8.edu",e="http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#Department"

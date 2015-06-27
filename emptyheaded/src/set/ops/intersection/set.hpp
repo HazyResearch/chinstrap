@@ -65,7 +65,7 @@ namespace ops{
         break;
     }
 
-    std::cout << "ERROR" << std::endl;
+    std::cout << "SET INTERSECTION ERROR 0" << std::endl;
     return C_in;
   }
   inline Set<hybrid>* set_intersect(Set<hybrid> *C_in, const Set<hybrid> *A_in, const Set<hybrid> *B_in){
@@ -125,7 +125,7 @@ namespace ops{
         default:
         break;
     }
-    std::cout << "ERROR" << std::endl;
+    std::cout << "SET INTERSECTION ERROR 1" << std::endl;
     return C_in;
   }
 template<typename F>
@@ -184,7 +184,7 @@ template<typename F>
         break;
     }
 
-    std::cout << "ERROR" << std::endl;
+    std::cout << "SET INTERSECTION ERROR 1" << std::endl;
     return 0;
   }
   inline size_t set_intersect(const Set<hybrid> *A_in,const Set<hybrid> *B_in){
@@ -242,7 +242,7 @@ template<typename F>
         break;
     }
 
-    std::cout << "ERROR" << std::endl;
+    std::cout << "SET INTERSECTION ERROR 3" << std::endl;
     return 0;
   }
 }

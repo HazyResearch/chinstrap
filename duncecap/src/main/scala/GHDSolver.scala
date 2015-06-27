@@ -4,7 +4,7 @@ import scala.collection.mutable
 import java.io.{FileWriter, BufferedWriter, File}
 
 object GHDSolver {
-  type EquivalenceClasses = (Map[(String,Int),(Int,Int,String)],Map[String,Int],Map[Int,String],Map[String,String])
+  type EquivalenceClasses = (Map[(String,Int),(Int,Int,String,Int)],Map[String,Int],Map[Int,String],Map[String,String])
 
   def getAttrSet(rels: List[Relation]): Set[String] = {
     return rels.foldLeft(Set[String]())(
@@ -29,25 +29,27 @@ object GHDSolver {
 
     while(frontier.size != 0){
       next_frontier.clear
+      val level_attr = scala.collection.mutable.ListBuffer.empty[String]
       frontier.foreach{ cur:GHDNode =>
-
-        var tmp_attr = scala.collection.mutable.ListBuffer.empty[(String,Int)]
         //first add attributes with elements in common with children, then add others        
         val children_attrs = cur.children.flatMap{ c => c.rels.flatMap{r => r.attrs}.toList}
-        val children_attrs_sorted = children_attrs.sortBy(e => if(resultAttrs.contains(e)) resultAttrs.indexOf(e) else resultAttrs.size+1)
-
+        //sort by frequency
+        val children_attrs_sorted = children_attrs.distinct.sortBy(children_attrs count _.==).reverse
         val cur_attrs = cur.rels.flatMap{r => r.attrs}
-        val cur_attrs_sorted = cur_attrs.sortBy(e => if(resultAttrs.contains(e)) resultAttrs.indexOf(e) else resultAttrs.size+1)
 
-        cur_attrs_sorted.intersect(children_attrs_sorted).foreach{ a =>
+        //find shared attributes and sort by frequency
+        val shared_attrs = cur_attrs.intersect(children_attrs_sorted).sortBy(e => children_attrs_sorted.indexOf(e))
+        //shared attributes added first. Should be added in order of how many times
+        //appears in the child.
+        shared_attrs.foreach{ a =>
           if(!attr.contains(a)){
             attr += a
           }
         }
-        //add others
+        //collect others
         cur_attrs.foreach{ a =>
-          if(!attr.contains(a)){
-            attr += a
+          if(!attr.contains(a) && !level_attr.contains(a)){
+            level_attr += a
           }
         }
 
@@ -56,6 +58,13 @@ object GHDSolver {
             seen += child
             next_frontier += child
           }
+        }
+      }
+
+      val cur_attrs_sorted = level_attr.sortBy(e => if(resultAttrs.contains(e)) resultAttrs.indexOf(e) else resultAttrs.size+1)
+      cur_attrs_sorted.foreach{ a =>
+        if(!attr.contains(a)){
+          attr += a
         }
       }
 

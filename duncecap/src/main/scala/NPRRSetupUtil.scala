@@ -7,10 +7,10 @@ object NPRRSetupUtil {
   type RName = String
   type RIndex = Int
   type Column = (RName, RIndex)
-  type EM = Map[(String,Int),(Int,Int,String)]
-  type EquivalenceClasses = (Map[(String,Int),(Int,Int,String)],Map[String,Int],Map[Int,String],Map[String,String])
+  type EM = Map[(String,Int),(Int,Int,String,Int)]
+  type EquivalenceClasses = (EM,Map[String,Int],Map[Int,String],Map[String,String])
 
-  def buildEncodingEquivalenceClasses(relations : Relations): EquivalenceClasses = {
+  def buildEncodingEquivalenceClasses(relations : Relations, reorderedDistinctRelations:Relations): EquivalenceClasses = {
       /**
      * Figures out aliases amongst relations and attributes, sets up for encoding
      * Code is absolutely horrible
@@ -94,13 +94,22 @@ object NPRRSetupUtil {
       encodingIDToName.keys.toList.foreach{ i =>
         e_to_index += (i -> 0)
       }
+
+      val r_new = reorderedDistinctRelations.flatMap{ r =>
+        (0 until r.attrs.size).map{ i =>
+          ((r.name,r.attrs(i)) -> i)
+        }
+      }.toMap
+      println("HERE")
+      r_new.foreach{println}
+
       //build a map between the (relation,attr_index) to (encoding,encoding_index)
-      var e_to_index2 = mutable.Map[(String,Int),(Int,Int,String)]()
+      var e_to_index2 = mutable.Map[(String,Int),(Int,Int,String,Int)]()
       relations.foreach{rel =>
         (0 until rel.attrs.size).foreach{i =>
           val ei = e_to_index(attributeToEncoding(rel.attrs(i)))
-          val a = (rel.name,i)
-          val b = (attributeToEncoding(rel.attrs(i)),ei,Environment.getTypes(rel.name)(i))
+          val a = (rel.name,r_new(rel.name,rel.attrs(i)))
+          val b = (attributeToEncoding(rel.attrs(i)),ei,Environment.getTypes(rel.name)(i),i)
           if(!e_to_index2.contains(a)){
             e_to_index2 += ( a -> b )
             e_to_index(attributeToEncoding(rel.attrs(i))) += 1
