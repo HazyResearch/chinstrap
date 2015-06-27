@@ -314,7 +314,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
       //will break code if it is not spitting this out for the outermost level of the trie...HACK
       if(resultAttrs.size == 1 && processed.size != 0){
-        s.println(s"""new_head_data[nhd++] = ${resultAttrs.head}_d;""")
+        s.println(s"""new_head_data[nhd.fetch_add(1)] = ${resultAttrs.head}_d;""")
       }
 
 
@@ -354,7 +354,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     if (outermostLoop) {
       if(resultAttrs.size == 1 && attrs.size > 1){
         s.println(s"""uint32_t *new_head_data = (uint32_t*)tmp_buffer.get_next(0,${attrs.head}.cardinality*sizeof(uint32_t));""")
-        s.println(s"""size_t nhd = 0;""")
+        s.println(s"""std::atomic<size_t> nhd(0);""")
       }
 
       if(aggregate)
@@ -370,7 +370,8 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         val encodingName = encodingNames(attrMap(attrs.head))
         s.println(s"""const size_t halloc_size = sizeof(uint64_t)*${encodingName}_encoding->num_distinct*2;""")
         s.println(s"""uint8_t *new_head_mem = output_buffer.get_next(${0},halloc_size);""")
-        s.println(s"""${attrs.head} = Set<${layout}>::from_array(new_head_mem,new_head_data,nhd);""")
+        s.println(s"""tbb::parallel_sort(new_head_data,new_head_data+nhd.load());""");
+        s.println(s"""${attrs.head} = Set<${layout}>::from_array(new_head_mem,new_head_data,nhd.load());""")
         s.println(s"""${name}_block->set = &${attrs.head};""")
         s.println(s"""output_buffer.roll_back(0,halloc_size-${attrs.head}.number_of_bytes);""")
       }
@@ -566,6 +567,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val visited_attributes = mutable.Set[String]()
     (0 until resultAttrs.size).foreach{ i =>
       val a = resultAttrs(i)
+      val tid = if(i == 0) "0" else "tid"
       val a_name = if(i != 0) a else lhs_name
       val prev = if(i == 0) "" else resultAttrs(i-1)
       val access = accessor(a)
@@ -598,12 +600,12 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       
       //exists in output
       val ename = encodingNames(attrMap(a))
-      s.println(s"""${a_name}_block = new(output_buffer.get_next(0, sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${a_name}_block);""")
+      s.println(s"""${a_name}_block = new(output_buffer.get_next(${tid}, sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${a_name}_block);""")
       if(prev_set != "")
         s.println(s"""${prev_set_block}_block->set_block(${prev_set}_i,${prev_set}_d,${a_name}_block);""")
       if(i != resultAttrs.size-1){
         val ename = encodingNames(attrMap(a))
-        s.println(s"""${a_name}_block->init_pointers(0, &output_buffer,${a_name}_block->set.cardinality,${ename}_encoding->num_distinct,${a_name}_block->set.type == type::UINTEGER);""")
+        s.println(s"""${a_name}_block->init_pointers(${tid}, &output_buffer,${a_name}_block->set.cardinality,${ename}_encoding->num_distinct,${a_name}_block->set.type == type::UINTEGER);""")
       } else {
         s.println(s"""const size_t count = ${a_name}_block->set.cardinality;""")
         if(i != 0)
