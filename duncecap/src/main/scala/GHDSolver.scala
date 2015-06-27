@@ -77,19 +77,19 @@ object GHDSolver {
     return attr.toList
   }
 
-  def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, fn:(CodeStringBuilder,GHDNode,List[String],List[List[ASTCriterion]],Boolean,EquivalenceClasses) => Unit, s:CodeStringBuilder, attribute_ordering:List[String], selections:List[List[ASTCriterion]], aggregate:Boolean, equivalenceClasses:EquivalenceClasses): Unit = {
+  def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, fn:(CodeStringBuilder,GHDNode,List[String],List[List[ASTCriterion]],Boolean,EquivalenceClasses,List[String]) => Unit, s:CodeStringBuilder, attribute_ordering:List[String], selections:List[List[ASTCriterion]], aggregate:Boolean, equivalenceClasses:EquivalenceClasses, resultAttrs:List[String]): Unit = {
     for (child <- curr.children) {
       if (!seen.contains(child)) {
         seen += child
-        bottom_up(seen, child, fn, s, attribute_ordering, selections,aggregate,equivalenceClasses)
+        bottom_up(seen, child, fn, s, attribute_ordering, selections,aggregate,equivalenceClasses,resultAttrs)
       }
     }
     val bag_attrs = curr.rels.flatMap(r => r.attrs).toList.distinct
     val a_i = attribute_ordering.zipWithIndex.filter(a => bag_attrs.contains(a._1))
     val s_in = a_i.map{ i => selections(i._2) }
-    fn(s,curr,a_i.map(_._1),s_in,aggregate,equivalenceClasses)
+    fn(s,curr,a_i.map(_._1),s_in,aggregate,equivalenceClasses,resultAttrs)
   }
-  def top_down(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): (Map[String,String],Map[String,mutable.Set[String]]) = {
+  def top_down(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode], resultAttrs:List[String]): (Map[String,String],Map[String,mutable.Set[String]]) = {
     var depth = 0
     var frontier = f_in
     var next_frontier = mutable.Set[GHDNode]()
@@ -102,33 +102,34 @@ object GHDSolver {
       next_frontier.clear
 
       frontier.foreach{ cur:GHDNode =>
-
-        (0 until cur.attribute_ordering.size).foreach{i =>
-          if(!visited_attributes.contains(cur.attribute_ordering(i))){
-            visited_attributes += cur.attribute_ordering(i)
-            val a1 = cur.attribute_ordering(i)
+        val newAttrs = cur.attribute_ordering.filter(resultAttrs.contains(_))
+        (0 until newAttrs.size).foreach{i =>
+          if(!visited_attributes.contains(newAttrs(i))){
+            visited_attributes += newAttrs(i)
+            val a1 = newAttrs(i)
             val a2 = cur.name + "_block" + (0 until i).map{s =>
-              "->get_block(" + cur.attribute_ordering(s) + "_d)" 
+              "->get_block(" + newAttrs(s) + "_d)" 
             }.mkString("")
             final_accessor += ((a1,a2))
           }
-          if((i+1) < cur.attribute_ordering.size){
-            if(!final_checks.contains(cur.attribute_ordering(i))){
-              final_checks += ((cur.attribute_ordering(i),mutable.Set[String]()))
+          if((i+1) < newAttrs.size){
+            if(!final_checks.contains(newAttrs(i))){
+              final_checks += ((newAttrs(i),mutable.Set[String]()))
             }
-            final_checks(cur.attribute_ordering(i)) += cur.attribute_ordering(i+1)
+            final_checks(newAttrs(i)) += newAttrs(i+1)
           }
         }
 
         cur.children.foreach{(child:GHDNode) =>
+          val childrenAttrs = child.attribute_ordering.filter(resultAttrs.contains(_))
           var name = ""
           (0 until 1).foreach{ i =>
             //can only be first level...past that we have a dependency
-            if((i+1) < child.attribute_ordering.size){
-              if(!final_checks.contains(child.attribute_ordering(i))){
-                final_checks += ((child.attribute_ordering(i),mutable.Set[String]()))
+            if((i+1) < childrenAttrs.size){
+              if(!final_checks.contains(childrenAttrs(i))){
+                final_checks += ((childrenAttrs(i),mutable.Set[String]()))
               }
-              final_checks(child.attribute_ordering(i)) += child.attribute_ordering(i+1)
+              final_checks(childrenAttrs(i)) += childrenAttrs(i+1)
             }
           }
           if(!seen.contains(child)){
