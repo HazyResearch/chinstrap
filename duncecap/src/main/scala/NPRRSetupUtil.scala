@@ -48,9 +48,6 @@ object NPRRSetupUtil {
         }.toList
 
       }
-      
-      println("EQUIV ATTRIBUTES")
-      equivalentAttributeSets.foreach{println}
 
       //Merge all equivalent sets with an equivalent attribute
       //Should just be a list of disjoint sets at the end these are our equivalence classes
@@ -76,8 +73,7 @@ object NPRRSetupUtil {
         equivalentAttributeSets = new_set
       }
 
-      println("EQUIV ATTRIBUTES")
-      equivalentAttributeSets.foreach{println}
+
 
       //maps each attribute to an encoding ID
       var attributeToEncoding = mutable.Map[String,Int]()
@@ -100,8 +96,6 @@ object NPRRSetupUtil {
           ((r.name,r.attrs(i)) -> i)
         }
       }.toMap
-      println("HERE")
-      r_new.foreach{println}
 
       //build a map between the (relation,attr_index) to (encoding,encoding_index)
       var e_to_index2 = mutable.Map[(String,Int),(Int,Int,String,Int)]()
@@ -117,12 +111,16 @@ object NPRRSetupUtil {
         }
       }
       
+      /*
+      println("EQUIV ATTRIBUTES")
+      equivalentAttributeSets.foreach{println}
       println("Attribute to Encoding")
       attributeToEncoding.foreach{println}
       println("Encoding to Name")
       encodingIDToName.foreach{println}
       println("Relations to Index")
       e_to_index2.foreach{println}
+      */
 
       (e_to_index2.toMap,attributeToEncoding.toMap,encodingIDToName.toMap,attributeToType.toMap)    
   }

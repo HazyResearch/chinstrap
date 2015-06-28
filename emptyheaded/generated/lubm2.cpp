@@ -106,17 +106,17 @@ run(std::unordered_map<std::string, void *> &relations,
     std::vector<Column<uint32_t>> *EmemberOf =
         new std::vector<Column<uint32_t>>();
     std::vector<void *> *encodings_memberOf = new std::vector<void *>();
-    EmemberOf->push_back(abc_encoding->encoded.at(0));
-    encodings_memberOf->push_back((void *)abc_encoding);
     EmemberOf->push_back(abc_encoding->encoded.at(1));
+    encodings_memberOf->push_back((void *)abc_encoding);
+    EmemberOf->push_back(abc_encoding->encoded.at(0));
     encodings_memberOf->push_back((void *)abc_encoding);
     std::vector<Column<uint32_t>> *EsubOrganizationOf =
         new std::vector<Column<uint32_t>>();
     std::vector<void *> *encodings_subOrganizationOf =
         new std::vector<void *>();
-    EsubOrganizationOf->push_back(abc_encoding->encoded.at(3));
-    encodings_subOrganizationOf->push_back((void *)abc_encoding);
     EsubOrganizationOf->push_back(abc_encoding->encoded.at(2));
+    encodings_subOrganizationOf->push_back((void *)abc_encoding);
+    EsubOrganizationOf->push_back(abc_encoding->encoded.at(3));
     encodings_subOrganizationOf->push_back((void *)abc_encoding);
     std::vector<Column<uint32_t>> *Etype = new std::vector<Column<uint32_t>>();
     std::vector<void *> *encodings_type = new std::vector<void *>();
@@ -164,63 +164,13 @@ run(std::unordered_map<std::string, void *> &relations,
     allocator::memory<uint8_t> tmp_buffer(
         4 * 6 * 2 * sizeof(TrieBlock<hybrid>) *
         (abc_encoding->num_distinct + xyz_encoding->num_distinct));
-    uint32_t y_selection = xyz_encoding->value_to_key.at(
-        "http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#Department");
     uint32_t x_selection = xyz_encoding->value_to_key.at(
         "http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#GraduateStudent");
     uint32_t z_selection = xyz_encoding->value_to_key.at(
         "http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#University");
+    uint32_t y_selection = xyz_encoding->value_to_key.at(
+        "http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#Department");
     auto join_timer = debug::start_clock();
-    //////////NPRR
-    par::reducer<size_t> type_by_cardinality(
-        0, [](size_t a, size_t b) { return a + b; });
-    TrieBlock<hybrid> *type_by_block;
-    {
-      Set<hybrid> b;
-      type_by_block = NULL;
-      if (Ttype->head) {
-        b = Ttype->head->set;
-        type_by_block =
-            new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
-                TrieBlock<hybrid>(Ttype->head);
-        type_by_block->init_pointers(0, &output_buffer, b.cardinality,
-                                     abc_encoding->num_distinct,
-                                     b.type == type::UINTEGER);
-      }
-      uint32_t *new_head_data =
-          (uint32_t *)tmp_buffer.get_next(0, b.cardinality * sizeof(uint32_t));
-      std::atomic<size_t> nhd(0);
-      b.par_foreach_index([&](size_t tid, uint32_t b_i, uint32_t b_d) {
-        Set<hybrid> y;
-        if (Ttype->head->get_block(b_d)) {
-          y = Ttype->head->get_block(b_d)->set;
-          uint8_t *sd_y = output_buffer.get_next(
-              tid, y.cardinality * sizeof(uint32_t)); // initialize the memory
-          uint32_t *ob_y = (uint32_t *)output_buffer.get_next(
-              tid, y.cardinality * sizeof(uint32_t));
-          size_t ob_i_y = 0;
-          y.foreach ([&](uint32_t y_data) {
-            if (y_data == y_selection)
-              ob_y[ob_i_y++] = y_data;
-          });
-          y = Set<hybrid>::from_array(sd_y, ob_y, ob_i_y);
-          output_buffer.roll_back(tid, y.cardinality * sizeof(uint32_t));
-        }
-        if (y.cardinality != 0) {
-          const size_t count = 1;
-          type_by_cardinality.update(tid, count);
-          new_head_data[nhd.fetch_add(1)] = b_d;
-        }
-      });
-      const size_t halloc_size =
-          sizeof(uint64_t) * abc_encoding->num_distinct * 2;
-      uint8_t *new_head_mem = output_buffer.get_next(0, halloc_size);
-      tbb::parallel_sort(new_head_data, new_head_data + nhd.load());
-      b = Set<hybrid>::from_array(new_head_mem, new_head_data, nhd.load());
-      type_by_block->set = &b;
-      output_buffer.roll_back(0, halloc_size - b.number_of_bytes);
-    }
-    std::cout << type_by_cardinality.evaluate(0) << std::endl;
     //////////NPRR
     par::reducer<size_t> type_ax_cardinality(
         0, [](size_t a, size_t b) { return a + b; });
@@ -322,173 +272,172 @@ run(std::unordered_map<std::string, void *> &relations,
     }
     std::cout << type_cz_cardinality.evaluate(0) << std::endl;
     //////////NPRR
+    par::reducer<size_t> type_by_cardinality(
+        0, [](size_t a, size_t b) { return a + b; });
+    TrieBlock<hybrid> *type_by_block;
+    {
+      Set<hybrid> b;
+      type_by_block = NULL;
+      if (Ttype->head) {
+        b = Ttype->head->set;
+        type_by_block =
+            new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
+                TrieBlock<hybrid>(Ttype->head);
+        type_by_block->init_pointers(0, &output_buffer, b.cardinality,
+                                     abc_encoding->num_distinct,
+                                     b.type == type::UINTEGER);
+      }
+      uint32_t *new_head_data =
+          (uint32_t *)tmp_buffer.get_next(0, b.cardinality * sizeof(uint32_t));
+      std::atomic<size_t> nhd(0);
+      b.par_foreach_index([&](size_t tid, uint32_t b_i, uint32_t b_d) {
+        Set<hybrid> y;
+        if (Ttype->head->get_block(b_d)) {
+          y = Ttype->head->get_block(b_d)->set;
+          uint8_t *sd_y = output_buffer.get_next(
+              tid, y.cardinality * sizeof(uint32_t)); // initialize the memory
+          uint32_t *ob_y = (uint32_t *)output_buffer.get_next(
+              tid, y.cardinality * sizeof(uint32_t));
+          size_t ob_i_y = 0;
+          y.foreach ([&](uint32_t y_data) {
+            if (y_data == y_selection)
+              ob_y[ob_i_y++] = y_data;
+          });
+          y = Set<hybrid>::from_array(sd_y, ob_y, ob_i_y);
+          output_buffer.roll_back(tid, y.cardinality * sizeof(uint32_t));
+        }
+        if (y.cardinality != 0) {
+          const size_t count = 1;
+          type_by_cardinality.update(tid, count);
+          new_head_data[nhd.fetch_add(1)] = b_d;
+        }
+      });
+      const size_t halloc_size =
+          sizeof(uint64_t) * abc_encoding->num_distinct * 2;
+      uint8_t *new_head_mem = output_buffer.get_next(0, halloc_size);
+      tbb::parallel_sort(new_head_data, new_head_data + nhd.load());
+      b = Set<hybrid>::from_array(new_head_mem, new_head_data, nhd.load());
+      type_by_block->set = &b;
+      output_buffer.roll_back(0, halloc_size - b.number_of_bytes);
+    }
+    std::cout << type_by_cardinality.evaluate(0) << std::endl;
+    //////////NPRR
     par::reducer<size_t>
-        memberOfsubOrganizationOfundegraduateDegreeFrom_cab_cardinality(
+        memberOfsubOrganizationOfundegraduateDegreeFrom_bca_cardinality(
             0, [](size_t a, size_t b) { return a + b; });
     TrieBlock<hybrid> *
-        memberOfsubOrganizationOfundegraduateDegreeFrom_cab_block;
+        memberOfsubOrganizationOfundegraduateDegreeFrom_bca_block;
     {
-      Set<hybrid> c;
-      memberOfsubOrganizationOfundegraduateDegreeFrom_cab_block = NULL;
-      if (TsubOrganizationOf->head && TundegraduateDegreeFrom->head &&
-          type_cz_block) {
-        memberOfsubOrganizationOfundegraduateDegreeFrom_cab_block =
+      Set<hybrid> b;
+      memberOfsubOrganizationOfundegraduateDegreeFrom_bca_block = NULL;
+      if (TmemberOf->head && TsubOrganizationOf->head && type_by_block) {
+        memberOfsubOrganizationOfundegraduateDegreeFrom_bca_block =
             new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
                 TrieBlock<hybrid>();
-        const size_t alloc_size_c =
+        const size_t alloc_size_b =
             sizeof(uint64_t) * abc_encoding->num_distinct * 2;
-        c.data =
-            output_buffer.get_next(0, alloc_size_c); // initialize the memory
-        Set<hybrid> c_tmp(
-            tmp_buffer.get_next(0, alloc_size_c)); // initialize the memory
-        c_tmp = *ops::set_intersect(
-                    &c_tmp, (const Set<hybrid> *)&TsubOrganizationOf->head->set,
-                    (const Set<hybrid> *)&TundegraduateDegreeFrom->head->set);
-        c = *ops::set_intersect(&c, (const Set<hybrid> *)&c_tmp,
-                                (const Set<hybrid> *)&type_cz_block->set);
-        tmp_buffer.roll_back(0, alloc_size_c);
-        output_buffer.roll_back(0, alloc_size_c - c.number_of_bytes);
-        memberOfsubOrganizationOfundegraduateDegreeFrom_cab_block->set = &c;
-        memberOfsubOrganizationOfundegraduateDegreeFrom_cab_block
-            ->init_pointers(0, &output_buffer, c.cardinality,
+        b.data =
+            output_buffer.get_next(0, alloc_size_b); // initialize the memory
+        Set<hybrid> b_tmp(
+            tmp_buffer.get_next(0, alloc_size_b)); // initialize the memory
+        b_tmp = *ops::set_intersect(
+                    &b_tmp, (const Set<hybrid> *)&TmemberOf->head->set,
+                    (const Set<hybrid> *)&TsubOrganizationOf->head->set);
+        b = *ops::set_intersect(&b, (const Set<hybrid> *)&b_tmp,
+                                (const Set<hybrid> *)&type_by_block->set);
+        tmp_buffer.roll_back(0, alloc_size_b);
+        output_buffer.roll_back(0, alloc_size_b - b.number_of_bytes);
+        memberOfsubOrganizationOfundegraduateDegreeFrom_bca_block->set = &b;
+        memberOfsubOrganizationOfundegraduateDegreeFrom_bca_block
+            ->init_pointers(0, &output_buffer, b.cardinality,
                             abc_encoding->num_distinct,
-                            c.type == type::UINTEGER);
+                            b.type == type::UINTEGER);
       }
-      c.par_foreach_index([&](size_t tid, uint32_t c_i, uint32_t c_d) {
-        Set<hybrid> a;
-        TrieBlock<hybrid> *a_block = NULL;
-        if (TmemberOf->head && TundegraduateDegreeFrom->head->get_block(c_d) &&
-            type_ax_block) {
-          a_block = new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
+      b.par_foreach_index([&](size_t tid, uint32_t b_i, uint32_t b_d) {
+        Set<hybrid> c;
+        TrieBlock<hybrid> *c_block = NULL;
+        if (TsubOrganizationOf->head->get_block(b_d) &&
+            TundegraduateDegreeFrom->head && type_cz_block) {
+          c_block = new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
               TrieBlock<hybrid>();
-          const size_t alloc_size_a =
+          const size_t alloc_size_c =
               sizeof(uint64_t) * abc_encoding->num_distinct * 2;
-          a.data = output_buffer.get_next(
-              tid, alloc_size_a); // initialize the memory
-          Set<hybrid> a_tmp(
-              tmp_buffer.get_next(tid, alloc_size_a)); // initialize the memory
-          a_tmp = *ops::set_intersect(
-                      &a_tmp, (const Set<hybrid> *)&TmemberOf->head->set,
-                      (const Set<hybrid> *)&TundegraduateDegreeFrom->head
-                          ->get_block(c_d)
-                          ->set);
-          a = *ops::set_intersect(&a, (const Set<hybrid> *)&a_tmp,
-                                  (const Set<hybrid> *)&type_ax_block->set);
-          tmp_buffer.roll_back(tid, alloc_size_a);
-          output_buffer.roll_back(tid, alloc_size_a - a.number_of_bytes);
-          a_block->set = &a;
-          a_block->init_pointers(tid, &output_buffer, a.cardinality,
+          c.data = output_buffer.get_next(
+              tid, alloc_size_c); // initialize the memory
+          Set<hybrid> c_tmp(
+              tmp_buffer.get_next(tid, alloc_size_c)); // initialize the memory
+          c_tmp =
+              *ops::set_intersect(
+                  &c_tmp,
+                  (const Set<hybrid> *)&TsubOrganizationOf->head->get_block(b_d)
+                      ->set,
+                  (const Set<hybrid> *)&TundegraduateDegreeFrom->head->set);
+          c = *ops::set_intersect(&c, (const Set<hybrid> *)&c_tmp,
+                                  (const Set<hybrid> *)&type_cz_block->set);
+          tmp_buffer.roll_back(tid, alloc_size_c);
+          output_buffer.roll_back(tid, alloc_size_c - c.number_of_bytes);
+          c_block->set = &c;
+          c_block->init_pointers(tid, &output_buffer, c.cardinality,
                                  abc_encoding->num_distinct,
-                                 a.type == type::UINTEGER);
+                                 c.type == type::UINTEGER);
         }
-        bool a_block_valid = false;
-        a.foreach_index([&](uint32_t a_i, uint32_t a_d) {
-          Set<hybrid> b;
-          TrieBlock<hybrid> *b_block = NULL;
-          if (TmemberOf->head->get_block(a_d) &&
-              TsubOrganizationOf->head->get_block(c_d) && type_by_block) {
-            b_block =
+        bool c_block_valid = false;
+        c.foreach_index([&](uint32_t c_i, uint32_t c_d) {
+          Set<hybrid> a;
+          TrieBlock<hybrid> *a_block = NULL;
+          if (TmemberOf->head->get_block(b_d) &&
+              TundegraduateDegreeFrom->head->get_block(c_d) && type_ax_block) {
+            a_block =
                 new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
                     TrieBlock<hybrid>();
-            const size_t alloc_size_b =
+            const size_t alloc_size_a =
                 sizeof(uint64_t) * abc_encoding->num_distinct * 2;
-            b.data = output_buffer.get_next(
-                tid, alloc_size_b); // initialize the memory
-            Set<hybrid> b_tmp(tmp_buffer.get_next(
-                tid, alloc_size_b)); // initialize the memory
-            b_tmp =
+            a.data = output_buffer.get_next(
+                tid, alloc_size_a); // initialize the memory
+            Set<hybrid> a_tmp(tmp_buffer.get_next(
+                tid, alloc_size_a)); // initialize the memory
+            a_tmp =
                 *ops::set_intersect(
-                    &b_tmp,
-                    (const Set<hybrid> *)&TmemberOf->head->get_block(a_d)->set,
-                    (const Set<hybrid> *)&TsubOrganizationOf->head->get_block(
-                                                                        c_d)
+                    &a_tmp,
+                    (const Set<hybrid> *)&TmemberOf->head->get_block(b_d)->set,
+                    (const Set<hybrid> *)&TundegraduateDegreeFrom->head
+                        ->get_block(c_d)
                         ->set);
-            b = *ops::set_intersect(&b, (const Set<hybrid> *)&b_tmp,
-                                    (const Set<hybrid> *)&type_by_block->set);
-            tmp_buffer.roll_back(tid, alloc_size_b);
-            output_buffer.roll_back(tid, alloc_size_b - b.number_of_bytes);
-            b_block->set = &b;
+            a = *ops::set_intersect(&a, (const Set<hybrid> *)&a_tmp,
+                                    (const Set<hybrid> *)&type_ax_block->set);
+            tmp_buffer.roll_back(tid, alloc_size_a);
+            output_buffer.roll_back(tid, alloc_size_a - a.number_of_bytes);
+            a_block->set = &a;
           }
-          if (b.cardinality != 0) {
-            const size_t count = b.cardinality;
-            memberOfsubOrganizationOfundegraduateDegreeFrom_cab_cardinality
+          if (a.cardinality != 0) {
+            const size_t count = a.cardinality;
+            memberOfsubOrganizationOfundegraduateDegreeFrom_bca_cardinality
                 .update(tid, count);
-            a_block_valid = true;
-            a_block->set_block(a_i, a_d, b_block);
+            c_block_valid = true;
+            c_block->set_block(c_i, c_d, a_block);
           } else {
-            a_block->set_block(a_i, a_d, NULL);
+            c_block->set_block(c_i, c_d, NULL);
           }
         });
-        if (a_block_valid) {
-          memberOfsubOrganizationOfundegraduateDegreeFrom_cab_block->set_block(
-              c_i, c_d, a_block);
+        if (c_block_valid) {
+          memberOfsubOrganizationOfundegraduateDegreeFrom_bca_block->set_block(
+              b_i, b_d, c_block);
         } else {
-          memberOfsubOrganizationOfundegraduateDegreeFrom_cab_block->set_block(
-              c_i, c_d, NULL);
+          memberOfsubOrganizationOfundegraduateDegreeFrom_bca_block->set_block(
+              b_i, b_d, NULL);
         }
       });
     }
-    std::cout << memberOfsubOrganizationOfundegraduateDegreeFrom_cab_cardinality
+    std::cout << memberOfsubOrganizationOfundegraduateDegreeFrom_bca_cardinality
                      .evaluate(0) << std::endl;
-    ///////////////////TOP DOWN
-    par::reducer<size_t> result_abc_cardinality(
-        0, [](size_t a, size_t b) { return a + b; });
-    TrieBlock<hybrid> *result_abc_block;
-    {
-      result_abc_block =
-          memberOfsubOrganizationOfundegraduateDegreeFrom_cab_block;
-      if (result_abc_block) {
-        result_abc_block =
-            new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
-                TrieBlock<hybrid>(result_abc_block);
-        result_abc_block->init_pointers(
-            0, &output_buffer, result_abc_block->set.cardinality,
-            abc_encoding->num_distinct,
-            result_abc_block->set.type == type::UINTEGER);
-        result_abc_block->set.par_foreach_index([&](size_t tid, uint32_t c_i,
-                                                    uint32_t c_d) {
-          (void)c_i;
-          (void)c_d;
-          TrieBlock<hybrid> *a_block =
-              memberOfsubOrganizationOfundegraduateDegreeFrom_cab_block
-                  ->get_block(c_d);
-          if (a_block) {
-            a_block =
-                new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
-                    TrieBlock<hybrid>(a_block);
-            result_abc_block->set_block(c_i, c_d, a_block);
-            a_block->init_pointers(tid, &output_buffer,
-                                   a_block->set.cardinality,
-                                   abc_encoding->num_distinct,
-                                   a_block->set.type == type::UINTEGER);
-            a_block->set.foreach_index([&](uint32_t a_i, uint32_t a_d) {
-              (void)a_i;
-              (void)a_d;
-              TrieBlock<hybrid> *b_block =
-                  memberOfsubOrganizationOfundegraduateDegreeFrom_cab_block
-                      ->get_block(c_d)
-                      ->get_block(a_d);
-              if (b_block) {
-                b_block =
-                    new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
-                        TrieBlock<hybrid>(b_block);
-                a_block->set_block(a_i, a_d, b_block);
-                const size_t count = b_block->set.cardinality;
-                result_abc_cardinality.update(tid, count);
-              }
-            });
-          }
-        });
-      }
-      Trie<hybrid> *Tresult = new Trie<hybrid>(result_abc_block);
-      tries["result"] = Tresult;
-      std::vector<void *> *encodings_result = new std::vector<void *>();
-      encodings_result->push_back(abc_encoding);
-      encodings_result->push_back(abc_encoding);
-      encodings_result->push_back(abc_encoding);
-      encodings["result"] = encodings_result;
-    }
-    std::cout << result_abc_cardinality.evaluate(0) << std::endl;
+    Trie<hybrid> *Tresult = new Trie<hybrid>(
+        memberOfsubOrganizationOfundegraduateDegreeFrom_bca_block);
+    tries["result"] = Tresult;
+    std::vector<void *> *encodings_result = new std::vector<void *>();
+    encodings_result->push_back(abc_encoding);
+    encodings_result->push_back(abc_encoding);
+    encodings_result->push_back(abc_encoding);
+    encodings["result"] = encodings_result;
     debug::stop_clock("JOIN", join_timer);
     tmp_buffer.free();
   }

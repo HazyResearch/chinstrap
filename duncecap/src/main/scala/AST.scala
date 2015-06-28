@@ -298,8 +298,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.println(s"""tmp_buffer.roll_back(${tid},alloc_size_${attr});""")
       }
 
-      println("2. attr: " + attr + " " + resultAttrs)
-
       s.println(s"""output_buffer.roll_back(${tid},alloc_size_${attr} - ${attr}.number_of_bytes);""")
       if(resultAttrs.contains(attr)){
         if(processed.size != 0){
@@ -658,9 +656,9 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     var relations = rels.map((rel : ASTRelation) => new Relation(rel.attrs, rel.identifierName))
     val solver = GHDSolver
     //get minimum GHD's
-    val resultAttrs = lhs.attrs
     val myghd = solver.getGHD(relations)
-    val attribute_ordering = solver.getAttributeOrdering(myghd,resultAttrs)
+    val attribute_ordering = solver.getAttributeOrdering(myghd,lhs.attrs)
+    val resultAttrs = lhs.attrs.sortBy(attribute_ordering.indexOf(_))
     //////////////////////////////////////////////////////////////////////
 
     /**
@@ -697,9 +695,14 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
     s.println(s"""auto join_timer = debug::start_clock();""")
     solver.bottom_up(mutable.LinkedHashSet[GHDNode](myghd), myghd, emitNPRR, s, attribute_ordering, attrSelections, aggregate, equivalenceClasses, resultAttrs)
+    val top_down_unnecessary = resultAttrs.foldLeft(true){ (a,b) => (myghd.attribute_ordering.indexOf(a) == resultAttrs.indexOf(a)) && (myghd.attribute_ordering.indexOf(b) == resultAttrs.indexOf(b))}
+    println("TOPD DOWN UNECCESSARY: " + top_down_unnecessary)
     if(myghd.children.size != 0){
       val (accessor,checks) = solver.top_down(mutable.LinkedHashSet[GHDNode](myghd), mutable.LinkedHashSet(myghd), resultAttrs)
-      emitTopDown(s,accessor,checks,equivalenceClasses,resultAttrs.sortBy(attribute_ordering.indexOf(_))) 
+      if(!top_down_unnecessary)
+        emitTopDown(s,accessor,checks,equivalenceClasses,resultAttrs) 
+      else
+        emitResultTrie(s, lhs.identifierName, myghd.name, myghd.attribute_ordering, equivalenceClasses)
     } else{
       emitResultTrie(s, lhs.identifierName, myghd.name, myghd.attribute_ordering, equivalenceClasses)
     }

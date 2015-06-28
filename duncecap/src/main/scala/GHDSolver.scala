@@ -146,9 +146,6 @@ object GHDSolver {
       depth += 1
     }
 
-    final_accessor.foreach{println}
-    println("FINAL CHECKS")
-    final_checks.foreach{println}
     (final_accessor.toMap,final_checks.toMap)
   }
   private def breadth_first(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): (Int,Int) = {
@@ -195,7 +192,6 @@ object GHDSolver {
     val attribute_ordering = get_attribute_ordering(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd),resultAttrs)
     println("Attribute Ordering")
     attribute_ordering.foreach{println}
-    println("Attribute Ordering")
     return attribute_ordering
   }
 

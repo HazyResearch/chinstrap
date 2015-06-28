@@ -224,6 +224,58 @@ run(std::unordered_map<std::string, void *> &relations,
     }
     std::cout << subOrganizationOf_be_cardinality.evaluate(0) << std::endl;
     //////////NPRR
+    par::reducer<size_t> type_ad_cardinality(
+        0, [](size_t a, size_t b) { return a + b; });
+    TrieBlock<hybrid> *type_ad_block;
+    {
+      Set<hybrid> a;
+      type_ad_block = NULL;
+      if (Ttype->head) {
+        a = Ttype->head->set;
+        type_ad_block =
+            new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
+                TrieBlock<hybrid>(Ttype->head);
+        type_ad_block->init_pointers(0, &output_buffer, a.cardinality,
+                                     ab_encoding->num_distinct,
+                                     a.type == type::UINTEGER);
+      }
+      uint32_t *new_head_data =
+          (uint32_t *)tmp_buffer.get_next(0, a.cardinality * sizeof(uint32_t));
+      std::atomic<size_t> nhd(0);
+      a.par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d) {
+        Set<hybrid> d;
+        if (Ttype->head->get_block(a_d)) {
+          d = Ttype->head->get_block(a_d)->set;
+          uint8_t *sd_d = output_buffer.get_next(
+              tid, d.cardinality * sizeof(uint32_t)); // initialize the memory
+          uint32_t *ob_d = (uint32_t *)output_buffer.get_next(
+              tid, d.cardinality * sizeof(uint32_t));
+          size_t ob_i_d = 0;
+          d.foreach ([&](uint32_t d_data) {
+            if (d_data == d_selection)
+              ob_d[ob_i_d++] = d_data;
+          });
+          d = Set<hybrid>::from_array(sd_d, ob_d, ob_i_d);
+          output_buffer.roll_back(tid, d.cardinality * sizeof(uint32_t));
+        }
+        if (d.cardinality != 0) {
+          const size_t count = 1;
+          type_ad_cardinality.update(tid, count);
+          new_head_data[nhd.fetch_add(1)] = a_d;
+        }
+      });
+      const size_t halloc_size =
+          sizeof(uint64_t) * ab_encoding->num_distinct * 2;
+      uint8_t *new_head_mem = output_buffer.get_next(0, halloc_size);
+      tbb::parallel_sort(new_head_data, new_head_data + nhd.load());
+      a = Set<hybrid>::from_array(new_head_mem, new_head_data, nhd.load());
+      type_ad_block->set = &a;
+      output_buffer.roll_back(0, halloc_size - a.number_of_bytes);
+    }
+    std::cout << type_ad_cardinality.evaluate(0) << std::endl;
+    //////////NPRR
+    TrieBlock<hybrid> *emailAddress_ac_block = TemailAddress->head;
+    //////////NPRR
     par::reducer<size_t> type_bf_cardinality(
         0, [](size_t a, size_t b) { return a + b; });
     TrieBlock<hybrid> *type_bf_block;
@@ -286,65 +338,13 @@ run(std::unordered_map<std::string, void *> &relations,
     }
     std::cout << type_bf_cardinality.evaluate(0) << std::endl;
     //////////NPRR
-    TrieBlock<hybrid> *emailAddress_ac_block = TemailAddress->head;
-    //////////NPRR
-    par::reducer<size_t> type_ad_cardinality(
-        0, [](size_t a, size_t b) { return a + b; });
-    TrieBlock<hybrid> *type_ad_block;
-    {
-      Set<hybrid> a;
-      type_ad_block = NULL;
-      if (Ttype->head) {
-        a = Ttype->head->set;
-        type_ad_block =
-            new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
-                TrieBlock<hybrid>(Ttype->head);
-        type_ad_block->init_pointers(0, &output_buffer, a.cardinality,
-                                     ab_encoding->num_distinct,
-                                     a.type == type::UINTEGER);
-      }
-      uint32_t *new_head_data =
-          (uint32_t *)tmp_buffer.get_next(0, a.cardinality * sizeof(uint32_t));
-      std::atomic<size_t> nhd(0);
-      a.par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d) {
-        Set<hybrid> d;
-        if (Ttype->head->get_block(a_d)) {
-          d = Ttype->head->get_block(a_d)->set;
-          uint8_t *sd_d = output_buffer.get_next(
-              tid, d.cardinality * sizeof(uint32_t)); // initialize the memory
-          uint32_t *ob_d = (uint32_t *)output_buffer.get_next(
-              tid, d.cardinality * sizeof(uint32_t));
-          size_t ob_i_d = 0;
-          d.foreach ([&](uint32_t d_data) {
-            if (d_data == d_selection)
-              ob_d[ob_i_d++] = d_data;
-          });
-          d = Set<hybrid>::from_array(sd_d, ob_d, ob_i_d);
-          output_buffer.roll_back(tid, d.cardinality * sizeof(uint32_t));
-        }
-        if (d.cardinality != 0) {
-          const size_t count = 1;
-          type_ad_cardinality.update(tid, count);
-          new_head_data[nhd.fetch_add(1)] = a_d;
-        }
-      });
-      const size_t halloc_size =
-          sizeof(uint64_t) * ab_encoding->num_distinct * 2;
-      uint8_t *new_head_mem = output_buffer.get_next(0, halloc_size);
-      tbb::parallel_sort(new_head_data, new_head_data + nhd.load());
-      a = Set<hybrid>::from_array(new_head_mem, new_head_data, nhd.load());
-      type_ad_block->set = &a;
-      output_buffer.roll_back(0, halloc_size - a.number_of_bytes);
-    }
-    std::cout << type_ad_cardinality.evaluate(0) << std::endl;
-    //////////NPRR
     par::reducer<size_t> memberOf_ab_cardinality(
         0, [](size_t a, size_t b) { return a + b; });
     TrieBlock<hybrid> *memberOf_ab_block;
     {
       Set<hybrid> a;
       memberOf_ab_block = NULL;
-      if (TmemberOf->head && emailAddress_ac_block && type_ad_block) {
+      if (TmemberOf->head && type_ad_block && emailAddress_ac_block) {
         memberOf_ab_block =
             new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
                 TrieBlock<hybrid>();
@@ -354,11 +354,12 @@ run(std::unordered_map<std::string, void *> &relations,
             output_buffer.get_next(0, alloc_size_a); // initialize the memory
         Set<hybrid> a_tmp(
             tmp_buffer.get_next(0, alloc_size_a)); // initialize the memory
-        a_tmp = *ops::set_intersect(
-                    &a_tmp, (const Set<hybrid> *)&TmemberOf->head->set,
-                    (const Set<hybrid> *)&emailAddress_ac_block->set);
-        a = *ops::set_intersect(&a, (const Set<hybrid> *)&a_tmp,
-                                (const Set<hybrid> *)&type_ad_block->set);
+        a_tmp = *ops::set_intersect(&a_tmp,
+                                    (const Set<hybrid> *)&TmemberOf->head->set,
+                                    (const Set<hybrid> *)&type_ad_block->set);
+        a = *ops::set_intersect(
+                &a, (const Set<hybrid> *)&a_tmp,
+                (const Set<hybrid> *)&emailAddress_ac_block->set);
         tmp_buffer.roll_back(0, alloc_size_a);
         output_buffer.roll_back(0, alloc_size_a - a.number_of_bytes);
         memberOf_ab_block->set = &a;
