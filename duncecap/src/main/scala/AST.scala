@@ -241,7 +241,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
             s.println(s"""${name}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${relsAttrsWithAttr.head});""")
           emitSetSelection(s,attr,name,sel,tid,layout,resultAttrs.contains(attr))
           if(resultAttrs.contains(attr))
-            emitInitPointers(s,name,attr,encodingName,true,tid)
+            emitInitPointers(s,name,attr,encodingName,lastIntersection,tid)
         }
         else{
           if(resultAttrs.contains(attr))
@@ -317,7 +317,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.println(s"""new_head_data[nhd.fetch_add(1)] = ${resultAttrs.head}_d;""")
       }
 
-
       if(resultAttrs.contains(attr)){
         resultProcessed.tail.filter(a => a != resultProcessed.head).foreach{ pa =>
           s.println(s"""${pa}_block_valid = true;""")
@@ -329,7 +328,12 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         resultProcessed.tail.foreach{ pa =>
           s.println(s"""${pa}_block_valid = true;""")
         }
-      } 
+      }
+      if(resultAttrs.contains(attr)){
+        s.println(s"""} else{""")
+        val blockName = if(resultProcessed.size == 1) name else resultProcessed.last
+        s.println(s"""${blockName}_block->set_block(${resultProcessed.last}_i,${resultProcessed.last}_d,NULL);""")
+      }
       s.println("""}""")
       List[(String, List[String])]()
     } else {
