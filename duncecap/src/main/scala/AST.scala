@@ -567,7 +567,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   }
 
   def emitTopDown(s:CodeStringBuilder, accessor:Map[String,String], checks:Map[String,mutable.Set[String]], eq:EquivalenceClasses, resultAttrs:List[String]) = {
-    val lhs_name = lhs.getName()
+    val lhs_name = lhs.identifierName + "_" + resultAttrs.mkString("")
     val (encodingMap,attrMap,encodingNames,attributeToType) = eq
     s.println("///////////////////TOP DOWN")
     //FIXME ADD A REAL OUTPUT TRIE
@@ -582,6 +582,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val visited_attributes = mutable.Set[String]()
     (0 until resultAttrs.size).foreach{ i =>
       val a = resultAttrs(i)
+      println("PROCESSING: " + a)
       val tid = if(i == 0) "0" else "tid"
       val a_name = if(i != 0) a else lhs_name
       val prev = if(i == 0) "" else resultAttrs(i-1)
@@ -640,7 +641,11 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.println(s"""(void)${a}_i;(void)${a}_d;""")
       }
     }
-    (0 until resultAttrs.size-1).foreach{ i =>
+    (0 until resultAttrs.size-1).foreach{ ii =>
+      val i = resultAttrs.size-1-ii
+      s.println("""} else {""")
+      val bname = if(i ==1) lhs_name else resultAttrs(i-1)
+      s.println(s"""${bname}_block->set_block(${resultAttrs(i-1)}_i,${resultAttrs(i-1)}_d,NULL);""")
       s.println("""}""")
       s.println("""});""")
     }
@@ -660,7 +665,12 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val attribute_ordering = solver.getAttributeOrdering(myghd,lhs.attrs)
     val resultAttrs = lhs.attrs.sortBy(attribute_ordering.indexOf(_))
     //////////////////////////////////////////////////////////////////////
-
+    println("RESULT ATTRIBUTES")
+    resultAttrs.foreach{
+      println
+    }
+    println("Attribute Ordering")
+    attribute_ordering.foreach{println}
     /**
      * We get a distinct list of them so we can look them up and have a pointer to them
      */

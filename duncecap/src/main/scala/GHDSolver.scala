@@ -22,11 +22,6 @@ object GHDSolver {
     var next_frontier = mutable.Set[GHDNode]()
     var attr = scala.collection.mutable.ListBuffer.empty[String]
 
-    println("RESULT ATTRIBUTES")
-    resultAttrs.foreach{
-      println
-    }
-
     while(frontier.size != 0){
       next_frontier.clear
       val level_attr = scala.collection.mutable.ListBuffer.empty[String]
@@ -190,8 +185,6 @@ object GHDSolver {
   }
   def getAttributeOrdering(myghd:GHDNode, resultAttrs:List[String]) : List[String] ={
     val attribute_ordering = get_attribute_ordering(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd),resultAttrs)
-    println("Attribute Ordering")
-    attribute_ordering.foreach{println}
     return attribute_ordering
   }
 

@@ -19,6 +19,7 @@ namespace allocator{
       cur = ptr;
     }
     inline T* get_next(size_t num){
+      //std::cout << (void*)(cur+num*sizeof(T)) << " " << (void*)max_ptr << " " << (max_ptr-(cur+num*sizeof(T))) << std::endl;
       if((cur+num*sizeof(T)) < max_ptr){
         T* val = (T*)cur;
         cur += (num*sizeof(T));
@@ -56,15 +57,15 @@ namespace allocator{
   template<class T>
   struct memory{
     const size_t multplier = 2;
-    size_t num_elems;
+    std::vector<size_t> num_elems;
     std::vector<size_t> indicies;
     std::vector<std::vector<elem<T>>> elements;
     memory(){}
     memory(size_t num_elems_in){
-      num_elems = num_elems_in;
       for(size_t i = 0; i < NUM_THREADS; i++){
         std::vector<elem<T>> current;
-        current.push_back(elem<T>(num_elems));
+        num_elems.push_back(num_elems_in);
+        current.push_back(elem<T>(num_elems.at(i)));
         elements.push_back(current);
         indicies.push_back(0);
       }
@@ -75,7 +76,7 @@ namespace allocator{
     inline T* get_next(size_t tid){
       T* val = elements.at(tid).at(indicies.at(tid)).get_next();
       if(val == NULL){
-        elements.at(tid).push_back(elem<T>(num_elems));
+        elements.at(tid).push_back(elem<T>(num_elems.at(tid)));
         indicies.at(tid)++;
         val = elements.at(tid).at(indicies.at(tid)).get_next();
         assert(val != NULL);
@@ -85,14 +86,14 @@ namespace allocator{
     inline T* get_next(size_t tid, size_t num){
       T* val = elements.at(tid).at(indicies.at(tid)).get_next(num);
       if(val == NULL){
-        num_elems = (num_elems+1)*multplier;
-        while(num > num_elems){
-          num_elems = (num_elems+1)*multplier;
+        num_elems.at(tid) = (num_elems.at(tid)+1)*multplier;
+        while(num > num_elems.at(tid)){
+          num_elems.at(tid) = (num_elems.at(tid)+1)*multplier;
         }
 
-        std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems << std::endl;
-        assert(num < num_elems);
-        elements.at(tid).push_back(elem<T>(num_elems));
+        std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems.at(tid) << std::endl;
+        assert(num < num_elems.at(tid));
+        elements.at(tid).push_back(elem<T>(num_elems.at(tid)));
         indicies.at(tid)++;
         val = elements.at(tid).at(indicies.at(tid)).get_next(num);
         assert(val != NULL);
@@ -102,14 +103,14 @@ namespace allocator{
     inline T* get_next(size_t tid, size_t num, size_t align){
       T* val = elements.at(tid).at(indicies.at(tid)).get_next(num,align);
       if(val == NULL){
-        num_elems = (num_elems+1)*multplier;
-        while((num+align) > num_elems){
-          num_elems = (num_elems+1)*multplier;
+        num_elems.at(tid) = (num_elems.at(tid)+1)*multplier;
+        while((num+align) > num_elems.at(tid)){
+          num_elems.at(tid) = (num_elems.at(tid)+1)*multplier;
         }
 
-        std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems << std::endl;
-        assert(num < num_elems);
-        elements.at(tid).push_back(elem<T>(num_elems));
+        std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems.at(tid) << std::endl;
+        assert(num < num_elems.at(tid));
+        elements.at(tid).push_back(elem<T>(num_elems.at(tid)));
         indicies.at(tid)++;
         val = elements.at(tid).at(indicies.at(tid)).get_next(num,align);
         assert(val != NULL);
