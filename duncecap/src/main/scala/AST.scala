@@ -230,11 +230,22 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     if(processed.size == 0)
       tid = "0"
 
+    s.println(s"""Set<${layout}> ${attr};""")
+    if(resultAttrs.contains(attr)){
+      if(resultProcessed.size == 0)
+        s.println(s"""${name}_block = NULL;""")
+      else
+        s.println(s"""TrieBlock<${layout}> *${attr}_block = NULL;""")
+    }
+    //can have NULL pointers in trie
+    s.print(s"""if( ${relsAttrsWithAttr.head}""")
+    relsAttrsWithAttr.tail.foreach{rawa =>
+      s.print(s""" && ${rawa}""")
+    }
+    s.println(s"""){""")
     if (relsAttrsWithAttr.size == 1) {
-      println("1. attr: " + attr + " " + resultProcessed)
-
       // no need to emit an intersection
-      s.println( s"""Set<${layout}> ${attr} = ${relsAttrsWithAttr.head}->set;""")
+      s.println( s"""${attr} = ${relsAttrsWithAttr.head}->set;""")
       if(!aggregate){
         if(resultProcessed.size == 0){
           if(resultAttrs.contains(attr))
@@ -245,7 +256,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         }
         else{
           if(resultAttrs.contains(attr))
-            s.println(s"""TrieBlock<${layout}> *${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${relsAttrsWithAttr.head});""")
+            s.println(s"""${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${relsAttrsWithAttr.head});""")
           emitSetSelection(s,attr,attr,sel,tid,layout,resultAttrs.contains(attr)) 
           if(resultAttrs.contains(attr))
             emitInitPointers(s,attr,attr,encodingName,lastIntersection,tid)
@@ -256,10 +267,10 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         if(resultProcessed.size == 0)
           s.println(s"""${name}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>();""")
         else
-          s.println(s"""TrieBlock<${layout}> *${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>();""")
+          s.println(s"""${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>();""")
       }
       s.println(s"""const size_t alloc_size_${attr} = sizeof(uint64_t)*${encodingName}_encoding->num_distinct*2;""")
-      s.println(s"""Set<${layout}> ${attr}(output_buffer.get_next(${tid},alloc_size_${attr})); //initialize the memory""")
+      s.println(s"""${attr}.data = output_buffer.get_next(${tid},alloc_size_${attr}); //initialize the memory""")
             
       //intersection
       val restOfRelsAttrsWithAttr = relsAttrsWithAttr.tail.tail 
@@ -301,6 +312,8 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         }
       }
     }
+
+    s.println("}")
 
     if (lastIntersection) {
       s.println(s"""if(${attr}.cardinality != 0){""")
