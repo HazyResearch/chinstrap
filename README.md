@@ -1,6 +1,32 @@
-# EmptyHeaded
+# Dependencies
 
-Some information about emptyheaded here.
++Clang 3.6 or GCC 4.9.2
++Java 1.8
++SBT 0.13.8
++Intel TBB
+
+It may work with different versions of these but this is what the system is currently tested on.
+
+Need GCC?
+
+sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test  
+sudo apt-get update
+sudo apt-get install g++-4.9
+
+Need Java 1.8?
+
+https://www.digitalocean.com/community/tutorials/how-to-install-java-on-ubuntu-with-apt-get
+
+Need SBT?
+
+http://www.scala-sbt.org/download.html
+
+Need TBB?
+
+sudo apt-get install libtbb-dev
+
+For more information....
+https://www.threadingbuildingblocks.org/
 
 # DunceCap
 
