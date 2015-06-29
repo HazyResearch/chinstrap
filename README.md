@@ -1,5 +1,6 @@
 # Dependencies
 
+* C++11
 * Clang 3.6 or GCC 4.9.2
 * Scala 2.11.2 (Java 1.8)
 * SBT 0.13.8
