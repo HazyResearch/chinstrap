@@ -1,8 +1,11 @@
 # Dependencies
 
 +Clang 3.6 or GCC 4.9.2
+
 +Java 1.8
+
 +SBT 0.13.8
+
 +Intel TBB
 
 It may work with different versions of these but this is what the system is currently tested on.
@@ -26,6 +29,7 @@ Need TBB?
 sudo apt-get install libtbb-dev
 
 For more information....
+
 https://www.threadingbuildingblocks.org/
 
 # DunceCap
