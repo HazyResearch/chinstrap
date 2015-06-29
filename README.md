@@ -41,7 +41,7 @@ At the root of the project run:
 
 `./compile.sh < path to query file >/<query>.datalog`
 
-* The query file must end in ".datalog"
+* *The query file must end in ".datalog"*
 
 This will generate a file in `emptyheaded/generated/<query>.cpp` and an executable in `emptyheaded/bin/<query>`
 
