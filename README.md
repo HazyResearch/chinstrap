@@ -29,23 +29,43 @@ For more information....
 
 https://www.threadingbuildingblocks.org/
 
-# DunceCap
+# Compile a query
 
-### Repl
+Now that you have all the dependencies installed you can compile a query.  See our webpage for examples on query sytax to figure out what we currently support.
 
-Start repl: `sbt run` (note that to quit, you need to :quit out of the repl and then ctrl-c out of sbt) from the duncecap directory.
+### Commands
 
-The generated file will appear in emptyheaded/generated.
+At the root of the project run:
 
-Run tests: `sbt test`
+`./compile.sh < path to query file >/<query>.datalog`
 
-You can also use :load as in the standard scala repl to load in multiple lines to be interpreted. There are a few sample scripts under duncecap/scripts/.   
+* The query file must end in ".datalog"
 
-### Compile to a single file
+This will generate a file in `emptyheaded/generated/<query>.cpp` and an executable in `emptyheaded/bin/<query>`
 
-`sbt "run datalog_filepath runnable.cpp"`
+# Run a query
 
-### Server
+`./emptyheaded/bin/<query>`
 
-Compile using makefile in emptyheaded. Run `./bin/server` to start the server.
+# Example
 
+Create a sample input file, `triangle.tsv`, with the following data:
+
+```
+0 1
+1 0
+1 2
+2 1
+0 2
+2 0
+```
+
+Now create a datalog file, `triangle.datalog`, with the following contents:
+
+```
+R(uint64_t,uint64_t) <- load("<complete path to>/triangle.tsv", tsv)
+U(a,b,c) <- R(a,b),R(b,c),R(a,c)
+print(a,b,c)
+```
+
+You should see an output with the 6 permutations of the triangles from the input! Congrats you just ran your first EmptyHeaded query.
