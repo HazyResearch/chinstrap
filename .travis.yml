@@ -1,5 +1,4 @@
-language: cpp
-compiler: gcc
+language: scala
 
 before_install:
   - sudo apt-get install build-essential
