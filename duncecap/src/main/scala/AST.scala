@@ -133,7 +133,7 @@ case class ASTPrintStatement(r : ASTRelation) extends ASTNode with ASTStatement 
       }
     }
     (0 until (r.attrs.size)).foreach{ i =>
-      s.println("""});};""")
+      s.println("""});}""")
     }
   }
 

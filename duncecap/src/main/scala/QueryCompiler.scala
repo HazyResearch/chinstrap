@@ -3,6 +3,7 @@ package DunceCap
 import java.io.{FileWriter, File, BufferedWriter}
 import sys.process._
 import java.nio.file.{Paths, Files}
+import scala.util.matching.Regex
 
 /**
  * You can run the output of this class by doing
@@ -12,12 +13,16 @@ import java.nio.file.{Paths, Files}
  * from the emptyheaded/bin directory
  */
 object QueryCompiler extends App {
-  val usage = "Usage: ./QueryCompiler query.datalog outputFilename"
-  if (args.length != 2) {
+  val usage = "Usage: ./QueryCompiler QQuery.datalog"
+  if (args.length != 1) {
     println(usage)
   } else {
-    val source = scala.io.Source.fromFile(args.head)
-    val outputFilename = args.tail.head
+    val input_file = if(args.head.head.equals("/")) args.head else ("../" + args.head)
+    val source = scala.io.Source.fromFile(input_file)
+    val ParseFile = """(.*)/(.*).datalog""".r
+    val ParseFile(path,fname) = input_file
+    println("HERE: " + path + " " + fname)
+    val outputFilename = fname
     val lines = try source.mkString finally source.close()
     DCParser.parseAll(DCParser.statements, lines) match {
       case DCParser.Success(ast, _) => {

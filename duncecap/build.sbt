@@ -1,3 +1,6 @@
+import com.typesafe.sbt.SbtStartScript
+seq(SbtStartScript.startScriptForClassesSettings: _*)
+
 name := "DunceCap"
 
 //resolvers += "Sonatype (releases)" at "https://oss.sonatype.org/content/repositories/releases/"
