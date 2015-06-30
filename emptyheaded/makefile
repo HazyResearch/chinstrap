@@ -30,7 +30,7 @@ endif
 
 APPS_SOURCES=$(shell ls apps)
 TOOLS_SOURCES=$(shell ls tools)
-TESTS_SOURCES=$(shell find tests -name '*.cpp' -exec basename {} \;)
+TESTS_SOURCES=$(shell find tests -name '*.cpp';)
 SERVER_SOURCES=server.cpp
 GENERATED_SOURCES=$(shell ls generated)
 BENCHMARKS_SOURCES=$(shell ls benchmarks)
@@ -41,10 +41,9 @@ GENERATED=$(GENERATED_SOURCES:.cpp=)
 TESTS=$(TESTS_SOURCES:.cpp=)
 BENCHMARKS=$(BENCHMARKS_SOURCES:.cpp=)
 
-
 APPS_EXES=$(APPS:%=$(EXEDIR)/%)
 TOOLS_EXES=$(TOOLS:%=$(EXEDIR)/%)
-TESTS_EXES=$(TESTS:%=$(EXEDIR)/%)
+TESTS_EXES=$(TESTS)
 BENCHMARKS_EXES=$(BENCHMARKS:%=$(EXEDIR)/%)
 GENERATED_EXES=$(GENERATED:%=$(EXEDIR)/%)
 
@@ -71,7 +70,7 @@ $(GENERATED_EXES): $(OBJECTS) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=generated%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -o $@ $(INCLUDE_DIRS)
 
 $(TESTS_EXES): $(OBJECTS) $(EXEDIR)
-	$(CXX) $(CXXFLAGS) $(@:bin%=tests%.cpp) $(OBJECTS) $(EXT_OBJECTS) -lgtest $(LIBS) -o $@ $(INCLUDE_DIRS) -DGOOGLE_TEST -I./apps/
+	$(CXX) $(CXXFLAGS) $@.cpp $(OBJECTS) $(EXT_OBJECTS) -lgtest $(LIBS) -o bin/$(notdir $@) $(INCLUDE_DIRS) -DGOOGLE_TEST -I./apps/ -I./generated
 
 $(OBJECTS): $(SOURCES) $(HEADERS) $(OBJDIR)
 	$(CXX) $(CXXFLAGS) $(LIB_INCS) -o $@ -c $(@:build%.o=src%.cpp) $(INCLUDE_DIRS)
@@ -82,7 +81,7 @@ server: $(OBJECTS) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=server%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -ldl -o $bin/@ $(INCLUDE_DIRS)
 
 tests: $(TESTS_EXES)
-	@$(foreach bin, $(TESTS_EXES), $(bin);)
+	@$(foreach bin, $(addprefix ./bin/, $(notdir $(TESTS_EXES))), $(bin);)
 
 clean:
 	rm -rf $(OBJDIR) $(EXEDIR)

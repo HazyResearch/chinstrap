@@ -1,8 +1,10 @@
-#include "emptyheaded.hpp"
-extern "C" void
+#define GENERATED
+#include "main.hpp"
+extern "C" long
 run(std::unordered_map<std::string, void *> &relations,
     std::unordered_map<std::string, Trie<hybrid> *> tries,
     std::unordered_map<std::string, std::vector<void *> *> encodings) {
+  long query_result = -1;
   ////////////////////////////////////////////////////////////////////////////////
   {
     Relation<std::string, std::string> *takesCourse =
@@ -85,11 +87,11 @@ run(std::unordered_map<std::string, void *> &relations,
     tries["type"] = Ttype;
     encodings["type"] = encodings_type;
     allocator::memory<uint8_t> output_buffer(
-        2 * 3 * 2 * sizeof(TrieBlock<hybrid>) *
+        1 * 3 * 2 * sizeof(TrieBlock<hybrid>) *
         (a_encoding->num_distinct + b_encoding->num_distinct +
          c_encoding->num_distinct));
     allocator::memory<uint8_t> tmp_buffer(
-        2 * 3 * 2 * sizeof(TrieBlock<hybrid>) *
+        1 * 3 * 2 * sizeof(TrieBlock<hybrid>) *
         (a_encoding->num_distinct + b_encoding->num_distinct +
          c_encoding->num_distinct));
     uint32_t b_selection = b_encoding->value_to_key.at(
@@ -98,60 +100,14 @@ run(std::unordered_map<std::string, void *> &relations,
         "http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#GraduateStudent");
     auto join_timer = debug::start_clock();
     //////////NPRR
-    par::reducer<size_t> type_ac_cardinality(
+    par::reducer<size_t> takesCoursetype_abc_cardinality(
         0, [](size_t a, size_t b) { return a + b; });
-    TrieBlock<hybrid> *type_ac_block;
+    TrieBlock<hybrid> *takesCoursetype_abc_block;
     {
       Set<hybrid> a;
-      type_ac_block = NULL;
-      if (Ttype->head) {
-        a = Ttype->head->set;
-        type_ac_block =
-            new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
-                TrieBlock<hybrid>(Ttype->head);
-        type_ac_block->init_pointers(0, &output_buffer, a.cardinality,
-                                     a_encoding->num_distinct,
-                                     a.type == type::UINTEGER);
-      }
-      a.par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d) {
-        Set<hybrid> c;
-        TrieBlock<hybrid> *c_block = NULL;
-        if (Ttype->head->get_block(a_d)) {
-          c = Ttype->head->get_block(a_d)->set;
-          c_block = new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
-              TrieBlock<hybrid>(Ttype->head->get_block(a_d));
-          uint8_t *sd_c = output_buffer.get_next(
-              tid, c.cardinality * sizeof(uint32_t)); // initialize the memory
-          uint32_t *ob_c = (uint32_t *)output_buffer.get_next(
-              tid, c.cardinality * sizeof(uint32_t));
-          size_t ob_i_c = 0;
-          c.foreach ([&](uint32_t c_data) {
-            if (c_data == c_selection)
-              ob_c[ob_i_c++] = c_data;
-          });
-          c = Set<hybrid>::from_array(sd_c, ob_c, ob_i_c);
-          output_buffer.roll_back(tid, c.cardinality * sizeof(uint32_t));
-          c_block->set = &c;
-        }
-        if (c.cardinality != 0) {
-          const size_t count = c.cardinality;
-          type_ac_cardinality.update(tid, count);
-          type_ac_block->set_block(a_i, a_d, c_block);
-        } else {
-          type_ac_block->set_block(a_i, a_d, NULL);
-        }
-      });
-    }
-    std::cout << type_ac_cardinality.evaluate(0) << std::endl;
-    //////////NPRR
-    par::reducer<size_t> takesCourse_ab_cardinality(
-        0, [](size_t a, size_t b) { return a + b; });
-    TrieBlock<hybrid> *takesCourse_ab_block;
-    {
-      Set<hybrid> a;
-      takesCourse_ab_block = NULL;
-      if (TtakesCourse->head && type_ac_block) {
-        takesCourse_ab_block =
+      takesCoursetype_abc_block = NULL;
+      if (TtakesCourse->head && Ttype->head) {
+        takesCoursetype_abc_block =
             new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
                 TrieBlock<hybrid>();
         const size_t alloc_size_a =
@@ -160,12 +116,12 @@ run(std::unordered_map<std::string, void *> &relations,
             output_buffer.get_next(0, alloc_size_a); // initialize the memory
         a = *ops::set_intersect(&a,
                                 (const Set<hybrid> *)&TtakesCourse->head->set,
-                                (const Set<hybrid> *)&type_ac_block->set);
+                                (const Set<hybrid> *)&Ttype->head->set);
         output_buffer.roll_back(0, alloc_size_a - a.number_of_bytes);
-        takesCourse_ab_block->set = &a;
-        takesCourse_ab_block->init_pointers(0, &output_buffer, a.cardinality,
-                                            a_encoding->num_distinct,
-                                            a.type == type::UINTEGER);
+        takesCoursetype_abc_block->set = &a;
+        takesCoursetype_abc_block->init_pointers(
+            0, &output_buffer, a.cardinality, a_encoding->num_distinct,
+            a.type == type::UINTEGER);
       }
       a.par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d) {
         Set<hybrid> b;
@@ -186,69 +142,57 @@ run(std::unordered_map<std::string, void *> &relations,
           b = Set<hybrid>::from_array(sd_b, ob_b, ob_i_b);
           output_buffer.roll_back(tid, b.cardinality * sizeof(uint32_t));
           b_block->set = &b;
+          b_block->init_pointers(tid, &output_buffer, b.cardinality,
+                                 b_encoding->num_distinct,
+                                 b.type == type::UINTEGER);
         }
-        if (b.cardinality != 0) {
-          const size_t count = b.cardinality;
-          takesCourse_ab_cardinality.update(tid, count);
-          takesCourse_ab_block->set_block(a_i, a_d, b_block);
+        bool b_block_valid = false;
+        b.foreach_index([&](uint32_t b_i, uint32_t b_d) {
+          Set<hybrid> c;
+          TrieBlock<hybrid> *c_block = NULL;
+          if (Ttype->head->get_block(a_d)) {
+            c = Ttype->head->get_block(a_d)->set;
+            c_block =
+                new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
+                    TrieBlock<hybrid>(Ttype->head->get_block(a_d));
+            uint8_t *sd_c = output_buffer.get_next(
+                tid, c.cardinality * sizeof(uint32_t)); // initialize the memory
+            uint32_t *ob_c = (uint32_t *)output_buffer.get_next(
+                tid, c.cardinality * sizeof(uint32_t));
+            size_t ob_i_c = 0;
+            c.foreach ([&](uint32_t c_data) {
+              if (c_data == c_selection)
+                ob_c[ob_i_c++] = c_data;
+            });
+            c = Set<hybrid>::from_array(sd_c, ob_c, ob_i_c);
+            output_buffer.roll_back(tid, c.cardinality * sizeof(uint32_t));
+            c_block->set = &c;
+          }
+          if (c.cardinality != 0) {
+            const size_t count = c.cardinality;
+            takesCoursetype_abc_cardinality.update(tid, count);
+            b_block_valid = true;
+            b_block->set_block(b_i, b_d, c_block);
+          } else {
+            b_block->set_block(b_i, b_d, NULL);
+          }
+        });
+        if (b_block_valid) {
+          takesCoursetype_abc_block->set_block(a_i, a_d, b_block);
         } else {
-          takesCourse_ab_block->set_block(a_i, a_d, NULL);
+          takesCoursetype_abc_block->set_block(a_i, a_d, NULL);
         }
       });
     }
-    std::cout << takesCourse_ab_cardinality.evaluate(0) << std::endl;
-    ///////////////////TOP DOWN
-    par::reducer<size_t> result_abc_cardinality(
-        0, [](size_t a, size_t b) { return a + b; });
-    TrieBlock<hybrid> *result_abc_block;
-    {
-      result_abc_block = takesCourse_ab_block;
-      if (result_abc_block) {
-        result_abc_block =
-            new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
-                TrieBlock<hybrid>(result_abc_block);
-        result_abc_block->init_pointers(
-            0, &output_buffer, result_abc_block->set.cardinality,
-            a_encoding->num_distinct,
-            result_abc_block->set.type == type::UINTEGER);
-        result_abc_block->set.par_foreach_index([&](size_t tid, uint32_t a_i,
-                                                    uint32_t a_d) {
-          (void)a_i;
-          (void)a_d;
-          TrieBlock<hybrid> *b_block = takesCourse_ab_block->get_block(a_d);
-          TrieBlock<hybrid> *c_block = type_ac_block->get_block(a_d);
-          if (b_block && c_block) {
-            b_block =
-                new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
-                    TrieBlock<hybrid>(b_block);
-            result_abc_block->set_block(a_i, a_d, b_block);
-            b_block->init_pointers(
-                tid, &output_buffer, b_block->set.cardinality,
-                b_encoding->num_distinct, b_block->set.type == type::UINTEGER);
-            b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d) {
-              (void)b_i;
-              (void)b_d;
-              if (c_block) {
-                c_block =
-                    new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
-                        TrieBlock<hybrid>(c_block);
-                b_block->set_block(b_i, b_d, c_block);
-                const size_t count = c_block->set.cardinality;
-                result_abc_cardinality.update(tid, count);
-              }
-            });
-          }
-        });
-      }
-      Trie<hybrid> *Tresult = new Trie<hybrid>(result_abc_block);
-      tries["result"] = Tresult;
-      std::vector<void *> *encodings_result = new std::vector<void *>();
-      encodings_result->push_back(a_encoding);
-      encodings_result->push_back(b_encoding);
-      encodings_result->push_back(c_encoding);
-      encodings["result"] = encodings_result;
-    }
-    std::cout << result_abc_cardinality.evaluate(0) << std::endl;
+    query_result = takesCoursetype_abc_cardinality.evaluate(0);
+    std::cout << takesCoursetype_abc_cardinality.evaluate(0) << std::endl;
+    Trie<hybrid> *Tresult = new Trie<hybrid>(takesCoursetype_abc_block);
+    tries["result"] = Tresult;
+    std::vector<void *> *encodings_result = new std::vector<void *>();
+    encodings_result->push_back(a_encoding);
+    encodings_result->push_back(b_encoding);
+    encodings_result->push_back(c_encoding);
+    encodings["result"] = encodings_result;
     debug::stop_clock("JOIN", join_timer);
     tmp_buffer.free();
   }
@@ -275,16 +219,19 @@ run(std::unordered_map<std::string, void *> &relations,
                         << ((Encoding<std::string> *)encodings_result->at(2))
                                ->key_to_value[c_d] << std::endl;
                   });
-            };
+            }
           });
-        };
+        }
       });
-    };
+    }
   }
+  return query_result;
 }
+#ifndef GOOGLE_TEST
 int main() {
   std::unordered_map<std::string, void *> relations;
   std::unordered_map<std::string, Trie<hybrid> *> tries;
   std::unordered_map<std::string, std::vector<void *> *> encodings;
   run(relations, tries, encodings);
 }
+#endif

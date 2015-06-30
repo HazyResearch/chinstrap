@@ -88,7 +88,12 @@ std::pair<std::string,std::string> parse(int argc, char* argv[]) {
   return std::make_pair(l,p);
 }
 
-#ifndef GOOGLE_TEST
+#ifdef GOOGLE_TEST
+int main(int argc, char **argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
+#elif !defined GENERATED
 int main (int argc, char* argv[]) {
   std::tuple<std::string,std::string> tup_in = parse(argc,argv);
   std::string l = std::get<0>(tup_in);
@@ -121,10 +126,5 @@ int main (int argc, char* argv[]) {
     abort ();
   }
   return 0;
-}
-#else
-int main(int argc, char **argv) {
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
 }
 #endif

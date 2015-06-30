@@ -12,9 +12,12 @@ object CodeGen {
    * This following method will get called in both compiler and repl mode
    */
   def emitHeaderAndCodeForAST(s: CodeStringBuilder, root: ASTNode) = {
-    s.println("#include \"emptyheaded.hpp\"")
-    s.println(s"""extern \"C\" void run(std::unordered_map<std::string, void*>& relations, std::unordered_map<std::string, Trie<${layout}>*> tries, std::unordered_map<std::string, std::vector<void*>*> encodings) {""")
+    s.println("#define GENERATED")
+    s.println("#include \"main.hpp\"")
+    s.println(s"""extern \"C\" long run(std::unordered_map<std::string, void*>& relations, std::unordered_map<std::string, Trie<${layout}>*> tries, std::unordered_map<std::string, std::vector<void*>*> encodings) {""")
+    s.println(s"""long query_result = -1;""")
     root.code(s)
+    s.println(s"""return query_result;""")
     s.println("}")
   }
 
@@ -22,12 +25,14 @@ object CodeGen {
     * emitMainMethod will get called only in compiler mode
     */
   def emitMainMethod(s : CodeStringBuilder): Unit = {
+    s.println("#ifndef GOOGLE_TEST")
     s.println("int main() {")
     s.println("std::unordered_map<std::string, void*> relations;")
     s.println(s"std::unordered_map<std::string, Trie<${layout}>*> tries;")
     s.println(s"std::unordered_map<std::string, std::vector<void*>*> encodings;")
     s.println("run(relations,tries,encodings);")
     s.println("}")
+    s.println("#endif")
   }
 }
 
@@ -559,6 +564,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       val firstBlockOfTrie = current.rels.map(( rel: Relation) => ("T" + rel.name + "->head", rel.attrs.sortBy(attribute_ordering.indexOf(_))))
       emitNPRR(s, true, attribute_ordering, firstBlockOfTrie, attrSelections, aggregate,equivalenceClasses,name,yanna,List(),List(),resultAttrs.filter(attribute_ordering.contains(_)))
       s.println("}")
+      s.println(s"query_result = ${name}_cardinality.evaluate(0);")
       s.println(s"std::cout << ${name}_cardinality.evaluate(0) << std::endl;")
     } else{
       val r_name = current.rels.head.name

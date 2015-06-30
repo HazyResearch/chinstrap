@@ -66,7 +66,7 @@ namespace common{
 #else
   static double bitset_req = 2.0;
 #endif
-  static size_t block_bitset_req = 16;
+  //static size_t block_bitset_req = 16;
 }
 
 struct aggregate{};
@@ -91,7 +91,9 @@ namespace type{
     UINTEGER = 1,
     HYBRID = 2,
     BLOCK_BITSET = 3,
-    BLOCK = 4
+    BLOCK = 4,
+    NOT_VALID = 8
+
   };
 
 }

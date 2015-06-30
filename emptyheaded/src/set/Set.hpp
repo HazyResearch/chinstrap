@@ -24,6 +24,8 @@ class Set{
     Set(){
       number_of_bytes = 0;
       cardinality = 0;
+      data = NULL;
+      type = type::NOT_VALID;
     };
 
     //All values passed in
