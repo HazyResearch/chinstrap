@@ -1,5 +1,5 @@
 set -e
-sbt update
+cd duncecap && sbt update && cd ..
 if [ ! -d "tests/data" ]; then
   # Control will enter here if $DIRECTORY doesn't exist.
   cd tests && tar -zxvf data.tar.gz && cd ..
