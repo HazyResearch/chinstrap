@@ -81,7 +81,6 @@ server: $(OBJECTS) $(EXEDIR)
 	$(CXX) $(CXXFLAGS) $(@:bin%=server%.cpp) $(OBJECTS) $(EXT_OBJECTS) $(LIBS) -lzmq -ldl -o $bin/@ $(INCLUDE_DIRS)
 
 tests: $(TESTS_EXES)
-	@$(foreach bin, $(addprefix ./bin/, $(notdir $(TESTS_EXES))), $(bin);)
 
 clean:
 	rm -rf $(OBJDIR) $(EXEDIR)
