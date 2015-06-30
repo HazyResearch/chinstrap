@@ -1,5 +1,8 @@
 language: scala
 
+scala:
+  - 2.11.2
+
 before_install:
   - sudo apt-get install build-essential
   - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test  
