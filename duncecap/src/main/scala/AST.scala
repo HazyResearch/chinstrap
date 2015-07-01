@@ -658,6 +658,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     s.println("""}""")
     emitResultTrie(s, lhs.identifierName, lhs_name, resultAttrs, eq)
     s.println("}")
+    s.println(s"""query_result = ${lhs_name}_cardinality.evaluate(0);""")
     s.println(s"std::cout << ${lhs_name}_cardinality.evaluate(0) << std::endl;")
   }
 
