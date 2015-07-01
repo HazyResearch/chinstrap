@@ -7,5 +7,5 @@ TEST(LUBM6, LUBM) {
   std::unordered_map<std::string, Trie<hybrid> *> tries;
   std::unordered_map<std::string, std::vector<void *> *> encodings;
   long result = run(relations, tries, encodings);
-  EXPECT_EQ(440805, result);
+  EXPECT_EQ(423970, result);
 }
