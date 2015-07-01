@@ -9,8 +9,7 @@ run(std::unordered_map<std::string, void *> &relations,
   {
     Relation<std::string, std::string> *takesCourse =
         new Relation<std::string, std::string>();
-    tsv_reader f_reader(
-        "/dfs/scratch0/caberger/systems/lubm/out_data/takesCourse.txt");
+    tsv_reader f_reader("../tests/data/lubm/takesCourse.txt");
     char *next = f_reader.tsv_get_first();
     takesCourse->num_rows = 0;
     while (next != NULL) {
@@ -27,8 +26,7 @@ run(std::unordered_map<std::string, void *> &relations,
   {
     Relation<std::string, std::string> *type =
         new Relation<std::string, std::string>();
-    tsv_reader f_reader(
-        "/dfs/scratch0/caberger/systems/lubm/out_data/type.txt");
+    tsv_reader f_reader("../tests/data/lubm/type.txt");
     char *next = f_reader.tsv_get_first();
     type->num_rows = 0;
     while (next != NULL) {

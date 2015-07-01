@@ -5,7 +5,10 @@ if [ ! -d "tests/data" ]; then
   cd tests && tar -zxvf data.tar.gz && cd ..
 fi
 
-./compile.sh queries/lubm/lubm1.datalog
+DL_NAMES=$(find queries/lubm -name '*.datalog';)
+for name in $DL_NAMES; do
+  ./compile.sh ${name}
+done
 
 cd ./emptyheaded && make clean && make tests TRAVIS=true 
 NAMES=$(find tests -name '*.cpp' -exec basename {} \;)

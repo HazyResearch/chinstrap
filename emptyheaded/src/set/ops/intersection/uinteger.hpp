@@ -163,10 +163,38 @@ namespace ops{
     static inline size_t unpack(const __m128i x, uint32_t *w, 
       const size_t num, F f, const __m128i i_a, const __m128i i_b){
       size_t filter = 0;
-      for(size_t i =0 ; i < num; i++){
-        *(w+i) = _mm_extract_epi32(x,i);
-        filter += f(_mm_extract_epi32(x,i),_mm_extract_epi32(i_a,i),_mm_extract_epi32(i_b,i)); 
-      }      
+      //I can't write a for loop because that won't compile with gcc
+      if(num == 0){
+        *(w+0) = _mm_extract_epi32(x,0);
+        filter += f(_mm_extract_epi32(x,0),_mm_extract_epi32(i_a,0),_mm_extract_epi32(i_b,0)); 
+      } else if(num == 1){
+        *(w+0) = _mm_extract_epi32(x,0);
+        filter += f(_mm_extract_epi32(x,0),_mm_extract_epi32(i_a,0),_mm_extract_epi32(i_b,0)); 
+
+        *(w+1) = _mm_extract_epi32(x,1);
+        filter += f(_mm_extract_epi32(x,1),_mm_extract_epi32(i_a,1),_mm_extract_epi32(i_b,1)); 
+      } else if(num == 2){
+        *(w+0) = _mm_extract_epi32(x,0);
+        filter += f(_mm_extract_epi32(x,0),_mm_extract_epi32(i_a,0),_mm_extract_epi32(i_b,0)); 
+
+        *(w+1) = _mm_extract_epi32(x,1);
+        filter += f(_mm_extract_epi32(x,1),_mm_extract_epi32(i_a,1),_mm_extract_epi32(i_b,1));
+
+        *(w+2) = _mm_extract_epi32(x,2);
+        filter += f(_mm_extract_epi32(x,2),_mm_extract_epi32(i_a,2),_mm_extract_epi32(i_b,2)); 
+      } else {
+        *(w+0) = _mm_extract_epi32(x,0);
+        filter += f(_mm_extract_epi32(x,0),_mm_extract_epi32(i_a,0),_mm_extract_epi32(i_b,0)); 
+
+        *(w+1) = _mm_extract_epi32(x,1);
+        filter += f(_mm_extract_epi32(x,1),_mm_extract_epi32(i_a,1),_mm_extract_epi32(i_b,1));
+
+        *(w+2) = _mm_extract_epi32(x,2);
+        filter += f(_mm_extract_epi32(x,2),_mm_extract_epi32(i_a,2),_mm_extract_epi32(i_b,2)); 
+
+        *(w+3) = _mm_extract_epi32(x,3);
+        filter += f(_mm_extract_epi32(x,3),_mm_extract_epi32(i_a,3),_mm_extract_epi32(i_b,3)); 
+      } 
       return filter;
     }
   };
@@ -185,9 +213,22 @@ namespace ops{
       const size_t num, F f, const __m128i i_a, const __m128i i_b){
       (void) w;
       size_t filter = 0;
-      for(size_t i =0 ; i < num; i++){
-        filter += f(_mm_extract_epi32(x,i),_mm_extract_epi32(i_a,i),_mm_extract_epi32(i_b,i)); 
-      }      
+
+      if(num == 0){
+        filter += f(_mm_extract_epi32(x,0),_mm_extract_epi32(i_a,0),_mm_extract_epi32(i_b,0)); 
+      } else if(num == 1){
+        filter += f(_mm_extract_epi32(x,0),_mm_extract_epi32(i_a,0),_mm_extract_epi32(i_b,0)); 
+        filter += f(_mm_extract_epi32(x,1),_mm_extract_epi32(i_a,1),_mm_extract_epi32(i_b,1)); 
+      } else if(num == 2){
+        filter += f(_mm_extract_epi32(x,0),_mm_extract_epi32(i_a,0),_mm_extract_epi32(i_b,0)); 
+        filter += f(_mm_extract_epi32(x,1),_mm_extract_epi32(i_a,1),_mm_extract_epi32(i_b,1)); 
+        filter += f(_mm_extract_epi32(x,2),_mm_extract_epi32(i_a,2),_mm_extract_epi32(i_b,2)); 
+      } else {
+        filter += f(_mm_extract_epi32(x,0),_mm_extract_epi32(i_a,0),_mm_extract_epi32(i_b,0)); 
+        filter += f(_mm_extract_epi32(x,1),_mm_extract_epi32(i_a,1),_mm_extract_epi32(i_b,1)); 
+        filter += f(_mm_extract_epi32(x,2),_mm_extract_epi32(i_a,2),_mm_extract_epi32(i_b,2)); 
+        filter += f(_mm_extract_epi32(x,3),_mm_extract_epi32(i_a,3),_mm_extract_epi32(i_b,3)); 
+      }   
       return filter;
     }
   };
@@ -1102,7 +1143,6 @@ namespace ops{
       __m128i v_a = _mm_loadu_si128((__m128i*)&A[i_a]);
       __m128i v_b = _mm_loadu_si128((__m128i*)&B[i_b]);
       //]
-
       //[ compute mask of common elements
       const uint32_t right_cyclic_shift = _MM_SHUFFLE(0,3,2,1);
 
@@ -1150,6 +1190,7 @@ namespace ops{
       //advance pointers
       const uint32_t a_max = A[i_a+3];
       const uint32_t b_max = B[i_b+3];
+
       i_a += (a_max <= b_max) * 4;
       i_b += (a_max >= b_max) * 4;
     }

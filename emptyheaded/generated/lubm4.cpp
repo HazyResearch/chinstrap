@@ -1,8 +1,10 @@
-#include "emptyheaded.hpp"
-extern "C" void
+#define GENERATED
+#include "main.hpp"
+extern "C" long
 run(std::unordered_map<std::string, void *> &relations,
     std::unordered_map<std::string, Trie<hybrid> *> tries,
     std::unordered_map<std::string, std::vector<void *> *> encodings) {
+  long query_result = -1;
   ////////////////////////////////////////////////////////////////////////////////
   {
     Relation<std::string, std::string> *worksFor =
@@ -199,12 +201,12 @@ run(std::unordered_map<std::string, void *> &relations,
     tries["worksFor"] = TworksFor;
     encodings["worksFor"] = encodings_worksFor;
     allocator::memory<uint8_t> output_buffer(
-        5 * 6 * 2 * sizeof(TrieBlock<hybrid>) *
+        1 * 6 * 2 * sizeof(TrieBlock<hybrid>) *
         (d_encoding->num_distinct + a_encoding->num_distinct +
          f_encoding->num_distinct + c_encoding->num_distinct +
          e_encoding->num_distinct + b_encoding->num_distinct));
     allocator::memory<uint8_t> tmp_buffer(
-        5 * 6 * 2 * sizeof(TrieBlock<hybrid>) *
+        1 * 6 * 2 * sizeof(TrieBlock<hybrid>) *
         (d_encoding->num_distinct + a_encoding->num_distinct +
          f_encoding->num_distinct + c_encoding->num_distinct +
          e_encoding->num_distinct + b_encoding->num_distinct));
@@ -215,71 +217,16 @@ run(std::unordered_map<std::string, void *> &relations,
                                     "univ-bench.owl#AssociateProfessor");
     auto join_timer = debug::start_clock();
     //////////NPRR
-    TrieBlock<hybrid> *emailAddress_ad_block = TemailAddress->head;
-    //////////NPRR
-    TrieBlock<hybrid> *telephone_ae_block = Ttelephone->head;
-    //////////NPRR
-    par::reducer<size_t> type_af_cardinality(
-        0, [](size_t a, size_t b) { return a + b; });
-    TrieBlock<hybrid> *type_af_block;
+    par::reducer<size_t>
+        worksFornameemailAddresstelephonetype_acdebf_cardinality(
+            0, [](size_t a, size_t b) { return a + b; });
+    TrieBlock<hybrid> *worksFornameemailAddresstelephonetype_acdebf_block;
     {
       Set<hybrid> a;
-      type_af_block = NULL;
-      if (Ttype->head) {
-        a = Ttype->head->set;
-        type_af_block =
-            new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
-                TrieBlock<hybrid>(Ttype->head);
-        type_af_block->init_pointers(0, &output_buffer, a.cardinality,
-                                     a_encoding->num_distinct,
-                                     a.type == type::UINTEGER);
-      }
-      uint32_t *new_head_data =
-          (uint32_t *)tmp_buffer.get_next(0, a.cardinality * sizeof(uint32_t));
-      std::atomic<size_t> nhd(0);
-      a.par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d) {
-        Set<hybrid> f;
-        if (Ttype->head->get_block(a_d)) {
-          f = Ttype->head->get_block(a_d)->set;
-          uint8_t *sd_f = output_buffer.get_next(
-              tid, f.cardinality * sizeof(uint32_t)); // initialize the memory
-          uint32_t *ob_f = (uint32_t *)output_buffer.get_next(
-              tid, f.cardinality * sizeof(uint32_t));
-          size_t ob_i_f = 0;
-          f.foreach ([&](uint32_t f_data) {
-            if (f_data == f_selection)
-              ob_f[ob_i_f++] = f_data;
-          });
-          f = Set<hybrid>::from_array(sd_f, ob_f, ob_i_f);
-          output_buffer.roll_back(tid, f.cardinality * sizeof(uint32_t));
-        }
-        if (f.cardinality != 0) {
-          const size_t count = 1;
-          type_af_cardinality.update(tid, count);
-          new_head_data[nhd.fetch_add(1)] = a_d;
-        }
-      });
-      const size_t halloc_size =
-          sizeof(uint64_t) * a_encoding->num_distinct * 2;
-      uint8_t *new_head_mem = output_buffer.get_next(0, halloc_size);
-      tbb::parallel_sort(new_head_data, new_head_data + nhd.load());
-      a = Set<hybrid>::from_array(new_head_mem, new_head_data, nhd.load());
-      type_af_block->set = &a;
-      output_buffer.roll_back(0, halloc_size - a.number_of_bytes);
-    }
-    std::cout << type_af_cardinality.evaluate(0) << std::endl;
-    //////////NPRR
-    TrieBlock<hybrid> *name_ac_block = Tname->head;
-    //////////NPRR
-    par::reducer<size_t> worksFor_ab_cardinality(
-        0, [](size_t a, size_t b) { return a + b; });
-    TrieBlock<hybrid> *worksFor_ab_block;
-    {
-      Set<hybrid> a;
-      worksFor_ab_block = NULL;
-      if (TworksFor->head && emailAddress_ad_block && telephone_ae_block &&
-          type_af_block && name_ac_block) {
-        worksFor_ab_block =
+      worksFornameemailAddresstelephonetype_acdebf_block = NULL;
+      if (TworksFor->head && Tname->head && TemailAddress->head &&
+          Ttelephone->head && Ttype->head) {
+        worksFornameemailAddresstelephonetype_acdebf_block =
             new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
                 TrieBlock<hybrid>();
         const size_t alloc_size_a =
@@ -288,124 +235,143 @@ run(std::unordered_map<std::string, void *> &relations,
             output_buffer.get_next(0, alloc_size_a); // initialize the memory
         Set<hybrid> a_tmp(
             tmp_buffer.get_next(0, alloc_size_a)); // initialize the memory
-        a_tmp = *ops::set_intersect(
-                    &a_tmp, (const Set<hybrid> *)&TworksFor->head->set,
-                    (const Set<hybrid> *)&emailAddress_ad_block->set);
+        a_tmp = *ops::set_intersect(&a_tmp,
+                                    (const Set<hybrid> *)&TworksFor->head->set,
+                                    (const Set<hybrid> *)&Tname->head->set);
         a = *ops::set_intersect(&a, (const Set<hybrid> *)&a_tmp,
-                                (const Set<hybrid> *)&telephone_ae_block->set);
-        a_tmp = *ops::set_intersect(&a_tmp, (const Set<hybrid> *)&a,
-                                    (const Set<hybrid> *)&type_af_block->set);
+                                (const Set<hybrid> *)&TemailAddress->head->set);
+        a_tmp =
+            *ops::set_intersect(&a_tmp, (const Set<hybrid> *)&a,
+                                (const Set<hybrid> *)&Ttelephone->head->set);
         a = *ops::set_intersect(&a, (const Set<hybrid> *)&a_tmp,
-                                (const Set<hybrid> *)&name_ac_block->set);
+                                (const Set<hybrid> *)&Ttype->head->set);
         tmp_buffer.roll_back(0, alloc_size_a);
         output_buffer.roll_back(0, alloc_size_a - a.number_of_bytes);
-        worksFor_ab_block->set = &a;
-        worksFor_ab_block->init_pointers(0, &output_buffer, a.cardinality,
-                                         a_encoding->num_distinct,
-                                         a.type == type::UINTEGER);
+        worksFornameemailAddresstelephonetype_acdebf_block->set = &a;
+        worksFornameemailAddresstelephonetype_acdebf_block->init_pointers(
+            0, &output_buffer, a.cardinality, a_encoding->num_distinct,
+            a.type == type::UINTEGER);
       }
-      uint32_t *new_head_data =
-          (uint32_t *)tmp_buffer.get_next(0, a.cardinality * sizeof(uint32_t));
-      std::atomic<size_t> nhd(0);
       a.par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d) {
-        Set<hybrid> b;
-        if (TworksFor->head->get_block(a_d)) {
-          b = TworksFor->head->get_block(a_d)->set;
-          uint8_t *sd_b = output_buffer.get_next(
-              tid, b.cardinality * sizeof(uint32_t)); // initialize the memory
-          uint32_t *ob_b = (uint32_t *)output_buffer.get_next(
-              tid, b.cardinality * sizeof(uint32_t));
-          size_t ob_i_b = 0;
-          b.foreach ([&](uint32_t b_data) {
-            if (b_data == b_selection)
-              ob_b[ob_i_b++] = b_data;
-          });
-          b = Set<hybrid>::from_array(sd_b, ob_b, ob_i_b);
-          output_buffer.roll_back(tid, b.cardinality * sizeof(uint32_t));
+        Set<hybrid> c;
+        TrieBlock<hybrid> *c_block = NULL;
+        if (Tname->head->get_block(a_d)) {
+          c = Tname->head->get_block(a_d)->set;
+          c_block = new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
+              TrieBlock<hybrid>(Tname->head->get_block(a_d));
+          c_block->init_pointers(tid, &output_buffer, c.cardinality,
+                                 c_encoding->num_distinct,
+                                 c.type == type::UINTEGER);
         }
-        if (b.cardinality != 0) {
-          const size_t count = 1;
-          worksFor_ab_cardinality.update(tid, count);
-          new_head_data[nhd.fetch_add(1)] = a_d;
-        }
-      });
-      const size_t halloc_size =
-          sizeof(uint64_t) * a_encoding->num_distinct * 2;
-      uint8_t *new_head_mem = output_buffer.get_next(0, halloc_size);
-      tbb::parallel_sort(new_head_data, new_head_data + nhd.load());
-      a = Set<hybrid>::from_array(new_head_mem, new_head_data, nhd.load());
-      worksFor_ab_block->set = &a;
-      output_buffer.roll_back(0, halloc_size - a.number_of_bytes);
-    }
-    std::cout << worksFor_ab_cardinality.evaluate(0) << std::endl;
-    ///////////////////TOP DOWN
-    par::reducer<size_t> result_acde_cardinality(
-        0, [](size_t a, size_t b) { return a + b; });
-    TrieBlock<hybrid> *result_acde_block;
-    {
-      result_acde_block = worksFor_ab_block;
-      if (result_acde_block) {
-        result_acde_block =
-            new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
-                TrieBlock<hybrid>(result_acde_block);
-        result_acde_block->init_pointers(
-            0, &output_buffer, result_acde_block->set.cardinality,
-            a_encoding->num_distinct,
-            result_acde_block->set.type == type::UINTEGER);
-        result_acde_block->set.par_foreach_index([&](size_t tid, uint32_t a_i,
-                                                     uint32_t a_d) {
-          (void)a_i;
-          (void)a_d;
-          TrieBlock<hybrid> *c_block = name_ac_block->get_block(a_d);
-          TrieBlock<hybrid> *d_block = emailAddress_ad_block->get_block(a_d);
-          TrieBlock<hybrid> *e_block = telephone_ae_block->get_block(a_d);
-          if (c_block && d_block && e_block) {
-            c_block =
+        bool c_block_valid = false;
+        c.foreach_index([&](uint32_t c_i, uint32_t c_d) {
+          Set<hybrid> d;
+          TrieBlock<hybrid> *d_block = NULL;
+          if (TemailAddress->head->get_block(a_d)) {
+            d = TemailAddress->head->get_block(a_d)->set;
+            d_block =
                 new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
-                    TrieBlock<hybrid>(c_block);
-            result_acde_block->set_block(a_i, a_d, c_block);
-            c_block->init_pointers(
-                tid, &output_buffer, c_block->set.cardinality,
-                c_encoding->num_distinct, c_block->set.type == type::UINTEGER);
-            c_block->set.foreach_index([&](uint32_t c_i, uint32_t c_d) {
-              (void)c_i;
-              (void)c_d;
-              if (d_block) {
-                d_block =
-                    new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
-                        TrieBlock<hybrid>(d_block);
-                c_block->set_block(c_i, c_d, d_block);
-                d_block->init_pointers(tid, &output_buffer,
-                                       d_block->set.cardinality,
-                                       d_encoding->num_distinct,
-                                       d_block->set.type == type::UINTEGER);
-                d_block->set.foreach_index([&](uint32_t d_i, uint32_t d_d) {
-                  (void)d_i;
-                  (void)d_d;
-                  if (e_block) {
-                    e_block = new (
-                        output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
-                        TrieBlock<hybrid>(e_block);
-                    d_block->set_block(d_i, d_d, e_block);
-                    const size_t count = e_block->set.cardinality;
-                    result_acde_cardinality.update(tid, count);
-                  }
+                    TrieBlock<hybrid>(TemailAddress->head->get_block(a_d));
+            d_block->init_pointers(tid, &output_buffer, d.cardinality,
+                                   d_encoding->num_distinct,
+                                   d.type == type::UINTEGER);
+          }
+          bool d_block_valid = false;
+          d.foreach_index([&](uint32_t d_i, uint32_t d_d) {
+            Set<hybrid> e;
+            TrieBlock<hybrid> *e_block = NULL;
+            if (Ttelephone->head->get_block(a_d)) {
+              e = Ttelephone->head->get_block(a_d)->set;
+              e_block =
+                  new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
+                      TrieBlock<hybrid>(Ttelephone->head->get_block(a_d));
+              e_block->init_pointers(tid, &output_buffer, e.cardinality,
+                                     e_encoding->num_distinct,
+                                     e.type == type::UINTEGER);
+            }
+            bool e_block_valid = false;
+            e.foreach_index([&](uint32_t e_i, uint32_t e_d) {
+              Set<hybrid> b;
+              if (TworksFor->head->get_block(a_d)) {
+                b = TworksFor->head->get_block(a_d)->set;
+                uint8_t *sd_b = output_buffer.get_next(
+                    tid,
+                    b.cardinality * sizeof(uint32_t)); // initialize the memory
+                uint32_t *ob_b = (uint32_t *)output_buffer.get_next(
+                    tid, b.cardinality * sizeof(uint32_t));
+                size_t ob_i_b = 0;
+                b.foreach ([&](uint32_t b_data) {
+                  if (b_data == b_selection)
+                    ob_b[ob_i_b++] = b_data;
                 });
+                b = Set<hybrid>::from_array(sd_b, ob_b, ob_i_b);
+                output_buffer.roll_back(tid, b.cardinality * sizeof(uint32_t));
               }
+              b.foreach_index([&](uint32_t b_i, uint32_t b_d) {
+                Set<hybrid> f;
+                if (Ttype->head->get_block(a_d)) {
+                  f = Ttype->head->get_block(a_d)->set;
+                  uint8_t *sd_f = output_buffer.get_next(
+                      tid, f.cardinality *
+                               sizeof(uint32_t)); // initialize the memory
+                  uint32_t *ob_f = (uint32_t *)output_buffer.get_next(
+                      tid, f.cardinality * sizeof(uint32_t));
+                  size_t ob_i_f = 0;
+                  f.foreach ([&](uint32_t f_data) {
+                    if (f_data == f_selection)
+                      ob_f[ob_i_f++] = f_data;
+                  });
+                  f = Set<hybrid>::from_array(sd_f, ob_f, ob_i_f);
+                  output_buffer.roll_back(tid,
+                                          f.cardinality * sizeof(uint32_t));
+                }
+                if (f.cardinality != 0) {
+                  const size_t count = 1;
+                  worksFornameemailAddresstelephonetype_acdebf_cardinality
+                      .update(tid, count);
+                  c_block_valid = true;
+                  d_block_valid = true;
+                  e_block_valid = true;
+                }
+              });
             });
+            if (e_block_valid) {
+              d_block->set_block(d_i, d_d, e_block);
+            } else {
+              d_block->set_block(d_i, d_d, NULL);
+            }
+          });
+          if (d_block_valid) {
+            c_block->set_block(c_i, c_d, d_block);
+          } else {
+            c_block->set_block(c_i, c_d, NULL);
           }
         });
-      }
-      Trie<hybrid> *Tresult = new Trie<hybrid>(result_acde_block);
-      tries["result"] = Tresult;
-      std::vector<void *> *encodings_result = new std::vector<void *>();
-      encodings_result->push_back(a_encoding);
-      encodings_result->push_back(c_encoding);
-      encodings_result->push_back(d_encoding);
-      encodings_result->push_back(e_encoding);
-      encodings["result"] = encodings_result;
+        if (c_block_valid) {
+          worksFornameemailAddresstelephonetype_acdebf_block->set_block(
+              a_i, a_d, c_block);
+        } else {
+          worksFornameemailAddresstelephonetype_acdebf_block->set_block(
+              a_i, a_d, NULL);
+        }
+      });
     }
-    std::cout << result_acde_cardinality.evaluate(0) << std::endl;
+    query_result =
+        worksFornameemailAddresstelephonetype_acdebf_cardinality.evaluate(0);
+    std::cout
+        << worksFornameemailAddresstelephonetype_acdebf_cardinality.evaluate(0)
+        << std::endl;
+    Trie<hybrid> *Tresult =
+        new Trie<hybrid>(worksFornameemailAddresstelephonetype_acdebf_block);
+    tries["result"] = Tresult;
+    std::vector<void *> *encodings_result = new std::vector<void *>();
+    encodings_result->push_back(a_encoding);
+    encodings_result->push_back(c_encoding);
+    encodings_result->push_back(d_encoding);
+    encodings_result->push_back(e_encoding);
+    encodings_result->push_back(b_encoding);
+    encodings_result->push_back(f_encoding);
+    encodings["result"] = encodings_result;
     debug::stop_clock("JOIN", join_timer);
     tmp_buffer.free();
   }
@@ -445,18 +411,21 @@ run(std::unordered_map<std::string, void *> &relations,
                                               encodings_result->at(3))
                                              ->key_to_value[e_d] << std::endl;
                           });
-                    };
+                    }
                   });
-            };
+            }
           });
-        };
+        }
       });
-    };
+    }
   }
+  return query_result;
 }
+#ifndef GOOGLE_TEST
 int main() {
   std::unordered_map<std::string, void *> relations;
   std::unordered_map<std::string, Trie<hybrid> *> tries;
   std::unordered_map<std::string, std::vector<void *> *> encodings;
   run(relations, tries, encodings);
 }
+#endif

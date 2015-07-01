@@ -19,8 +19,7 @@ namespace masks{
   }
   //force init_masks to run before main
   static int m = init_masks();
-
-  static __m128i shuffle_mask32[16] = {        
+  static const __m128i shuffle_mask32[16] = {        
     _mm_set_epi8(15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0), //0
     _mm_set_epi8(15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0), //1
     _mm_set_epi8(15,14,13,12,11,10,9,8,7,6,5,4,7,6,5,4), //2

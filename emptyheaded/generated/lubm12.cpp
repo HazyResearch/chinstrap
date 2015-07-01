@@ -1,8 +1,10 @@
-#include "emptyheaded.hpp"
-extern "C" void
+#define GENERATED
+#include "main.hpp"
+extern "C" long
 run(std::unordered_map<std::string, void *> &relations,
     std::unordered_map<std::string, Trie<hybrid> *> tries,
     std::unordered_map<std::string, std::vector<void *> *> encodings) {
+  long query_result = -1;
   ////////////////////////////////////////////////////////////////////////////////
   {
     Relation<std::string, std::string> *worksFor =
@@ -261,6 +263,7 @@ run(std::unordered_map<std::string, void *> &relations,
         }
       });
     }
+    query_result = worksFortypesubOrganizationOf_abdce_cardinality.evaluate(0);
     std::cout << worksFortypesubOrganizationOf_abdce_cardinality.evaluate(0)
               << std::endl;
     Trie<hybrid> *Tresult =
@@ -276,10 +279,13 @@ run(std::unordered_map<std::string, void *> &relations,
     debug::stop_clock("JOIN", join_timer);
     tmp_buffer.free();
   }
+  return query_result;
 }
+#ifndef GOOGLE_TEST
 int main() {
   std::unordered_map<std::string, void *> relations;
   std::unordered_map<std::string, Trie<hybrid> *> tries;
   std::unordered_map<std::string, std::vector<void *> *> encodings;
   run(relations, tries, encodings);
 }
+#endif

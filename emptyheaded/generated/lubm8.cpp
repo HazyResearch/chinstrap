@@ -1,8 +1,10 @@
-#include "emptyheaded.hpp"
-extern "C" void
+#define GENERATED
+#include "main.hpp"
+extern "C" long
 run(std::unordered_map<std::string, void *> &relations,
     std::unordered_map<std::string, Trie<hybrid> *> tries,
     std::unordered_map<std::string, std::vector<void *> *> encodings) {
+  long query_result = -1;
   ////////////////////////////////////////////////////////////////////////////////
   {
     Relation<std::string, std::string> *memberOf =
@@ -162,11 +164,11 @@ run(std::unordered_map<std::string, void *> &relations,
     tries["type"] = Ttype;
     encodings["type"] = encodings_type;
     allocator::memory<uint8_t> output_buffer(
-        5 * 6 * 2 * sizeof(TrieBlock<hybrid>) *
+        1 * 6 * 2 * sizeof(TrieBlock<hybrid>) *
         (c_encoding->num_distinct + ab_encoding->num_distinct +
          e_encoding->num_distinct + df_encoding->num_distinct));
     allocator::memory<uint8_t> tmp_buffer(
-        5 * 6 * 2 * sizeof(TrieBlock<hybrid>) *
+        1 * 6 * 2 * sizeof(TrieBlock<hybrid>) *
         (c_encoding->num_distinct + ab_encoding->num_distinct +
          e_encoding->num_distinct + df_encoding->num_distinct));
     uint32_t b_selection =
@@ -178,174 +180,15 @@ run(std::unordered_map<std::string, void *> &relations,
         "http://www.lehigh.edu/~zhp2/2004/0401/univ-bench.owl#Department");
     auto join_timer = debug::start_clock();
     //////////NPRR
-    par::reducer<size_t> subOrganizationOf_be_cardinality(
-        0, [](size_t a, size_t b) { return a + b; });
-    TrieBlock<hybrid> *subOrganizationOf_be_block;
-    {
-      Set<hybrid> b;
-      subOrganizationOf_be_block = NULL;
-      if (TsubOrganizationOf->head) {
-        b = TsubOrganizationOf->head->set;
-        subOrganizationOf_be_block =
-            new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
-                TrieBlock<hybrid>(TsubOrganizationOf->head);
-        uint8_t *sd_b = output_buffer.get_next(
-            0, b.cardinality * sizeof(uint32_t)); // initialize the memory
-        uint32_t *ob_b = (uint32_t *)output_buffer.get_next(
-            0, b.cardinality * sizeof(uint32_t));
-        size_t ob_i_b = 0;
-        b.foreach ([&](uint32_t b_data) {
-          if (b_data == b_selection)
-            ob_b[ob_i_b++] = b_data;
-        });
-        b = Set<hybrid>::from_array(sd_b, ob_b, ob_i_b);
-        output_buffer.roll_back(0, b.cardinality * sizeof(uint32_t));
-        subOrganizationOf_be_block->set = &b;
-        subOrganizationOf_be_block->init_pointers(
-            0, &output_buffer, b.cardinality, ab_encoding->num_distinct,
-            b.type == type::UINTEGER);
-      }
-      b.par_foreach_index([&](size_t tid, uint32_t b_i, uint32_t b_d) {
-        Set<hybrid> e;
-        TrieBlock<hybrid> *e_block = NULL;
-        if (TsubOrganizationOf->head->get_block(b_d)) {
-          e = TsubOrganizationOf->head->get_block(b_d)->set;
-          e_block = new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
-              TrieBlock<hybrid>(TsubOrganizationOf->head->get_block(b_d));
-        }
-        if (e.cardinality != 0) {
-          const size_t count = e.cardinality;
-          subOrganizationOf_be_cardinality.update(tid, count);
-          subOrganizationOf_be_block->set_block(b_i, b_d, e_block);
-        } else {
-          subOrganizationOf_be_block->set_block(b_i, b_d, NULL);
-        }
-      });
-    }
-    std::cout << subOrganizationOf_be_cardinality.evaluate(0) << std::endl;
-    //////////NPRR
-    par::reducer<size_t> type_ad_cardinality(
-        0, [](size_t a, size_t b) { return a + b; });
-    TrieBlock<hybrid> *type_ad_block;
+    par::reducer<size_t>
+        memberOfemailAddresstypesubOrganizationOf_abcedf_cardinality(
+            0, [](size_t a, size_t b) { return a + b; });
+    TrieBlock<hybrid> *memberOfemailAddresstypesubOrganizationOf_abcedf_block;
     {
       Set<hybrid> a;
-      type_ad_block = NULL;
-      if (Ttype->head) {
-        a = Ttype->head->set;
-        type_ad_block =
-            new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
-                TrieBlock<hybrid>(Ttype->head);
-        type_ad_block->init_pointers(0, &output_buffer, a.cardinality,
-                                     ab_encoding->num_distinct,
-                                     a.type == type::UINTEGER);
-      }
-      uint32_t *new_head_data =
-          (uint32_t *)tmp_buffer.get_next(0, a.cardinality * sizeof(uint32_t));
-      std::atomic<size_t> nhd(0);
-      a.par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d) {
-        Set<hybrid> d;
-        if (Ttype->head->get_block(a_d)) {
-          d = Ttype->head->get_block(a_d)->set;
-          uint8_t *sd_d = output_buffer.get_next(
-              tid, d.cardinality * sizeof(uint32_t)); // initialize the memory
-          uint32_t *ob_d = (uint32_t *)output_buffer.get_next(
-              tid, d.cardinality * sizeof(uint32_t));
-          size_t ob_i_d = 0;
-          d.foreach ([&](uint32_t d_data) {
-            if (d_data == d_selection)
-              ob_d[ob_i_d++] = d_data;
-          });
-          d = Set<hybrid>::from_array(sd_d, ob_d, ob_i_d);
-          output_buffer.roll_back(tid, d.cardinality * sizeof(uint32_t));
-        }
-        if (d.cardinality != 0) {
-          const size_t count = 1;
-          type_ad_cardinality.update(tid, count);
-          new_head_data[nhd.fetch_add(1)] = a_d;
-        }
-      });
-      const size_t halloc_size =
-          sizeof(uint64_t) * ab_encoding->num_distinct * 2;
-      uint8_t *new_head_mem = output_buffer.get_next(0, halloc_size);
-      tbb::parallel_sort(new_head_data, new_head_data + nhd.load());
-      a = Set<hybrid>::from_array(new_head_mem, new_head_data, nhd.load());
-      type_ad_block->set = &a;
-      output_buffer.roll_back(0, halloc_size - a.number_of_bytes);
-    }
-    std::cout << type_ad_cardinality.evaluate(0) << std::endl;
-    //////////NPRR
-    TrieBlock<hybrid> *emailAddress_ac_block = TemailAddress->head;
-    //////////NPRR
-    par::reducer<size_t> type_bf_cardinality(
-        0, [](size_t a, size_t b) { return a + b; });
-    TrieBlock<hybrid> *type_bf_block;
-    {
-      Set<hybrid> b;
-      type_bf_block = NULL;
-      if (Ttype->head) {
-        b = Ttype->head->set;
-        type_bf_block =
-            new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
-                TrieBlock<hybrid>(Ttype->head);
-        uint8_t *sd_b = output_buffer.get_next(
-            0, b.cardinality * sizeof(uint32_t)); // initialize the memory
-        uint32_t *ob_b = (uint32_t *)output_buffer.get_next(
-            0, b.cardinality * sizeof(uint32_t));
-        size_t ob_i_b = 0;
-        b.foreach ([&](uint32_t b_data) {
-          if (b_data == b_selection)
-            ob_b[ob_i_b++] = b_data;
-        });
-        b = Set<hybrid>::from_array(sd_b, ob_b, ob_i_b);
-        output_buffer.roll_back(0, b.cardinality * sizeof(uint32_t));
-        type_bf_block->set = &b;
-        type_bf_block->init_pointers(0, &output_buffer, b.cardinality,
-                                     ab_encoding->num_distinct,
-                                     b.type == type::UINTEGER);
-      }
-      uint32_t *new_head_data =
-          (uint32_t *)tmp_buffer.get_next(0, b.cardinality * sizeof(uint32_t));
-      std::atomic<size_t> nhd(0);
-      b.par_foreach_index([&](size_t tid, uint32_t b_i, uint32_t b_d) {
-        Set<hybrid> f;
-        if (Ttype->head->get_block(b_d)) {
-          f = Ttype->head->get_block(b_d)->set;
-          uint8_t *sd_f = output_buffer.get_next(
-              tid, f.cardinality * sizeof(uint32_t)); // initialize the memory
-          uint32_t *ob_f = (uint32_t *)output_buffer.get_next(
-              tid, f.cardinality * sizeof(uint32_t));
-          size_t ob_i_f = 0;
-          f.foreach ([&](uint32_t f_data) {
-            if (f_data == f_selection)
-              ob_f[ob_i_f++] = f_data;
-          });
-          f = Set<hybrid>::from_array(sd_f, ob_f, ob_i_f);
-          output_buffer.roll_back(tid, f.cardinality * sizeof(uint32_t));
-        }
-        if (f.cardinality != 0) {
-          const size_t count = 1;
-          type_bf_cardinality.update(tid, count);
-          new_head_data[nhd.fetch_add(1)] = b_d;
-        }
-      });
-      const size_t halloc_size =
-          sizeof(uint64_t) * ab_encoding->num_distinct * 2;
-      uint8_t *new_head_mem = output_buffer.get_next(0, halloc_size);
-      tbb::parallel_sort(new_head_data, new_head_data + nhd.load());
-      b = Set<hybrid>::from_array(new_head_mem, new_head_data, nhd.load());
-      type_bf_block->set = &b;
-      output_buffer.roll_back(0, halloc_size - b.number_of_bytes);
-    }
-    std::cout << type_bf_cardinality.evaluate(0) << std::endl;
-    //////////NPRR
-    par::reducer<size_t> memberOf_ab_cardinality(
-        0, [](size_t a, size_t b) { return a + b; });
-    TrieBlock<hybrid> *memberOf_ab_block;
-    {
-      Set<hybrid> a;
-      memberOf_ab_block = NULL;
-      if (TmemberOf->head && type_ad_block && emailAddress_ac_block) {
-        memberOf_ab_block =
+      memberOfemailAddresstypesubOrganizationOf_abcedf_block = NULL;
+      if (TmemberOf->head && TemailAddress->head && Ttype->head) {
+        memberOfemailAddresstypesubOrganizationOf_abcedf_block =
             new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
                 TrieBlock<hybrid>();
         const size_t alloc_size_a =
@@ -354,24 +197,23 @@ run(std::unordered_map<std::string, void *> &relations,
             output_buffer.get_next(0, alloc_size_a); // initialize the memory
         Set<hybrid> a_tmp(
             tmp_buffer.get_next(0, alloc_size_a)); // initialize the memory
-        a_tmp = *ops::set_intersect(&a_tmp,
-                                    (const Set<hybrid> *)&TmemberOf->head->set,
-                                    (const Set<hybrid> *)&type_ad_block->set);
-        a = *ops::set_intersect(
-                &a, (const Set<hybrid> *)&a_tmp,
-                (const Set<hybrid> *)&emailAddress_ac_block->set);
+        a_tmp = *ops::set_intersect(
+                    &a_tmp, (const Set<hybrid> *)&TmemberOf->head->set,
+                    (const Set<hybrid> *)&TemailAddress->head->set);
+        a = *ops::set_intersect(&a, (const Set<hybrid> *)&a_tmp,
+                                (const Set<hybrid> *)&Ttype->head->set);
         tmp_buffer.roll_back(0, alloc_size_a);
         output_buffer.roll_back(0, alloc_size_a - a.number_of_bytes);
-        memberOf_ab_block->set = &a;
-        memberOf_ab_block->init_pointers(0, &output_buffer, a.cardinality,
-                                         ab_encoding->num_distinct,
-                                         a.type == type::UINTEGER);
+        memberOfemailAddresstypesubOrganizationOf_abcedf_block->set = &a;
+        memberOfemailAddresstypesubOrganizationOf_abcedf_block->init_pointers(
+            0, &output_buffer, a.cardinality, ab_encoding->num_distinct,
+            a.type == type::UINTEGER);
       }
       a.par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d) {
         Set<hybrid> b;
         TrieBlock<hybrid> *b_block = NULL;
-        if (TmemberOf->head->get_block(a_d) && subOrganizationOf_be_block &&
-            type_bf_block) {
+        if (TmemberOf->head->get_block(a_d) && TsubOrganizationOf->head &&
+            Ttype->head) {
           b_block = new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
               TrieBlock<hybrid>();
           const size_t alloc_size_b =
@@ -384,102 +226,138 @@ run(std::unordered_map<std::string, void *> &relations,
               *ops::set_intersect(
                   &b_tmp,
                   (const Set<hybrid> *)&TmemberOf->head->get_block(a_d)->set,
-                  (const Set<hybrid> *)&subOrganizationOf_be_block->set,
+                  (const Set<hybrid> *)&TsubOrganizationOf->head->set,
                   [&](uint32_t b_data, uint32_t _1, uint32_t _2) {
                     return b_data == b_selection;
                   });
           b = *ops::set_intersect(&b, (const Set<hybrid> *)&b_tmp,
-                                  (const Set<hybrid> *)&type_bf_block->set);
+                                  (const Set<hybrid> *)&Ttype->head->set);
           tmp_buffer.roll_back(tid, alloc_size_b);
           output_buffer.roll_back(tid, alloc_size_b - b.number_of_bytes);
           b_block->set = &b;
+          b_block->init_pointers(tid, &output_buffer, b.cardinality,
+                                 ab_encoding->num_distinct,
+                                 b.type == type::UINTEGER);
         }
-        if (b.cardinality != 0) {
-          const size_t count = b.cardinality;
-          memberOf_ab_cardinality.update(tid, count);
-          memberOf_ab_block->set_block(a_i, a_d, b_block);
+        bool b_block_valid = false;
+        b.foreach_index([&](uint32_t b_i, uint32_t b_d) {
+          Set<hybrid> c;
+          TrieBlock<hybrid> *c_block = NULL;
+          if (TemailAddress->head->get_block(a_d)) {
+            c = TemailAddress->head->get_block(a_d)->set;
+            c_block =
+                new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
+                    TrieBlock<hybrid>(TemailAddress->head->get_block(a_d));
+            c_block->init_pointers(tid, &output_buffer, c.cardinality,
+                                   c_encoding->num_distinct,
+                                   c.type == type::UINTEGER);
+          }
+          bool c_block_valid = false;
+          c.foreach_index([&](uint32_t c_i, uint32_t c_d) {
+            Set<hybrid> e;
+            TrieBlock<hybrid> *e_block = NULL;
+            if (TsubOrganizationOf->head->get_block(b_d)) {
+              e = TsubOrganizationOf->head->get_block(b_d)->set;
+              e_block = new (
+                  output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
+                  TrieBlock<hybrid>(TsubOrganizationOf->head->get_block(b_d));
+              e_block->init_pointers(tid, &output_buffer, e.cardinality,
+                                     e_encoding->num_distinct,
+                                     e.type == type::UINTEGER);
+            }
+            bool e_block_valid = false;
+            e.foreach_index([&](uint32_t e_i, uint32_t e_d) {
+              Set<hybrid> d;
+              if (Ttype->head->get_block(a_d)) {
+                d = Ttype->head->get_block(a_d)->set;
+                uint8_t *sd_d = output_buffer.get_next(
+                    tid,
+                    d.cardinality * sizeof(uint32_t)); // initialize the memory
+                uint32_t *ob_d = (uint32_t *)output_buffer.get_next(
+                    tid, d.cardinality * sizeof(uint32_t));
+                size_t ob_i_d = 0;
+                d.foreach ([&](uint32_t d_data) {
+                  if (d_data == d_selection)
+                    ob_d[ob_i_d++] = d_data;
+                });
+                d = Set<hybrid>::from_array(sd_d, ob_d, ob_i_d);
+                output_buffer.roll_back(tid, d.cardinality * sizeof(uint32_t));
+              }
+              d.foreach_index([&](uint32_t d_i, uint32_t d_d) {
+                Set<hybrid> f;
+                if (Ttype->head->get_block(b_d)) {
+                  f = Ttype->head->get_block(b_d)->set;
+                  uint8_t *sd_f = output_buffer.get_next(
+                      tid, f.cardinality *
+                               sizeof(uint32_t)); // initialize the memory
+                  uint32_t *ob_f = (uint32_t *)output_buffer.get_next(
+                      tid, f.cardinality * sizeof(uint32_t));
+                  size_t ob_i_f = 0;
+                  f.foreach ([&](uint32_t f_data) {
+                    if (f_data == f_selection)
+                      ob_f[ob_i_f++] = f_data;
+                  });
+                  f = Set<hybrid>::from_array(sd_f, ob_f, ob_i_f);
+                  output_buffer.roll_back(tid,
+                                          f.cardinality * sizeof(uint32_t));
+                }
+                if (f.cardinality != 0) {
+                  const size_t count = 1;
+                  memberOfemailAddresstypesubOrganizationOf_abcedf_cardinality
+                      .update(tid, count);
+                  b_block_valid = true;
+                  c_block_valid = true;
+                  e_block_valid = true;
+                }
+              });
+            });
+            if (e_block_valid) {
+              c_block->set_block(c_i, c_d, e_block);
+            } else {
+              c_block->set_block(c_i, c_d, NULL);
+            }
+          });
+          if (c_block_valid) {
+            b_block->set_block(b_i, b_d, c_block);
+          } else {
+            b_block->set_block(b_i, b_d, NULL);
+          }
+        });
+        if (b_block_valid) {
+          memberOfemailAddresstypesubOrganizationOf_abcedf_block->set_block(
+              a_i, a_d, b_block);
         } else {
-          memberOf_ab_block->set_block(a_i, a_d, NULL);
+          memberOfemailAddresstypesubOrganizationOf_abcedf_block->set_block(
+              a_i, a_d, NULL);
         }
       });
     }
-    std::cout << memberOf_ab_cardinality.evaluate(0) << std::endl;
-    ///////////////////TOP DOWN
-    par::reducer<size_t> result_abce_cardinality(
-        0, [](size_t a, size_t b) { return a + b; });
-    TrieBlock<hybrid> *result_abce_block;
-    {
-      result_abce_block = memberOf_ab_block;
-      if (result_abce_block) {
-        result_abce_block =
-            new (output_buffer.get_next(0, sizeof(TrieBlock<hybrid>)))
-                TrieBlock<hybrid>(result_abce_block);
-        result_abce_block->init_pointers(
-            0, &output_buffer, result_abce_block->set.cardinality,
-            ab_encoding->num_distinct,
-            result_abce_block->set.type == type::UINTEGER);
-        result_abce_block->set.par_foreach_index([&](size_t tid, uint32_t a_i,
-                                                     uint32_t a_d) {
-          (void)a_i;
-          (void)a_d;
-          TrieBlock<hybrid> *b_block = memberOf_ab_block->get_block(a_d);
-          TrieBlock<hybrid> *c_block = emailAddress_ac_block->get_block(a_d);
-          if (b_block && c_block) {
-            b_block =
-                new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
-                    TrieBlock<hybrid>(b_block);
-            result_abce_block->set_block(a_i, a_d, b_block);
-            b_block->init_pointers(
-                tid, &output_buffer, b_block->set.cardinality,
-                ab_encoding->num_distinct, b_block->set.type == type::UINTEGER);
-            b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d) {
-              (void)b_i;
-              (void)b_d;
-              TrieBlock<hybrid> *e_block =
-                  subOrganizationOf_be_block->get_block(b_d);
-              if (c_block && e_block) {
-                c_block =
-                    new (output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
-                        TrieBlock<hybrid>(c_block);
-                b_block->set_block(b_i, b_d, c_block);
-                c_block->init_pointers(tid, &output_buffer,
-                                       c_block->set.cardinality,
-                                       c_encoding->num_distinct,
-                                       c_block->set.type == type::UINTEGER);
-                c_block->set.foreach_index([&](uint32_t c_i, uint32_t c_d) {
-                  (void)c_i;
-                  (void)c_d;
-                  if (e_block) {
-                    e_block = new (
-                        output_buffer.get_next(tid, sizeof(TrieBlock<hybrid>)))
-                        TrieBlock<hybrid>(e_block);
-                    c_block->set_block(c_i, c_d, e_block);
-                    const size_t count = e_block->set.cardinality;
-                    result_abce_cardinality.update(tid, count);
-                  }
-                });
-              }
-            });
-          }
-        });
-      }
-      Trie<hybrid> *Tresult = new Trie<hybrid>(result_abce_block);
-      tries["result"] = Tresult;
-      std::vector<void *> *encodings_result = new std::vector<void *>();
-      encodings_result->push_back(ab_encoding);
-      encodings_result->push_back(ab_encoding);
-      encodings_result->push_back(c_encoding);
-      encodings_result->push_back(e_encoding);
-      encodings["result"] = encodings_result;
-    }
-    std::cout << result_abce_cardinality.evaluate(0) << std::endl;
+    query_result =
+        memberOfemailAddresstypesubOrganizationOf_abcedf_cardinality.evaluate(
+            0);
+    std::cout << memberOfemailAddresstypesubOrganizationOf_abcedf_cardinality
+                     .evaluate(0) << std::endl;
+    Trie<hybrid> *Tresult = new Trie<hybrid>(
+        memberOfemailAddresstypesubOrganizationOf_abcedf_block);
+    tries["result"] = Tresult;
+    std::vector<void *> *encodings_result = new std::vector<void *>();
+    encodings_result->push_back(ab_encoding);
+    encodings_result->push_back(ab_encoding);
+    encodings_result->push_back(c_encoding);
+    encodings_result->push_back(e_encoding);
+    encodings_result->push_back(df_encoding);
+    encodings_result->push_back(df_encoding);
+    encodings["result"] = encodings_result;
     debug::stop_clock("JOIN", join_timer);
     tmp_buffer.free();
   }
+  return query_result;
 }
+#ifndef GOOGLE_TEST
 int main() {
   std::unordered_map<std::string, void *> relations;
   std::unordered_map<std::string, Trie<hybrid> *> tries;
   std::unordered_map<std::string, std::vector<void *> *> encodings;
   run(relations, tries, encodings);
 }
+#endif
