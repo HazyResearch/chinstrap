@@ -18,6 +18,7 @@ class range_bitset{
     static void set(const uint32_t index, uint64_t *in_array, const uint64_t start_index);
 
     static long find(uint32_t key, const uint8_t *data_in, const size_t number_of_bytes, const type::layout t);
+    static std::tuple<size_t,bool> find(uint32_t start_index, uint32_t key, const uint8_t *data_in, const size_t number_of_bytes, const type::layout t);
 
     static type::layout get_type();
     static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
@@ -291,6 +292,17 @@ inline long range_bitset::find(uint32_t key, const uint8_t *A, const size_t numb
     }
   }
   return -1;
+}
+
+inline std::tuple<size_t,bool> range_bitset::find(uint32_t start_index,
+  uint32_t key, 
+  const uint8_t *data_in, 
+  const size_t number_of_bytes,
+  const type::layout t){
+
+  (void) start_index;
+  const long find_index = find(key,data_in,number_of_bytes,t);
+  return std::make_tuple(find_index,find_index != -1);
 }
 
 

@@ -106,6 +106,13 @@ class Set{
       type = in->type;
     }
 
+    std::tuple<size_t,bool> find(size_t index, uint32_t key) const {
+      /*std::cout << number_of_bytes << std::endl;
+      std::cout << number_of_bytes << std::endl;*/
+      //std::cout << "---" << std::endl;
+      return T::find(index,key,data,number_of_bytes,type);
+    }
+
     long find(uint32_t key) const {
       /*std::cout << number_of_bytes << std::endl;
       std::cout << number_of_bytes << std::endl;*/

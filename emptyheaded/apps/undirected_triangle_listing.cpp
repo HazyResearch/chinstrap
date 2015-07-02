@@ -126,14 +126,19 @@ struct undirected_triangle_listing: public application<T> {
     std::cout << "INTERSECTION TIME: " << t_intersection << std::endl;
 
     unsigned long size = 0;
+    TrieBlockIterator<T> a_blockI(a_block);
     a_block->set.foreach([&](uint32_t a_d) {
-        TrieBlock<T>* b_block = a_block->get_block(a_d);
+        TrieBlockIterator<T> b_blockI = a_blockI.get_block(a_d);
+        TrieBlock<T> *b_block = b_blockI.trie_block;
+        Set<T> b_set = b_block->set;
         if (b_block) {
-          b_block->set.foreach([&](uint32_t b_d) {
-              TrieBlock<T>* c_block = b_block->get_block(b_d);
+          b_set.foreach([&](uint32_t b_d) {
+              TrieBlockIterator<T> c_blockI = b_blockI.get_block(b_d);
+              TrieBlock<T> *c_block = c_blockI.trie_block;
+              Set<T> c_set = c_block->set;
               if (c_block) {
                 //std::cout << "A: " << a_d << " B: " << b_d << " Count: " << c_block->set.cardinality << std::endl;
-                size += c_block->set.cardinality;
+                size += c_set.cardinality;
               }
           });
         }

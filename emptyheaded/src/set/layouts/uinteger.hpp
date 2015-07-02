@@ -15,6 +15,7 @@ class uinteger{
     static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
 
     static long find(uint32_t key, const uint8_t *data_in, const size_t number_of_bytes, const type::layout t);
+    static std::tuple<size_t,bool> find(uint32_t start_index, uint32_t key, const uint8_t *data_in, const size_t number_of_bytes, const type::layout t);
 
     template<typename F>
     static void foreach(
@@ -150,7 +151,29 @@ inline size_t uinteger::par_foreach_index(
         f(tid, (uint32_t)i, data[i]);
      });
 }
+inline std::tuple<size_t,bool> uinteger::find(uint32_t start_index,
+  uint32_t key, 
+  const uint8_t *data_in, 
+  const size_t number_of_bytes,
+  const type::layout t){
+  (void) t;
 
+  const size_t end_index = (number_of_bytes/sizeof(uint32_t))-1;
+  if( (number_of_bytes == 0) || (start_index > end_index) )
+    return std::make_tuple(start_index,false);
+
+  
+  const uint32_t *data = (uint32_t*) data_in;
+  while(start_index <= end_index){
+    if(data[start_index] == key)
+      return std::make_tuple(start_index,true);
+    if(data[start_index] > key)
+      return std::make_tuple((start_index-1),false);
+    start_index++;
+  }
+  return std::make_tuple(start_index,false);
+  //else return binary_search((uint32_t*)data_in,start_index,end_index,key,[&](uint32_t d){return d;});
+}
 inline long uinteger::find(uint32_t key, 
   const uint8_t *data_in, 
   const size_t number_of_bytes,
