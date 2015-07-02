@@ -42,37 +42,33 @@ struct barbell_listing: public application<T> {
     //encoding each level in the Trie should map to.
     
     auto bt = debug::start_clock();
-    std::vector<size_t> *ranges_ab = new std::vector<size_t>();
     std::vector<Column<uint32_t>> *ER_ab = new std::vector<Column<uint32_t>>();
     ER_ab->push_back(a_encoding->encoded.at(0)); //perform filter, selection
-    ranges_ab->push_back(a_encoding->num_distinct);
     ER_ab->push_back(a_encoding->encoded.at(1));
-    ranges_ab->push_back(a_encoding->num_distinct);
 
     //add some sort of lambda to do selections 
-    Trie<T> *TR_ab = Trie<T>::build(ER_ab,ranges_ab,[&](size_t index){
+    Trie<T> *TR_ab = Trie<T>::build(ER_ab,[&](size_t index){
       (void) index;
       return true;
     });
-    
+        
     debug::stop_clock("Build",bt);
+  
+    allocator::memory<uint8_t> output_buffer(20 * R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
 
 
 //////////////////////////////////////////////////////////////////////
     //Prints the relation
     //R(a,b) join T(b,c) join S(a,c)
-
   TrieBlock<T>* a1_block; // bag BCD
   {
       //allocate memory
-      allocator::memory<uint8_t> output_buffer(R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
-
       auto qt = debug::start_clock();
 
       const TrieBlock<T> H = *TR_ab->head;
       const Set<T> A = H.set;
       a1_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T>))) TrieBlock<T>(H);
-      a1_block->init_pointers(0,&output_buffer,TR_ab->ranges->at(0)); 
+      a1_block->init_pointers(0,&output_buffer,A.cardinality,a_encoding->num_distinct,false); 
 
       par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
         return a + b;
@@ -82,12 +78,12 @@ struct barbell_listing: public application<T> {
         const Set<T> matching_b = H.get_block(a_d)->set;
         //build output B block
         TrieBlock<T>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
-        const size_t alloc_size = sizeof(uint64_t)*TR_ab->ranges->at(0)*2;
+        const size_t alloc_size = sizeof(uint64_t)*a_encoding->num_distinct*2;
 
         Set<T> B(output_buffer.get_next(tid, alloc_size));
         b_block->set = ops::set_intersect(&B, &matching_b, &A); //intersect the B
         output_buffer.roll_back(tid, alloc_size - b_block->set.number_of_bytes);
-        b_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1)); //find out the range of level 1
+        b_block->init_pointers(tid, &output_buffer, b_block->set.cardinality,a_encoding->num_distinct, true); //find out the range of level 1
 
         //Set a block pointer to new b block
         a1_block->set_block(a_d,a_d,b_block); 
@@ -114,14 +110,12 @@ struct barbell_listing: public application<T> {
   TrieBlock<T>* a2_block; // bag AEF
   {
       //allocate memory
-      allocator::memory<uint8_t> output_buffer(R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
-
       auto qt = debug::start_clock();
 
       const TrieBlock<T> H = *TR_ab->head;
       const Set<T> A = H.set;
       a2_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T>))) TrieBlock<T>(H);
-      a2_block->init_pointers(0,&output_buffer,TR_ab->ranges->at(0)); 
+      a2_block->init_pointers(0,&output_buffer,A.cardinality,a_encoding->num_distinct, false); 
 
       par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
         return a + b;
@@ -131,12 +125,12 @@ struct barbell_listing: public application<T> {
         const Set<T> matching_b = H.get_block(a_d)->set;
         //build output B block
         TrieBlock<T>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
-        const size_t alloc_size = sizeof(uint64_t)*TR_ab->ranges->at(0)*2;
+        const size_t alloc_size = sizeof(uint64_t)*a_encoding->num_distinct*2;
 
         Set<T> B(output_buffer.get_next(tid, alloc_size));
         b_block->set = ops::set_intersect(&B, &matching_b, &A); //intersect the B
         output_buffer.roll_back(tid, alloc_size - b_block->set.number_of_bytes);
-        b_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1)); //find out the range of level 1
+        b_block->init_pointers(tid, &output_buffer,b_block->set.cardinality,a_encoding->num_distinct, true); //find out the range of level 1
 
         //Set a block pointer to new b block
         a2_block->set_block(a_d,a_d,b_block); 
@@ -164,8 +158,7 @@ struct barbell_listing: public application<T> {
   TrieBlock<T>* a3_block; // this is the edgelist R(A,B) joined with the projection of the previous 2 bags on A and B
   {      
     auto qt = debug::start_clock();
-    allocator::memory<uint8_t> output_buffer(R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
-    const size_t alloc_size = sizeof(uint64_t)*TR_ab->ranges->at(0)*2; // why this magic number ?
+    const size_t alloc_size = sizeof(uint64_t)*a_encoding->num_distinct*2; // why this magic number ?
     const TrieBlock<T> H = *TR_ab->head;
     const Set<T> A = H.set;
 
@@ -173,7 +166,7 @@ struct barbell_listing: public application<T> {
     Set<T> new_A(output_buffer.get_next(0, alloc_size));
     a3_block->set = ops::set_intersect(&new_A, &A, (const Set<T> *)(&a1_block->set));
     output_buffer.roll_back(0, alloc_size - a3_block->set.number_of_bytes);
-    a3_block->init_pointers(0, &output_buffer, TR_ab->ranges->at(1));
+    a3_block->init_pointers(0, &output_buffer, A.cardinality,a_encoding->num_distinct, false);
     a3_block->set.par_foreach_index([&](size_t tid, uint32_t a3_i, uint32_t a3_d) {
       const TrieBlock<T>* matching_b = H.get_block(a3_d);
       TrieBlock<T>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
@@ -186,26 +179,25 @@ struct barbell_listing: public application<T> {
   }
 
   // now do the topdown pass of yannakakis
-  allocator::memory<uint8_t> output_buffer(200 * R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
   auto qt = debug::start_clock();
   TrieBlock<T>* a_block = a3_block;
   a_block->set.par_foreach([&](size_t tid, uint32_t a_d) {
     TrieBlock<T>* b_block = a_block->get_block(a_d);
     TrieBlock<T>* e_block = a1_block->get_block(a_d);
     if (b_block && e_block) {
-      b_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
+      b_block->init_pointers(tid, &output_buffer, b_block->set.cardinality,a_encoding->num_distinct, true);
       b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d) {
         TrieBlock<T>* old_c_block = a2_block->get_block(b_d);
         if (old_c_block) {
           TrieBlock<T>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(old_c_block);
-          c_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
+          c_block->init_pointers(tid, &output_buffer, c_block->set.cardinality,a_encoding->num_distinct, true);
           b_block->set_block(b_i, b_d, c_block);
           c_block->set.foreach_index([&](uint32_t c_i, uint32_t c_d) {
             TrieBlock<T>* old_d_block = old_c_block->get_block(c_d);
             if (old_d_block) {
               TrieBlock<T>* d_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(old_d_block);
               c_block->set_block(c_i, c_d, d_block);
-              d_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
+              d_block->init_pointers(tid, &output_buffer, d_block->set.cardinality,a_encoding->num_distinct, true);
               d_block->set.foreach_index([&](uint32_t d_i, uint32_t d_d) {
                 d_block->set_block(d_i, d_d, e_block);
                 // e_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
