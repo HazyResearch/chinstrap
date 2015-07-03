@@ -181,19 +181,30 @@ struct barbell_listing: public application<T> {
   // now do the topdown pass of yannakakis
   auto qt = debug::start_clock();
   TrieBlock<T>* a_block = a3_block;
-  a_block->set.par_foreach([&](size_t tid, uint32_t a_d) {
-    TrieBlock<T>* b_block = a_block->get_block(a_d);
-    TrieBlock<T>* e_block = a1_block->get_block(a_d);
+
+  TrieBlockIterator<T> a_blockI(a_block);
+  TrieBlockIterator<T> a1_blockI(a1_block);
+  TrieBlockIterator<T> a2_blockI(a2_block);
+
+  Set<T> a_set = a_block->set;
+
+  a_set.par_foreach([&](size_t tid, uint32_t a_d) {
+    TrieBlock<T>* b_block = (a_blockI.get_block(a_d)).trie_block;
+    Set<T> b_set = b_block->set;
+
+    TrieBlock<T>* e_block = (a1_blockI.get_block(a_d)).trie_block;
+    Set<T> e_set = e_block->set;
+
     if (b_block && e_block) {
       b_block->init_pointers(tid, &output_buffer, b_block->set.cardinality,a_encoding->num_distinct, true);
-      b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d) {
-        TrieBlock<T>* old_c_block = a2_block->get_block(b_d);
-        if (old_c_block) {
-          TrieBlock<T>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(old_c_block);
+      b_set.foreach_index([&](uint32_t b_i, uint32_t b_d) {
+        TrieBlockIterator<T> old_c_block = a2_blockI.get_block(b_d);
+        if (old_c_block.trie_block) {
+          TrieBlock<T>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(old_c_block.trie_block);
           c_block->init_pointers(tid, &output_buffer, c_block->set.cardinality,a_encoding->num_distinct, true);
           b_block->set_block(b_i, b_d, c_block);
           c_block->set.foreach_index([&](uint32_t c_i, uint32_t c_d) {
-            TrieBlock<T>* old_d_block = old_c_block->get_block(c_d);
+            TrieBlock<T>* old_d_block = old_c_block.get_block(c_d).trie_block;
             if (old_d_block) {
               TrieBlock<T>* d_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(old_d_block);
               c_block->set_block(c_i, c_d, d_block);
@@ -222,21 +233,25 @@ struct barbell_listing: public application<T> {
   });
 
   auto count_time = debug::start_clock();
-  a_block->set.par_foreach([&](size_t tid, uint32_t a_d) {
+  a_block->set.par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d) {
       // std::cout << a_d << std::endl;
-      TrieBlock<T>* b_block = a_block->get_block(a_d);
+      TrieBlock<T>* b_block = a_block->get_block(a_i,a_d);
+      Set<T> b_set = b_block->set;
       if (b_block) {
-        b_block->set.foreach([&](uint32_t b_d) {
-            TrieBlock<T>* c_block = b_block->get_block(b_d);
+        b_set.foreach_index([&](uint32_t b_i, uint32_t b_d) {
+            TrieBlock<T>* c_block = b_block->get_block(b_i,b_d);
+            Set<T> c_set = c_block->set;
             if (c_block) {
-                c_block->set.foreach([&](uint32_t c_d) {
-                TrieBlock<T>* d_block = c_block->get_block(c_d);
+                c_set.foreach_index([&](uint32_t c_i, uint32_t c_d) {
+                  TrieBlock<T>* d_block = c_block->get_block(c_i,c_d);
+                  Set<T> d_set = d_block->set;
                   if (d_block) {
-                    d_block->set.foreach([&](uint32_t d_d){
-                      TrieBlock<T>* e_block = d_block->get_block(d_d);
-                        if (e_block) {
-                          e_block->set.foreach([&](uint32_t e_d){
-                            TrieBlock<T>* f_block = e_block->get_block(e_d);
+                    d_set.foreach_index([&](uint32_t d_i, uint32_t d_d){
+                      TrieBlock<T>* e_block = d_block->get_block(d_i,d_d);
+                      Set<T> e_set = e_block->set;
+                       if (e_block) {
+                          e_set.foreach_index([&](uint32_t e_i, uint32_t e_d){
+                            TrieBlock<T>* f_block = e_block->get_block(e_i,e_d);
                             if (f_block) {
                               total_count.update(tid, f_block->set.cardinality);
                               // f_block->set.foreach([&](uint32_t f_d) {
