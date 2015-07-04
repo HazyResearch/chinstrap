@@ -5,6 +5,7 @@ import java.io.{FileWriter, BufferedWriter, File}
 
 object GHDSolver {
   type EquivalenceClasses = (Map[(String,Int),(Int,Int,String,Int)],Map[String,Int],Map[Int,String],Map[String,String])
+  type TopDown = (List[String],List[String],List[(List[(String,String,String,List[(String,String,String)])])])
 
   def getAttrSet(rels: List[Relation]): Set[String] = {
     return rels.foldLeft(Set[String]())(
@@ -84,56 +85,99 @@ object GHDSolver {
     val s_in = a_i.map{ i => selections(i._2) }
     fn(s,curr,a_i.map(_._1),s_in,aggregate,equivalenceClasses,resultAttrs)
   }
-  def top_down(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode], resultAttrs:List[String]): (Map[String,String],Map[String,mutable.Set[String]]) = {
+
+  private def top_down_PRE(seen: mutable.Set[GHDNode], curr: GHDNode, resultAttrs:List[String]): List[String] = {
+    val newAttrs = curr.attribute_ordering.filter(resultAttrs.contains(_))
+    val result = mutable.ListBuffer[String]()
+    if(newAttrs.size != 0){
+      result += curr.name + "_block"
+    }
+
+    curr.children.foreach { child =>
+      // if these two hyperedges are connected
+      if (!seen.contains(child)) {
+        seen += child
+        result ++= top_down_PRE(seen, child, resultAttrs)
+      }
+    }
+    return result.toList
+  }
+
+  private def top_down_DFS(seen: mutable.Set[GHDNode], curr: GHDNode, search_attribute:String, resultAttrs:List[String], f:(Int => Int)): List[(String,String,String)] = {
+    val newAttrs = curr.attribute_ordering.filter(resultAttrs.contains(_))
+    val i = f(newAttrs.indexOf(search_attribute))
+
+    val get_string = if(i != 0 && (i < newAttrs.size) ) ".get_block(" + search_attribute + "_d)"  else ""
+    val prev_block_string = if(i > 1 && (i < newAttrs.size)) "_" + newAttrs(i-1) else ""
+    val next_attr = if( i < newAttrs.size) newAttrs(i) else ""
+    val access_string = if(i < newAttrs.size) (curr.name + prev_block_string + "_block_iterator" + get_string) else ""
+
+    val result = if(i < newAttrs.size) mutable.ListBuffer[(String,String,String)]( (next_attr,curr.name,access_string) ) else mutable.ListBuffer[(String,String,String)]()
+    curr.children.foreach { child =>
+      // if these two hyperedges are connected
+      if (!seen.contains(child) && child.attribute_ordering.contains(search_attribute)) {
+        seen += child
+        result ++= top_down_DFS(seen, child, search_attribute, resultAttrs,f)
+      }
+    }
+    return result.toList
+  }
+
+  def top_down(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode], resultAttrs:List[String]): TopDown = {
     var depth = 0
     var frontier = f_in
     var next_frontier = mutable.Set[GHDNode]()
+    val visited_attributes = mutable.Set[String]()
+    val result_attributes = mutable.ListBuffer[String]()
 
-    var visited_attributes = mutable.Set[String]()
+    // Map [ Trie ->  List[attribute,check] ]
+    val result = mutable.ListBuffer[(List[(String,String,String,List[(String,String,String)])])]()
+
     var final_accessor = mutable.Map[String,String]()
     var final_checks = mutable.Map[String,mutable.Set[String]]()
+
+    //Lets make sure the tries actually exist before we run the top down pass
+    val preChecks = top_down_PRE(mutable.LinkedHashSet[GHDNode](seen.head), seen.head, resultAttrs)
 
     while(frontier.size != 0){
       next_frontier.clear
 
       frontier.foreach{ cur:GHDNode =>
+        val cur_result = mutable.ListBuffer[(String,String,String,List[(String,String,String)])]()
         val newAttrs = cur.attribute_ordering.filter(resultAttrs.contains(_))
+        result_attributes ++= newAttrs.filter(na => !result_attributes.contains(na))
+        var prev_access = ""
         (0 until newAttrs.size).foreach{i =>
+          var access_string = ""
+          val a = newAttrs(i)
           if(!visited_attributes.contains(newAttrs(i))){
-            visited_attributes += newAttrs(i)
-            val a1 = newAttrs(i)
-            val a2 = cur.name + "_block" + (0 until i).map{s =>
-              "->get_block(" + newAttrs(s) + "_d)" 
-            }.mkString("")
-            final_accessor += ((a1,a2))
+            visited_attributes += a
+            val get_string = if(i != 0) "->get_block"+"("+ newAttrs(i-1) + "_i," + newAttrs(i-1) + "_d)"  else ""
+            val prev_block_string = if(i > 1) "_" + newAttrs(i-1) else ""
+            println(i + " " + newAttrs)
+            access_string = cur.name + prev_block_string + "_block" + get_string
           }
-          if((i+1) < newAttrs.size){
-            if(!final_checks.contains(newAttrs(i))){
-              final_checks += ((newAttrs(i),mutable.Set[String]()))
+          
+          //dfs to find other tries that need to be added for check.
+          val checks = mutable.ListBuffer[(String,String,String)]();
+          cur.children.foreach{(child:GHDNode) =>
+            if(!seen.contains(child)){
+              seen += child
+              next_frontier += child
             }
-            final_checks(newAttrs(i)) += newAttrs(i+1)
+            if(child.attribute_ordering.contains(a)){
+              //run DFS
+              checks ++= top_down_DFS(mutable.LinkedHashSet[GHDNode](child), child, a, resultAttrs, i => i+1)
+            }
           }
-        }
+          prev_access = access_string
+          cur_result += ((cur.name,access_string,a,checks.toList))
 
-        cur.children.foreach{(child:GHDNode) =>
-          val childrenAttrs = child.attribute_ordering.filter(resultAttrs.contains(_))
-          var name = ""
-          (0 until 1).foreach{ i =>
-            //can only be first level...past that we have a dependency
-            if((i+1) < childrenAttrs.size){
-              if(!final_checks.contains(childrenAttrs(i))){
-                final_checks += ((childrenAttrs(i),mutable.Set[String]()))
-              }
-              final_checks(childrenAttrs(i)) += childrenAttrs(i+1)
-            }
-          }
-          if(!seen.contains(child)){
-            seen += child
-            next_frontier += child
-          }
         }
+        println("HERE")
+        cur_result.foreach{println}
+        result += cur_result.toList
       }
-
       var tmp = frontier
       frontier = next_frontier
       next_frontier = tmp
@@ -141,7 +185,7 @@ object GHDSolver {
       depth += 1
     }
 
-    (final_accessor.toMap,final_checks.toMap)
+    return (preChecks,result_attributes.toList,result.toList)
   }
   private def breadth_first(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): (Int,Int) = {
     var depth = 0

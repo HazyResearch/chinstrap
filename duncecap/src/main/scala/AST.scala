@@ -572,94 +572,109 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
   }
 
-  def emitTopDown(s:CodeStringBuilder, accessor:Map[String,String], checks:Map[String,mutable.Set[String]], eq:EquivalenceClasses, resultAttrs:List[String]) = {
+  //cur checks should contain Block Name and Acessor
+  private def emitChecks(s:CodeStringBuilder, curChecks:List[(String,String,String)], next_level_in:(String,String,String), last_level:Boolean, encodingName:String) : Boolean = {
+    val dec_names = curChecks.map{cc =>
+      s.println(s"""TrieBlockIterator<${layout}> ${cc._2}_${cc._1}_block_iterator = ${cc._3};""")
+      s.println(s"""TrieBlock<${layout}>* ${cc._2}_${cc._1}_block = ${cc._2}_${cc._1}_block_iterator.trie_block;""")
+      s"""${cc._2}_${cc._1}_block"""
+    }
+    var next_level = ""
+    if(next_level_in != ("","","") ){
+      s.println(s"""TrieBlock<${layout}>* ${next_level_in._2}_${next_level_in._1}_block = ${next_level_in._3};""")
+      next_level = s"""${next_level_in._2}_${next_level_in._1}_block"""
+    }
+    
+    val next = if(next_level != "") List[String](next_level)++dec_names else dec_names     
+    if(next.size > 0){
+      s.print(s"""if(${next.head} != NULL""")
+      next.tail.foreach{pc => s.print(s""" && ${pc} != NULL""")}
+      s.println(s"""){""")
+      if(next_level != "" && last_level){
+        s.println(s"""${next_level_in._2}_${next_level_in._1}_block->init_pointers(tid,&output_buffer,${next_level_in._2}_${next_level_in._1}_block->set.cardinality,${encodingName}_encoding->num_distinct,${next_level_in._2}_${next_level_in._1}_block->is_sparse);""")
+      }
+    }
+    return next.size > 0
+  }
+
+  def emitTrie(s:CodeStringBuilder,trie:List[(String,String,String,List[(String,String,String)])],tries:List[List[(String,String,String,List[(String,String,String)])]],eq:EquivalenceClasses,prevBlock:String,first:Boolean,seen:mutable.Set[String]) : Unit = {
+    if(trie.size > 0 && tries.size > 1){
+      val tl = trie.head
+      var checksTrue = false
+      val name = if(!first) s"""${tl._1}_${tl._3}""" else s"""${tl._1}"""
+      if(!seen.contains(tl._3)){
+        val (encodingMap,attrMap,encodingNames,attributeToType) = eq
+        s.println(s"""${name}_block->set.foreach_index([&](uint32_t ${tl._3}_i, uint32_t ${tl._3}_d){""")
+
+        val last_level_with_more = (trie.tail.size == 1) && (tries.tail.size > 0)
+        val encodingName = encodingNames(attrMap(tl._3))
+        val next_level_in = if(trie.tail.size > 0) (trie.tail.head._3,trie.tail.head._1,trie.tail.head._2) else ("","","")
+        checksTrue = emitChecks(s,tl._4,next_level_in,last_level_with_more,encodingName)
+        if(first){
+          s.println(s"""${prevBlock}->set_block(${tl._3}_i,${tl._3}_d,${tl._1}_block);""")
+        }
+      }
+
+      if(trie.size == 1){
+        emitTrie(s,tries.tail.head,tries.tail,eq,s"""${name}_block""",true,seen)
+      } else{
+        emitTrie(s,trie.tail,tries,eq,s"""${name}_block""",false,seen)
+      }
+
+      if(!seen.contains(tl._3)){
+        if(checksTrue){
+          s.println("""}""")
+          s.println(s"""else{${name}_block->set_block(${tl._3}_i,${tl._3}_d,NULL);}""")
+        }
+        s.println("""});""")
+      }
+      seen += tl._3
+    }
+    if(tries.size == 1){
+      s.println(s"""///HERE""")
+      val tl = trie.head
+      s.println(s"""${prevBlock}->set_block(${tl._3}_i,${tl._3}_d,${tl._1}_block);""")
+    }
+  }
+
+  def emitTopDown(s:CodeStringBuilder, accessor:(List[String],List[String],List[(List[(String,String,String,List[(String,String,String)])])]), eq:EquivalenceClasses) = {
+    val (preChecks,resultAttrs,trieStrings) = accessor
     val lhs_name = lhs.identifierName + "_" + resultAttrs.mkString("")
     val (encodingMap,attrMap,encodingNames,attributeToType) = eq
-    s.println("///////////////////TOP DOWN")
-    //FIXME ADD A REAL OUTPUT TRIE
-    s.println(s"""par::reducer<size_t> ${lhs_name}_cardinality(0,[](size_t a, size_t b){""")
-    s.println("return a + b;")
-    s.println("});")
-    s.println(s"""TrieBlock<${layout}> *${lhs_name}_block;""")
+    s.println(s"""////////////TOP DOWN""")
 
-    s.println("{")
-    var prev_set_block = ""
-    var prev_set = ""
-    val visited_attributes = mutable.Set[String]()
-    (0 until resultAttrs.size).foreach{ i =>
-      val a = resultAttrs(i)
-      println("PROCESSING: " + a)
-      val tid = if(i == 0) "0" else "tid"
-      val a_name = if(i != 0) a else lhs_name
-      val prev = if(i == 0) "" else resultAttrs(i-1)
-      val access = accessor(a)
-      if(!visited_attributes.contains(a)){
-        if(i != 0)
-          s.println(s"""TrieBlock<${layout}> *${a}_block = ${access};""")
-        else
-          s.println(s"""${lhs_name}_block = ${access};""")
-        visited_attributes += a
-      }
-      if(checks.contains(prev)){
-        checks(prev).foreach{ check =>
-          if(!visited_attributes.contains(check)){
-            val next = accessor(check)
-            s.println(s"""TrieBlock<${layout}> *${check}_block = ${next};""")
-            visited_attributes += check
-          }
-        }
-      }
-        s.print("if(" + a_name + "_block")
-        if(i != (resultAttrs.size-1) && checks.contains(prev)){
-          checks(prev).foreach{check =>
-            if(check != a){
-              s.print(" && ")
-              s.print(s"${check}_block")
-            }
-          }
-        }
-        s.println("){")
-      
-      //exists in output
-      val ename = encodingNames(attrMap(a))
-      s.println(s"""${a_name}_block = new(output_buffer.get_next(${tid}, sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${a_name}_block);""")
-      if(prev_set != "")
-        s.println(s"""${prev_set_block}_block->set_block(${prev_set}_i,${prev_set}_d,${a_name}_block);""")
-      if(i != resultAttrs.size-1){
-        val ename = encodingNames(attrMap(a))
-        s.println(s"""${a_name}_block->init_pointers(${tid}, &output_buffer,${a_name}_block->set.cardinality,${ename}_encoding->num_distinct,${a_name}_block->set.type == type::UINTEGER);""")
-      } else {
-        s.println(s"""const size_t count = ${a_name}_block->set.cardinality;""")
-        if(i != 0)
-          s.println(s"""${lhs_name}_cardinality.update(tid,count);""")
-        else
-          s.println(s"""${lhs_name}_cardinality.update(0,count);""")
-      }
-      prev_set = a
-      prev_set_block = a_name
-      
-      if(i == 0){
-        s.println(s"""${a_name}_block->set.par_foreach_index([&](size_t tid, uint32_t ${a}_i, uint32_t ${a}_d) {""")
-        s.println(s"""(void)${a}_i;(void)${a}_d;""")
-      }
-      else if(i != resultAttrs.size-1){
-        s.println(s"""${a_name}_block->set.foreach_index([&](uint32_t ${a}_i, uint32_t ${a}_d) {""")
-        s.println(s"""(void)${a}_i;(void)${a}_d;""")
-      }
+    //First check that all tries exist = prechecks
+    s.println(s"""TrieBlock<${layout}> *${lhs_name}_block = NULL;""")
+    if(preChecks.size != 0){
+      s.print(s"""if(${preChecks.head} != NULL""")
+      preChecks.tail.foreach{pc => s.print(s""" && ${pc} != NULL""")}
+      s.println("""){""")
     }
-    (0 until resultAttrs.size-1).foreach{ ii =>
-      val i = resultAttrs.size-1-ii
-      s.println("""} else {""")
-      val bname = if(i ==1) lhs_name else resultAttrs(i-1)
-      s.println(s"""${bname}_block->set_block(${resultAttrs(i-1)}_i,${resultAttrs(i-1)}_d,NULL);""")
+    preChecks.foreach{pc => s.println(s"""TrieBlockIterator<${layout}> ${pc}_iterator(${pc}) ;""")}
+
+    //emit parallel loop
+    val curTrie = trieStrings.head
+    val headBlock = curTrie.head
+    s.println(s"""${lhs_name}_block = ${headBlock._2};""")
+    s.println(s"""${lhs_name}_block->set.par_foreach_index([&](size_t tid, uint32_t ${headBlock._3}_i, uint32_t ${headBlock._3}_d){""")
+    
+    val curChecks = headBlock._4
+    val last_level_with_more = (curTrie.tail.size == 1) && (trieStrings.tail.size > 0)
+    val encodingName = encodingNames(attrMap(headBlock._3))
+    val next_level_in = if(curTrie.tail.size > 0) (curTrie.tail.head._3,curTrie.tail.head._1,curTrie.tail.head._2) else ("","","")
+    val checksTrue = emitChecks(s,curChecks,next_level_in,last_level_with_more,encodingName)
+    println(curTrie.tail)
+    emitTrie(s,curTrie.tail,trieStrings,eq,lhs_name + "_block",false,mutable.Set[String](headBlock._3))
+
+    //Close off first attribute
+    if(checksTrue){
       s.println("""}""")
-      s.println("""});""")
+      s.println(s"""else { ${lhs_name}_block->set_block(${headBlock._3}_i,${headBlock._3}_d,NULL); } """)
     }
-    s.println("""}""")
-    emitResultTrie(s, lhs.identifierName, lhs_name, resultAttrs, eq)
-    s.println("}")
-    s.println(s"""query_result = ${lhs_name}_cardinality.evaluate(0);""")
-    s.println(s"std::cout << ${lhs_name}_cardinality.evaluate(0) << std::endl;")
+    s.println("""});""")
+    if(preChecks.size != 0){
+      s.println("""}""")
+    }
   }
 
   override def code(s: CodeStringBuilder): Unit = {
@@ -715,9 +730,10 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val top_down_unnecessary = resultAttrs.foldLeft(true){ (a,b) => (myghd.attribute_ordering.indexOf(a) == resultAttrs.indexOf(a)) && (myghd.attribute_ordering.indexOf(b) == resultAttrs.indexOf(b))}
     println("TOPD DOWN UNECCESSARY: " + top_down_unnecessary)
     if(myghd.children.size != 0){
-      val (accessor,checks) = solver.top_down(mutable.LinkedHashSet[GHDNode](myghd), mutable.LinkedHashSet(myghd), resultAttrs)
-      if(!top_down_unnecessary)
-        emitTopDown(s,accessor,checks,equivalenceClasses,resultAttrs) 
+      if(!top_down_unnecessary){
+        val accessor = solver.top_down(mutable.LinkedHashSet[GHDNode](myghd), mutable.LinkedHashSet(myghd), resultAttrs)
+        emitTopDown(s,accessor,equivalenceClasses) 
+      }
       else
         emitResultTrie(s, lhs.identifierName, myghd.name, myghd.attribute_ordering, equivalenceClasses)
     } else{
