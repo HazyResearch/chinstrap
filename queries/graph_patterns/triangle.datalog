@@ -1,2 +1,3 @@
-R(uint64_t,uint64_t) <- load("/dfs/scratch0/caberger/datasets/facebook/edgelist/replicated.tsv", tsv)
+R(uint64_t,uint64_t) <- load("/dfs/scratch0/caberger/systems/chinstrap/tests/data/graphs/1_barbell.txt", tsv)
 U(a,b,c) <- R(a,b),R(b,c),R(a,c)
+print U(a,b,c)

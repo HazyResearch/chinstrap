@@ -111,6 +111,43 @@ case class ASTAssignStatement(identifier : ASTIdentifier, expression : ASTExpres
 
   override def optimize: Unit = ???
 }
+case class ASTSumStatement(r : ASTRelation) extends ASTNode with ASTStatement {
+  override def code(s: CodeStringBuilder): Unit = {
+    s.println(s"""par::reducer<size_t> ${r.identifierName}_cardinality(0,[](size_t a, size_t b){""")
+    s.println("return a + b;")
+    s.println("});")
+    s.println(s"""Trie<${layout}> *T${r.identifierName} = tries["${r.identifierName}"] ;""")
+    s.println(s"""std::vector<void*> *encodings_${r.identifierName} = encodings["${r.identifierName}"] ;""")
+
+    val name = r.getName()
+    val types = Environment.getTypes(r.identifierName)
+    (0 until r.attrs.size-1).foreach{i =>
+      val name_string = s"T${r.identifierName}->head" + (0 until i).map{i2 =>
+        val a = r.attrs(i2)
+        s"->get_block(${a}_i,${a}_d)"
+      }.mkString("")
+      s.println(s"""if(${name_string}){""")
+      if(i == 0)
+        s.println(s"""${name_string}->set.par_foreach_index([&](size_t tid, uint32_t ${r.attrs(i)}_i, uint32_t ${r.attrs(i)}_d){""")
+      else
+        s.println(s"""${name_string}->set.foreach_index([&](uint32_t ${r.attrs(i)}_i, uint32_t ${r.attrs(i)}_d){""")
+      s.println(s"""(void) ${r.attrs(i)}_i;""")
+      if(i == (r.attrs.size-2)){
+        val name_string = s"T${r.identifierName}->head" + (0 until (r.attrs.size-1)).map{i2 =>
+        val a = r.attrs(i2)
+        s"->get_block(${a}_i,${a}_d)"
+      }.mkString("")
+        s.println(s"""${r.identifierName}_cardinality.update(tid,${name_string}->set.cardinality);""")
+      }
+    }
+    (0 until (r.attrs.size-1)).foreach{ i =>
+      s.println("""});}""")
+    }
+    s.println(s"""std::cout << ${r.identifierName}_cardinality.evaluate(0) << std::endl;""")
+  }
+
+  override def optimize: Unit = ???
+}
 case class ASTPrintStatement(r : ASTRelation) extends ASTNode with ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     s.println(s"""Trie<${layout}> *T${r.identifierName} = tries["${r.identifierName}"] ;""")
@@ -121,7 +158,7 @@ case class ASTPrintStatement(r : ASTRelation) extends ASTNode with ASTStatement 
     (0 until r.attrs.size).foreach{i =>
       val name_string = s"T${r.identifierName}->head" + (0 until i).map{i2 =>
         val a = r.attrs(i2)
-        s"->get_block(${a}_d)"
+        s"->get_block(${a}_i,${a}_d)"
       }.mkString("")
       s.println(s"""if(${name_string}){""")
       s.println(s"""${name_string}->set.foreach_index([&](uint32_t ${r.attrs(i)}_i, uint32_t ${r.attrs(i)}_d){""")
@@ -591,18 +628,24 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       next.tail.foreach{pc => s.print(s""" && ${pc} != NULL""")}
       s.println(s"""){""")
       if(next_level != "" && last_level){
-        s.println(s"""${next_level_in._2}_${next_level_in._1}_block->init_pointers(tid,&output_buffer,${next_level_in._2}_${next_level_in._1}_block->set.cardinality,${encodingName}_encoding->num_distinct,${next_level_in._2}_${next_level_in._1}_block->is_sparse);""")
+        s.println(s"""${next_level_in._2}_${next_level_in._1}_block->init_pointers(tid,&output_buffer,${next_level_in._2}_${next_level_in._1}_block->set.cardinality,${encodingName}_encoding->num_distinct,true);""")
       }
     }
     return next.size > 0
   }
 
-  def emitTrie(s:CodeStringBuilder,trie:List[(String,String,String,List[(String,String,String)])],tries:List[List[(String,String,String,List[(String,String,String)])]],eq:EquivalenceClasses,prevBlock:String,first:Boolean,seen:mutable.Set[String]) : Unit = {
+  def emitTrie(s:CodeStringBuilder,trie:List[(String,String,String,List[(String,String,String)])],tries:List[List[(String,String,String,List[(String,String,String)])]],eq:EquivalenceClasses,prevBlock:String,prevAttr:String,first:Boolean,setBlock:Boolean,seen:mutable.Set[String]) : Unit = {
     if(trie.size > 0 && tries.size > 1){
       val tl = trie.head
       var checksTrue = false
       val name = if(!first) s"""${tl._1}_${tl._3}""" else s"""${tl._1}"""
-      if(!seen.contains(tl._3)){
+      val notSeen = !seen.contains(tl._3)
+      seen += tl._3
+
+      if(notSeen){
+        if(setBlock){
+          s.println(s"""${prevBlock}->set_block(${prevAttr}_i,${prevAttr}_d,${name}_block);""")
+        }
         val (encodingMap,attrMap,encodingNames,attributeToType) = eq
         s.println(s"""${name}_block->set.foreach_index([&](uint32_t ${tl._3}_i, uint32_t ${tl._3}_d){""")
 
@@ -610,31 +653,40 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         val encodingName = encodingNames(attrMap(tl._3))
         val next_level_in = if(trie.tail.size > 0) (trie.tail.head._3,trie.tail.head._1,trie.tail.head._2) else ("","","")
         checksTrue = emitChecks(s,tl._4,next_level_in,last_level_with_more,encodingName)
-        if(first){
-          s.println(s"""${prevBlock}->set_block(${tl._3}_i,${tl._3}_d,${tl._1}_block);""")
-        }
       }
+      
+      val nextSetBlock = if(notSeen) false else first
+      val next_prev_block = if(notSeen) s"""${name}_block""" else prevBlock
+      val next_prev_attr = if(notSeen) tl._3 else prevAttr
 
       if(trie.size == 1){
-        emitTrie(s,tries.tail.head,tries.tail,eq,s"""${name}_block""",true,seen)
+        emitTrie(s,tries.tail.head,tries.tail,eq,next_prev_block,next_prev_attr,true,true,seen)
       } else{
-        emitTrie(s,trie.tail,tries,eq,s"""${name}_block""",false,seen)
+        emitTrie(s,trie.tail,tries,eq,next_prev_block,next_prev_attr,false,nextSetBlock,seen)
       }
 
-      if(!seen.contains(tl._3)){
+      if(notSeen){
         if(checksTrue){
           s.println("""}""")
           s.println(s"""else{${name}_block->set_block(${tl._3}_i,${tl._3}_d,NULL);}""")
         }
         s.println("""});""")
       }
-      seen += tl._3
-    }
-    if(tries.size == 1){
-      s.println(s"""///HERE""")
+    } else if(tries.size == 1){
       val tl = trie.head
-      s.println(s"""${prevBlock}->set_block(${tl._3}_i,${tl._3}_d,${tl._1}_block);""")
+      val name = if(!first) s"""${tl._1}_${tl._3}""" else s"""${tl._1}"""
+      val notSeen = !seen.contains(tl._3)
+        seen += tl._3
+      
+      println(notSeen)
+      if(notSeen){
+        s.println(s"""///HERE""")
+        s.println(s"""${prevBlock}->set_block(${prevAttr}_i,${prevAttr}_d,${name}_block);""")
+      } else{
+        emitTrie(s,trie.tail,tries,eq,prevBlock,prevAttr,false,false,seen)
+      }
     }
+
   }
 
   def emitTopDown(s:CodeStringBuilder, accessor:(List[String],List[String],List[(List[(String,String,String,List[(String,String,String)])])]), eq:EquivalenceClasses) = {
@@ -642,6 +694,10 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val lhs_name = lhs.identifierName + "_" + resultAttrs.mkString("")
     val (encodingMap,attrMap,encodingNames,attributeToType) = eq
     s.println(s"""////////////TOP DOWN""")
+
+    s.println(s"""par::reducer<size_t> ${lhs_name}_cardinality(0,[](size_t a, size_t b){""")
+    s.println("return a + b;")
+    s.println("});")
 
     //First check that all tries exist = prechecks
     s.println(s"""TrieBlock<${layout}> *${lhs_name}_block = NULL;""")
@@ -664,7 +720,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val next_level_in = if(curTrie.tail.size > 0) (curTrie.tail.head._3,curTrie.tail.head._1,curTrie.tail.head._2) else ("","","")
     val checksTrue = emitChecks(s,curChecks,next_level_in,last_level_with_more,encodingName)
     println(curTrie.tail)
-    emitTrie(s,curTrie.tail,trieStrings,eq,lhs_name + "_block",false,mutable.Set[String](headBlock._3))
+    emitTrie(s,curTrie.tail,trieStrings,eq,lhs_name + "_block",headBlock._3,false,false,mutable.Set[String](headBlock._3))
 
     //Close off first attribute
     if(checksTrue){
@@ -675,6 +731,8 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     if(preChecks.size != 0){
       s.println("""}""")
     }
+    s.println(s"""std::cout << ${lhs_name}_cardinality.evaluate(0) << std::endl;""")
+    emitResultTrie(s,lhs.identifierName,lhs_name,resultAttrs,eq)
   }
 
   override def code(s: CodeStringBuilder): Unit = {

@@ -64,6 +64,7 @@ object DCParser extends RegexParsers {
 
   def assignStatement = identifier ~ ("<-" ~> expression) ^^ { case id~e => ASTAssignStatement(id, e) }
   def printStatement = "print" ~> relationIdentifier ^^ {case e => ASTPrintStatement(e)}
-  def statement = loadStatement | assignStatement | printStatement
+  def countStatement = "count" ~> relationIdentifier ^^ {case e => ASTSumStatement(e)}
+  def statement = loadStatement | assignStatement | printStatement | countStatement
   def statements = rep(statement) ^^ {case list => new ASTStatements(list)}
 }
