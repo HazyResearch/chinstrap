@@ -17,7 +17,8 @@ object QueryCompiler extends App {
   if (args.length != 1 && args.length != 3) {
     println(usage)
   } else {
-    val input_file = if(args.head.head.equals("/")) args.head else ("../" + args.head)
+    println("HEAD: " + args.head.head.equals('/'))
+    val input_file = if(args.head.head.equals('/')) args.head else ("../" + args.head)
     val source = scala.io.Source.fromFile(input_file)
     val ParseFile = """(.*)/(.*).datalog""".r
     val ParseFile(path,fname) = input_file
@@ -53,7 +54,7 @@ object QueryCompiler extends App {
         bw.close()
         s"""clang-format -i ${file}""" !
 
-        sys.process.Process(Seq("make", "clean"), new File("../emptyheaded")).!
+        sys.process.Process(Seq("rm", "-rf",s"""bin/${outputFilename}"""), new File("../emptyheaded")).!
         val result = sys.process.Process(Seq("make", s"""bin/${outputFilename}"""), new File("../emptyheaded")).!
 
         if (result != 0) {
