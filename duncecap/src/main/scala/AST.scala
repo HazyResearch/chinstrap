@@ -1,12 +1,11 @@
 package DunceCap
 
 import scala.collection.mutable
-
 /**
  * All code generation should start from this object:
  */
 object CodeGen {
-  val layout = "hybrid"
+  var layout = "hybrid"
 
   /**
    * This following method will get called in both compiler and repl mode

@@ -14,14 +14,21 @@ import scala.util.matching.Regex
  */
 object QueryCompiler extends App {
   val usage = "Usage: ./QueryCompiler QQuery.datalog"
-  if (args.length != 1) {
+  if (args.length != 1 && args.length != 3) {
     println(usage)
   } else {
     val input_file = if(args.head.head.equals("/")) args.head else ("../" + args.head)
     val source = scala.io.Source.fromFile(input_file)
     val ParseFile = """(.*)/(.*).datalog""".r
     val ParseFile(path,fname) = input_file
+
+    if(args.length == 3){
+      Environment.yanna = if(args.tail.head == "yanna") true else false
+      CodeGen.layout = args.tail.tail.head
+    }
     println("HERE: " + path + " " + fname)
+    println(Environment.yanna + " " + CodeGen.layout)
+
     val outputFilename = fname
     val lines = try source.mkString finally source.close()
     DCParser.parseAll(DCParser.statements, lines) match {
