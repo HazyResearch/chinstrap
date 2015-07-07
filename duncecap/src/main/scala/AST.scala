@@ -137,7 +137,9 @@ case class ASTSumStatement(r : ASTRelation) extends ASTNode with ASTStatement {
         val a = r.attrs(i2)
         s"->get_block(${a}_i,${a}_d)"
       }.mkString("")
+        s.println(s"""if(${name_string}){""")
         s.println(s"""${r.identifierName}_cardinality.update(tid,${name_string}->set.cardinality);""")
+        s.println(s"""}""")
       }
     }
     (0 until (r.attrs.size-1)).foreach{ i =>
@@ -610,7 +612,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   }
 
   //cur checks should contain Block Name and Acessor
-  private def emitChecks(s:CodeStringBuilder, curChecks:List[(String,String,String)], next_level_in:(String,String,String), last_level:Boolean, encodingName:String) : Boolean = {
+  private def emitChecks(s:CodeStringBuilder, curChecks:List[(String,String,String)], next_level_in:(String,String,String), encodingName:String) : Boolean = {
     val dec_names = curChecks.map{cc =>
       s.println(s"""TrieBlockIterator<${layout}> ${cc._2}_${cc._1}_block_iterator = ${cc._3};""")
       s.println(s"""TrieBlock<${layout}>* ${cc._2}_${cc._1}_block = ${cc._2}_${cc._1}_block_iterator.trie_block;""")
@@ -627,9 +629,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       s.print(s"""if(${next.head} != NULL""")
       next.tail.foreach{pc => s.print(s""" && ${pc} != NULL""")}
       s.println(s"""){""")
-      if(next_level != "" && last_level){
-        s.println(s"""${next_level_in._2}_${next_level_in._1}_block->init_pointers(tid,&output_buffer,${next_level_in._2}_${next_level_in._1}_block->set.cardinality,${encodingName}_encoding->num_distinct,true);""")
-      }
     }
     return next.size > 0
   }
@@ -643,32 +642,36 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       seen += tl._3
 
       if(notSeen){
-        if(setBlock){
-          s.println(s"""${prevBlock}->set_block(${prevAttr}_i,${prevAttr}_d,${name}_block);""")
-        }
         val (encodingMap,attrMap,encodingNames,attributeToType) = eq
+        val encodingName = encodingNames(attrMap(tl._3))
+        val last_level_with_more = ((trie.size == 1) && (tries.tail.size > 0)) && !setBlock
+
+        if(setBlock || last_level_with_more){
+          s.println(s"""TrieBlock<${layout}>* new_${name}_block = new (output_buffer.get_next(tid, sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${name}_block);""")
+          s.println(s"""new_${name}_block->init_pointers(tid,&output_buffer,${name}_block->set.cardinality,${encodingName}_encoding->num_distinct,true);""")
+          s.println(s"""${prevBlock}->set_block(${prevAttr}_i,${prevAttr}_d,new_${name}_block);""")
+        } else {
+          s.println(s"""TrieBlock<${layout}>* new_${name}_block = ${name}_block;""")
+        }
         s.println(s"""${name}_block->set.foreach_index([&](uint32_t ${tl._3}_i, uint32_t ${tl._3}_d){""")
 
-        val last_level_with_more = (trie.tail.size == 1) && (tries.tail.size > 0)
-        val encodingName = encodingNames(attrMap(tl._3))
         val next_level_in = if(trie.tail.size > 0) (trie.tail.head._3,trie.tail.head._1,trie.tail.head._2) else ("","","")
-        checksTrue = emitChecks(s,tl._4,next_level_in,last_level_with_more,encodingName)
+        checksTrue = emitChecks(s,tl._4,next_level_in,encodingName)
       }
       
-      val nextSetBlock = if(notSeen) false else first
-      val next_prev_block = if(notSeen) s"""${name}_block""" else prevBlock
+      val next_prev_block = if(notSeen) s"""new_${name}_block""" else prevBlock
       val next_prev_attr = if(notSeen) tl._3 else prevAttr
 
       if(trie.size == 1){
         emitTrie(s,tries.tail.head,tries.tail,eq,next_prev_block,next_prev_attr,true,true,seen)
       } else{
-        emitTrie(s,trie.tail,tries,eq,next_prev_block,next_prev_attr,false,nextSetBlock,seen)
+        emitTrie(s,trie.tail,tries,eq,next_prev_block,next_prev_attr,false,setBlock,seen)
       }
 
       if(notSeen){
         if(checksTrue){
           s.println("""}""")
-          s.println(s"""else{${name}_block->set_block(${tl._3}_i,${tl._3}_d,NULL);}""")
+          s.println(s"""else{new_${name}_block->set_block(${tl._3}_i,${tl._3}_d,NULL);}""")
         }
         s.println("""});""")
       }
@@ -711,14 +714,23 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     //emit parallel loop
     val curTrie = trieStrings.head
     val headBlock = curTrie.head
-    s.println(s"""${lhs_name}_block = ${headBlock._2};""")
+
+    val last_level_with_more = ((curTrie.size == 1) && (trieStrings.tail.size > 0))
+    if(last_level_with_more){
+      val (encodingMap,attrMap,encodingNames,attributeToType) = eq
+      val encodingName = encodingNames(attrMap(headBlock._3))
+      s.println(s"""${lhs_name}_block = new (output_buffer.get_next(tid, sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${headBlock._2});""")
+      s.println(s"""${lhs_name}_block->init_pointers(tid,&output_buffer,new_${lhs_name}_block->set.cardinality,${encodingName}_encoding->num_distinct,true);""")
+    } else{
+      s.println(s"""${lhs_name}_block = ${headBlock._2};""")
+    }
     s.println(s"""${lhs_name}_block->set.par_foreach_index([&](size_t tid, uint32_t ${headBlock._3}_i, uint32_t ${headBlock._3}_d){""")
     
+
     val curChecks = headBlock._4
-    val last_level_with_more = (curTrie.tail.size == 1) && (trieStrings.tail.size > 0)
     val encodingName = encodingNames(attrMap(headBlock._3))
     val next_level_in = if(curTrie.tail.size > 0) (curTrie.tail.head._3,curTrie.tail.head._1,curTrie.tail.head._2) else ("","","")
-    val checksTrue = emitChecks(s,curChecks,next_level_in,last_level_with_more,encodingName)
+    val checksTrue = emitChecks(s,curChecks,next_level_in,encodingName)
     println(curTrie.tail)
     emitTrie(s,curTrie.tail,trieStrings,eq,lhs_name + "_block",headBlock._3,false,false,mutable.Set[String](headBlock._3))
 
