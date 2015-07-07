@@ -1,2 +1,0 @@
-R(a:uint64_t, b:uint64_t) <- load("data/medium.txt", tsv)
-X(a,b,c) <- R(a,b),R(b,c),R(c,d),R(d,a),R(a,c),R(b,d)

@@ -117,7 +117,6 @@ case class ASTSumStatement(r : ASTRelation) extends ASTNode with ASTStatement {
     s.println("return a + b;")
     s.println("});")
     s.println(s"""Trie<${layout}> *T${r.identifierName} = tries["${r.identifierName}"] ;""")
-    s.println(s"""std::vector<void*> *encodings_${r.identifierName} = encodings["${r.identifierName}"] ;""")
 
     val name = r.getName()
     val types = Environment.getTypes(r.identifierName)
@@ -676,15 +675,13 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         }
         s.println("""});""")
       }
-    } else if(tries.size == 1){
+    } else if(tries.size == 1 && trie.size > 0){
       val tl = trie.head
       val name = if(!first) s"""${tl._1}_${tl._3}""" else s"""${tl._1}"""
       val notSeen = !seen.contains(tl._3)
         seen += tl._3
       
-      println(notSeen)
       if(notSeen){
-        s.println(s"""///HERE""")
         s.println(s"""${prevBlock}->set_block(${prevAttr}_i,${prevAttr}_d,${name}_block);""")
       } else{
         emitTrie(s,trie.tail,tries,eq,prevBlock,prevAttr,false,false,seen)
@@ -720,8 +717,8 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     if(last_level_with_more){
       val (encodingMap,attrMap,encodingNames,attributeToType) = eq
       val encodingName = encodingNames(attrMap(headBlock._3))
-      s.println(s"""${lhs_name}_block = new (output_buffer.get_next(tid, sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${headBlock._2});""")
-      s.println(s"""${lhs_name}_block->init_pointers(tid,&output_buffer,new_${lhs_name}_block->set.cardinality,${encodingName}_encoding->num_distinct,true);""")
+      s.println(s"""${lhs_name}_block = new (output_buffer.get_next(0, sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${headBlock._2});""")
+      s.println(s"""${lhs_name}_block->init_pointers(0,&output_buffer,${lhs_name}_block->set.cardinality,${encodingName}_encoding->num_distinct,true);""")
     } else{
       s.println(s"""${lhs_name}_block = ${headBlock._2};""")
     }
@@ -733,7 +730,12 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val next_level_in = if(curTrie.tail.size > 0) (curTrie.tail.head._3,curTrie.tail.head._1,curTrie.tail.head._2) else ("","","")
     val checksTrue = emitChecks(s,curChecks,next_level_in,encodingName)
     println(curTrie.tail)
-    emitTrie(s,curTrie.tail,trieStrings,eq,lhs_name + "_block",headBlock._3,false,false,mutable.Set[String](headBlock._3))
+
+    if(curTrie.size == 1){
+      emitTrie(s,trieStrings.tail.head,trieStrings.tail,eq,lhs_name + "_block",headBlock._3,true,true,mutable.Set[String](headBlock._3))
+    } else{
+      emitTrie(s,curTrie.tail,trieStrings,eq,lhs_name + "_block",headBlock._3,false,false,mutable.Set[String](headBlock._3))
+    }
 
     //Close off first attribute
     if(checksTrue){
