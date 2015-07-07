@@ -5,7 +5,7 @@ if [ ! -d "tests/data" ]; then
   cd tests && tar -zxvf data.tar.gz && cd ..
 fi
 
-DL_NAMES=$(find queries/lubm -name '*.datalog';)
+DL_NAMES=$(find queries -name '*.datalog';)
 for name in $DL_NAMES; do
   ./compile.sh ${name}
 done

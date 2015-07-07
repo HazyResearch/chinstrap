@@ -145,6 +145,7 @@ case class ASTSumStatement(r : ASTRelation) extends ASTNode with ASTStatement {
     (0 until (r.attrs.size-1)).foreach{ i =>
       s.println("""});}""")
     }
+    s.println(s"""query_result = ${r.identifierName}_cardinality.evaluate(0);""")
     s.println(s"""std::cout << ${r.identifierName}_cardinality.evaluate(0) << std::endl;""")
   }
 
