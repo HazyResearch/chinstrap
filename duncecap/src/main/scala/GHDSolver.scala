@@ -107,10 +107,11 @@ object GHDSolver {
     val newAttrs = curr.attribute_ordering.filter(resultAttrs.contains(_))
     val i = f(newAttrs.indexOf(search_attribute))
 
-    val get_string = if(i != 0 && (i < newAttrs.size) ) ".get_block(" + search_attribute + "_d)"  else ""
+    val get_string = if(i != 0 && (i < newAttrs.size) ) "get_block(" + search_attribute + "_d)"  else ""
     val prev_block_string = if(i > 1 && (i < newAttrs.size)) "_" + newAttrs(i-1) else ""
+    val iterator_string = if(i > 1 && (i < newAttrs.size)) "_iterator." else "->"
     val next_attr = if( i < newAttrs.size) newAttrs(i) else ""
-    val access_string = if(i < newAttrs.size) (curr.name + prev_block_string + "_block_iterator" + get_string) else ""
+    val access_string = if(i < newAttrs.size) (curr.name + prev_block_string + "_block" + iterator_string + get_string) else ""
 
     val result = if(i < newAttrs.size) mutable.ListBuffer[(String,String,String)]( (next_attr,curr.name,access_string) ) else mutable.ListBuffer[(String,String,String)]()
     curr.children.foreach { child =>

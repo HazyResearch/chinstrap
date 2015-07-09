@@ -611,10 +611,16 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   }
 
   //cur checks should contain Block Name and Acessor
-  private def emitChecks(s:CodeStringBuilder, curChecks:List[(String,String,String)], next_level_in:(String,String,String), encodingName:String) : Boolean = {
+  private def emitChecks(s:CodeStringBuilder, curChecks:List[(String,String,String)], next_level_in:(String,String,String), encodingName:String, firstLoop:Boolean) : Boolean = {
     val dec_names = curChecks.map{cc =>
-      s.println(s"""TrieBlockIterator<${layout}> ${cc._2}_${cc._1}_block_iterator = ${cc._3};""")
-      s.println(s"""TrieBlock<${layout}>* ${cc._2}_${cc._1}_block = ${cc._2}_${cc._1}_block_iterator.trie_block;""")
+      if(!firstLoop){
+        s.println(s"""TrieBlockIterator<${layout}> ${cc._2}_${cc._1}_block_iterator = ${cc._3};""")
+        s.println(s"""TrieBlock<${layout}>* ${cc._2}_${cc._1}_block = ${cc._2}_${cc._1}_block_iterator.trie_block;""")
+      } else{
+        //Because you can't have the iterators outside of the parallel loop (will thrash caches)
+        s.println(s"""TrieBlock<${layout}>* ${cc._2}_${cc._1}_block = ${cc._3};""")
+        s.println(s"""TrieBlockIterator<${layout}> ${cc._2}_${cc._1}_block_iterator(${cc._2}_${cc._1}_block);""")
+      }
       s"""${cc._2}_${cc._1}_block"""
     }
     var next_level = ""
@@ -655,7 +661,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.println(s"""${name}_block->set.foreach_index([&](uint32_t ${tl._3}_i, uint32_t ${tl._3}_d){""")
 
         val next_level_in = if(trie.tail.size > 0) (trie.tail.head._3,trie.tail.head._1,trie.tail.head._2) else ("","","")
-        checksTrue = emitChecks(s,tl._4,next_level_in,encodingName)
+        checksTrue = emitChecks(s,tl._4,next_level_in,encodingName,false)
       }
       
       val next_prev_block = if(notSeen) s"""new_${name}_block""" else prevBlock
@@ -706,7 +712,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       preChecks.tail.foreach{pc => s.print(s""" && ${pc} != NULL""")}
       s.println("""){""")
     }
-    preChecks.foreach{pc => s.println(s"""TrieBlockIterator<${layout}> ${pc}_iterator(${pc}) ;""")}
 
     //emit parallel loop
     val curTrie = trieStrings.head
@@ -722,12 +727,13 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       s.println(s"""${lhs_name}_block = ${headBlock._2};""")
     }
     s.println(s"""${lhs_name}_block->set.par_foreach_index([&](size_t tid, uint32_t ${headBlock._3}_i, uint32_t ${headBlock._3}_d){""")
-    
+    preChecks.foreach{pc => s.println(s"""TrieBlockIterator<${layout}> ${pc}_iterator(${pc});""")}
+
 
     val curChecks = headBlock._4
     val encodingName = encodingNames(attrMap(headBlock._3))
     val next_level_in = if(curTrie.tail.size > 0) (curTrie.tail.head._3,curTrie.tail.head._1,curTrie.tail.head._2) else ("","","")
-    val checksTrue = emitChecks(s,curChecks,next_level_in,encodingName)
+    val checksTrue = emitChecks(s,curChecks,next_level_in,encodingName,true)
     println(curTrie.tail)
 
     if(curTrie.size == 1){
