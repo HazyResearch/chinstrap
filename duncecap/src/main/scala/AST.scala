@@ -791,7 +791,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val size_string = encodingIDToName.head._2 + "_encoding->num_distinct" + encodingIDToName.tail.map{ e =>
       s"""+${e._2}_encoding->num_distinct"""
     }.mkString("")
-    s.println(s"""allocator::memory<uint8_t> output_buffer(${myghd.num_bags}*${attribute_ordering.size}*2*sizeof(TrieBlock<${layout}>)*(${size_string}));""")
+    s.println(s"""allocator::memory<uint8_t> output_buffer(${myghd.num_bags}*${attribute_ordering.size}*10*sizeof(TrieBlock<${layout}>)*(${size_string}));""")
     s.println(s"""allocator::memory<uint8_t> tmp_buffer(${myghd.num_bags}*${attribute_ordering.size}*2*sizeof(TrieBlock<${layout}>)*(${size_string}));""")
 
     //Prepare the attributes that will need to be selected on the fly
