@@ -418,7 +418,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       s.println(s"""bool ${attrs.head}_block_valid = false;""")
 
     if (outermostLoop) {
-      if(resultAttrs.size == 1 && attrs.size > 1){
+      if(resultAttrs.size == 1 && attrs.size > 1 && attrSelections.reduce( (a,b) => a.size + b.size) > 0){
         s.println(s"""uint32_t *new_head_data = (uint32_t*)tmp_buffer.get_next(0,${attrs.head}.cardinality*sizeof(uint32_t));""")
         s.println(s"""std::atomic<size_t> nhd(0);""")
       }
@@ -431,7 +431,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       emitNPRR(s, false, attrs.tail, relsAttrs,attrSelections.tail,aggregate,lastBag,equivalenceClasses,name,yanna,processed++List(attrs.head),next_processed,resultAttrs)
       s.println("});")
 
-      if(resultAttrs.size == 1 && attrs.size > 1){
+      if(resultAttrs.size == 1 && attrs.size > 1 && attrSelections.reduce( (a,b) => a.size + b.size) > 0){
         val (encodingMap,attrMap,encodingNames,attributeToType) = equivalenceClasses
         val encodingName = encodingNames(attrMap(attrs.head))
         s.println(s"""const size_t halloc_size = sizeof(uint64_t)*${encodingName}_encoding->num_distinct*2;""")
