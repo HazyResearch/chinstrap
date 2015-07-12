@@ -251,13 +251,16 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.println(s"""${name}_block->set= &${attr};""")
     }
   }
-
+  private def emitInitAggValues(s:CodeStringBuilder,init_agg_values:Boolean){
+    if(init_agg_values)
+      s.println(s"""///INIT AGG VALUES""")
+  }
   private def emitInitPointers(s:CodeStringBuilder,name:String,attr:String,encodingName:String,lastIntersection:Boolean,tid:String) = {
     if(!lastIntersection)
       s.println(s"""${name}_block->init_pointers(${tid},&output_buffer,${attr}.cardinality,${encodingName}_encoding->num_distinct,${attr}.type == type::UINTEGER);""")
   }
 
-  private def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, sel: List[ASTCriterion], relsAttrs :  List[(String, List[String])], aggregate:Boolean, equivalenceClasses:EquivalenceClasses, name:String, yanna:List[(String, String)], processed:List[String], resultProcessed:List[String], resultAttrs:List[String]) : List[(String, List[String])]= {
+  private def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, sel: List[ASTCriterion], relsAttrs :  List[(String, List[String])], aggregate:Boolean, equivalenceClasses:EquivalenceClasses, name:String, yanna:List[(String, String)], processed:List[String], resultProcessed:List[String], resultAttrs:List[String], init_agg_values:Boolean) : List[(String, List[String])]= {
     val (encodingMap,attrMap,encodingNames,attributeToType) = equivalenceClasses
     val encodingName = encodingNames(attrMap(attr))
 
@@ -286,6 +289,13 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       s.print(s""" && ${rawa}""")
     }
     s.println(s"""){""")
+
+    println("AGGREGATE: " + aggregate)
+    println("SIZES: " + resultProcessed.size + " " + resultAttrs.size)
+    
+
+    println("INIT: " + init_agg_values)
+
     if (relsAttrsWithAttr.size == 1) {
       // no need to emit an intersection
       s.println( s"""${attr} = ${relsAttrsWithAttr.head}->set;""")
@@ -296,6 +306,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
           emitSetSelection(s,attr,name,sel,tid,layout,resultAttrs.contains(attr))
           if(resultAttrs.contains(attr) && !aggregate)
             emitInitPointers(s,name,attr,encodingName,lastIntersection,tid)
+          emitInitAggValues(s,init_agg_values)
         }
         else{
           if(resultAttrs.contains(attr))
@@ -303,6 +314,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
           emitSetSelection(s,attr,attr,sel,tid,layout,resultAttrs.contains(attr)) 
           if(resultAttrs.contains(attr) && !aggregate)
             emitInitPointers(s,attr,attr,encodingName,lastIntersection,tid)
+          emitInitAggValues(s,init_agg_values)
         }
       }
      } else {
@@ -354,6 +366,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
           emitInitPointers(s,name,attr,encodingName,lastIntersection,tid)
         }
       }
+      emitInitAggValues(s,init_agg_values)
     }
     ////////////////////////////////////////// end intersection method
 
@@ -362,6 +375,9 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     if (lastIntersection) {
       if(aggregate){
           s.println(s"""${name}_cardinality.update(${tid},${attr}.cardinality);""")
+          if(!init_agg_values){
+            s.println(s"""///Update AGG Count""")
+          }
         } else {
           s.println(s"""if(${attr}.cardinality != 0){""")
           //update the count
@@ -409,16 +425,17 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
   }
 
-  private def emitAttrLoopOverResult(s: CodeStringBuilder, outermostLoop : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])], attrSelections:List[List[ASTCriterion]], aggregate:Boolean, lastBag:Boolean, equivalenceClasses:EquivalenceClasses, name:String, yanna:List[(String, String)], processed:List[String], resultProcessed:List[String], resultAttrs:List[String]) = {
+  private def emitAttrLoopOverResult(s: CodeStringBuilder, outermostLoop : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])], attrSelections:List[List[ASTCriterion]], aggregate:Boolean, lastBag:Boolean, equivalenceClasses:EquivalenceClasses, name:String, yanna:List[(String, String)], processed:List[String], resultProcessed:List[String], resultAttrs:List[String], init_agg_values:Boolean) = {
     // this should include the walking down the trie, so that when you recursively call emitNPRR, you do so with different rel names
     val next_processed = if(resultAttrs.contains(attrs.head)) resultProcessed++List(attrs.head) else resultProcessed
-    val agg_in = (aggregate && lastBag)
+    val agg_in = (aggregate && lastBag) || (aggregate && !resultAttrs.contains(attrs.head))
+    val new_data_for_head = (attrSelections.map(_.size).reduce( (a,b) => a + b) > 0)
 
     if(resultAttrs.contains(attrs.head) && resultProcessed.size != 0 && !agg_in)
       s.println(s"""bool ${attrs.head}_block_valid = false;""")
 
     if (outermostLoop) {
-      if(resultAttrs.size == 1 && attrs.size > 1 && attrSelections.reduce( (a,b) => a.size + b.size) > 0){
+      if(resultAttrs.size == 1 && attrs.size > 1 && new_data_for_head){
         s.println(s"""uint32_t *new_head_data = (uint32_t*)tmp_buffer.get_next(0,${attrs.head}.cardinality*sizeof(uint32_t));""")
         s.println(s"""std::atomic<size_t> nhd(0);""")
       }
@@ -431,7 +448,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       emitNPRR(s, false, attrs.tail, relsAttrs,attrSelections.tail,aggregate,lastBag,equivalenceClasses,name,yanna,processed++List(attrs.head),next_processed,resultAttrs)
       s.println("});")
 
-      if(resultAttrs.size == 1 && attrs.size > 1 && attrSelections.reduce( (a,b) => a.size + b.size) > 0){
+      if(resultAttrs.size == 1 && attrs.size > 1 && new_data_for_head){
         val (encodingMap,attrMap,encodingNames,attributeToType) = equivalenceClasses
         val encodingName = encodingNames(attrMap(attrs.head))
         s.println(s"""const size_t halloc_size = sizeof(uint64_t)*${encodingName}_encoding->num_distinct*2;""")
@@ -449,7 +466,10 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       emitNPRR(s, false, attrs.tail, relsAttrs,attrSelections.tail,aggregate,lastBag,equivalenceClasses,name,yanna,processed++List(attrs.head),next_processed,resultAttrs)
       s.println("});")
     }
-
+    
+    if(init_agg_values){
+      s.println("//WRITING AGG VALUE")
+    }
     if(resultAttrs.contains(attrs.head) && resultProcessed.size != 0 && !agg_in){
       val blockName = if(resultProcessed.size == 1) name else resultProcessed.last
       s.println(s"""if(${attrs.head}_block_valid){""")
@@ -464,13 +484,16 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     if (attrs.isEmpty) return
 
     println("AGGREGATE: " + aggregate + " LAST BAG: " + lastBag)
-
+    val agg_in = (aggregate && lastBag) || (aggregate && !resultAttrs.contains(attrs.head))
     val currAttr = attrs.head
+    val init_agg_values = if(resultAttrs.contains(currAttr) && aggregate && 
+      ((resultProcessed.size+1) == resultAttrs.size) ) true else false
     if (attrs.tail.isEmpty) {
-      emitAttrIntersection(s, true, currAttr, attrSelections.head, relsAttrs, aggregate, equivalenceClasses,name,yanna,processed,resultProcessed,resultAttrs)
+      emitAttrIntersection(s, true, currAttr, attrSelections.head, relsAttrs, agg_in, equivalenceClasses,name,yanna,processed,resultProcessed,resultAttrs,init_agg_values)
     } else {
-      val updatedRelsAttrs = emitAttrIntersection(s, false, currAttr, attrSelections.head, relsAttrs, (aggregate && lastBag), equivalenceClasses,name,yanna,processed,resultProcessed,resultAttrs)
-      emitAttrLoopOverResult(s, initialCall, attrs, updatedRelsAttrs, attrSelections, aggregate, lastBag, equivalenceClasses,name, yanna, processed, resultProcessed, resultAttrs)
+      println("A: " + attrs.head + " R: " + resultAttrs)
+      val updatedRelsAttrs = emitAttrIntersection(s, false, currAttr, attrSelections.head, relsAttrs, agg_in, equivalenceClasses,name,yanna,processed,resultProcessed,resultAttrs,init_agg_values)
+      emitAttrLoopOverResult(s, initialCall, attrs, updatedRelsAttrs, attrSelections, aggregate, lastBag, equivalenceClasses,name, yanna, processed, resultProcessed, resultAttrs, init_agg_values)
     }
   }
 
