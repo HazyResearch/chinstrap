@@ -48,7 +48,7 @@ struct undirected_triangle_counting: public application<T> {
 
     //add some sort of lambda to do selections 
     Trie<T> *TR_ab = Trie<T>::build(ER_ab,[&](size_t index){
-      return ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
+      return true;//ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
     });
     
     debug::stop_clock("Build",bt);

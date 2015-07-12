@@ -73,17 +73,33 @@ object GHDSolver {
     return attr.toList
   }
 
-  def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, fn:(CodeStringBuilder,GHDNode,List[String],List[List[ASTCriterion]],Boolean,EquivalenceClasses,List[String]) => Unit, s:CodeStringBuilder, attribute_ordering:List[String], selections:List[List[ASTCriterion]], aggregate:Boolean, equivalenceClasses:EquivalenceClasses, resultAttrs:List[String]): Unit = {
-    for (child <- curr.children) {
-      if (!seen.contains(child)) {
-        seen += child
-        bottom_up(seen, child, fn, s, attribute_ordering, selections,aggregate,equivalenceClasses,resultAttrs)
-      }
-    }
+  def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, fn:(CodeStringBuilder,GHDNode,List[String],List[List[ASTCriterion]],Boolean,Boolean,EquivalenceClasses,List[String]) => Unit, s:CodeStringBuilder, attribute_ordering:List[String], selections:List[List[ASTCriterion]], aggregate:Boolean, lastBag:Boolean, equivalenceClasses:EquivalenceClasses, resultAttrs:List[String], parent:GHDNode): Unit = {
+    val root = if(seen.size == 1) true else false
     val bag_attrs = curr.rels.flatMap(r => r.attrs).toList.distinct
     val a_i = attribute_ordering.zipWithIndex.filter(a => bag_attrs.contains(a._1))
     val s_in = a_i.map{ i => selections(i._2) }
-    fn(s,curr,a_i.map(_._1),s_in,aggregate,equivalenceClasses,resultAttrs)
+    curr.attribute_ordering = a_i.map(_._1)
+    for (child <- curr.children) {
+      if (!seen.contains(child)) {
+        seen += child
+        bottom_up(seen, child, fn, s, attribute_ordering, selections, aggregate, lastBag, equivalenceClasses, resultAttrs, curr)
+      }
+    }
+
+    val shared_attrs = parent.attribute_ordering.intersect(curr.attribute_ordering)
+    if(!aggregate){
+      fn(s,curr,curr.attribute_ordering,s_in,aggregate,lastBag,equivalenceClasses,resultAttrs)
+    }
+    else{
+      //for the root we store attributes that appear in the children
+      if(root && !lastBag){
+       val common_child_attrs = curr.attribute_ordering.intersect( curr.children.flatMap{c => c.attribute_ordering} )
+       fn(s,curr,curr.attribute_ordering,s_in,aggregate,lastBag,equivalenceClasses,curr.attribute_ordering.filter(common_child_attrs.contains(_)))
+      } else {
+        //for the children we store attributes that occur in the parents
+        fn(s,curr,curr.attribute_ordering,s_in,aggregate,lastBag,equivalenceClasses,curr.attribute_ordering.filter(shared_attrs.contains(_)))          
+      }
+    }
   }
 
   private def top_down_PRE(seen: mutable.Set[GHDNode], curr: GHDNode, resultAttrs:List[String]): List[String] = {

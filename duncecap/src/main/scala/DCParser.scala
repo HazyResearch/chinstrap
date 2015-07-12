@@ -44,9 +44,10 @@ object DCParser extends RegexParsers {
   def loadStatement = ((typedRelationIdentifier <~ "<-") <~ "load") ~ ("(" ~> string) ~ (("," ~> format) <~ ")") ^^
     {case id~file~fmt => ASTLoadFileStatement(id, file, fmt)}
 
-  def expression : Parser[ASTExpression] = countExpression | joinAndSelectExpression | identifier | string
+  def expression : Parser[ASTExpression] = countExpression | sumJoinAndSelectExpression | joinAndSelectExpression | identifier | string
   def countExpression : Parser[ASTCount] = "COUNT" ~> "(" ~> (expression <~ ")") ^^ {case e => ASTCount(e)}
-  def joinAndSelectExpression = joinExpression ^^ {case e => ASTJoinAndSelect(e._1, e._2)}
+  def sumJoinAndSelectExpression = "SUM" ~> "(" ~> (joinAndSelectExpression <~ ")") ^^ {case e => ASTJoinAndSelect(e.rels, e.selectCriteria,true)}
+  def joinAndSelectExpression = joinExpression ^^ {case e => ASTJoinAndSelect(e._1, e._2,false)}
   def joinExpression : Parser[(List[ASTRelation],List[ASTCriterion])] = notLastJoinExpression | lastJoinExpression
   def notLastJoinExpression = relationIdentifier ~ ("," ~> (joinExpression|selectExpression)) ^^ {case id~rest => (id::rest._1, rest._2)}
   def selectExpression : Parser[(List[ASTRelation],List[ASTCriterion])] = notLastSelectExpression | lastSelectExpression
