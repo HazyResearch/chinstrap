@@ -264,7 +264,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     sel: List[ASTCriterion], relsAttrs :  List[(String, List[String])], aggregate:Boolean, 
     equivalenceClasses:EquivalenceClasses, name:String, yanna:List[(String, String)], 
     processed:List[String], resultProcessed:List[String], resultAttrs:List[String], 
-    init_agg_values:Boolean) : List[(String, List[String])]= {
+    init_agg_values:Boolean, lastBag:Boolean) : List[(String, List[String])]= {
     val (encodingMap,attrMap,encodingNames,attributeToType) = equivalenceClasses
     val encodingName = encodingNames(attrMap(attr))
 
@@ -385,7 +385,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     if (lastIntersection) {
       if(aggregate){
           s.println(s"""${name}_cardinality.update(${tid},${attr}.cardinality);""")
-          if(!init_agg_values){
+          if(!init_agg_values && !lastBag){
             s.println(s"""aggregate_value += ${attr}.cardinality;""")
           }
         } else {
@@ -528,9 +528,9 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val init_agg_values = if(resultAttrs.contains(currAttr) && aggregate && 
       ((resultProcessed.size+1) == resultAttrs.size) ) true else false
     if (attrs.tail.isEmpty) {
-      emitAttrIntersection(s, true, currAttr, attrSelections.head, relsAttrs, agg_in, equivalenceClasses,name,yanna,processed,resultProcessed,resultAttrs,init_agg_values)
+      emitAttrIntersection(s, true, currAttr, attrSelections.head, relsAttrs, agg_in, equivalenceClasses,name,yanna,processed,resultProcessed,resultAttrs,init_agg_values,lastBag)
     } else {
-      val updatedRelsAttrs = emitAttrIntersection(s, false, currAttr, attrSelections.head, relsAttrs, agg_in, equivalenceClasses,name,yanna,processed,resultProcessed,resultAttrs,init_agg_values)
+      val updatedRelsAttrs = emitAttrIntersection(s, false, currAttr, attrSelections.head, relsAttrs, agg_in, equivalenceClasses,name,yanna,processed,resultProcessed,resultAttrs,init_agg_values,lastBag)
       emitAttrLoopOverResult(s, initialCall, attrs, updatedRelsAttrs, attrSelections, aggregate, lastBag, equivalenceClasses,name, yanna, processed, resultProcessed, resultAttrs, init_agg_values)
     }
   }
