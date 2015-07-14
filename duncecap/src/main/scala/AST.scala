@@ -288,6 +288,13 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.println(s"""TrieBlock<${layout},size_t> *${attr}_block = NULL;""")
       }
     }
+
+    //////////should be a method emit intersections
+    if (relsAttrsWithAttr.size != 1 && aggregate) {
+      s.println(s"""const size_t alloc_size_${attr} = sizeof(uint64_t)*${encodingName}_encoding->num_distinct*2;""")
+      s.println(s"""${attr}.data = output_buffer.get_next(${tid},alloc_size_${attr}); //initialize the memory""")
+    }
+
     //can have NULL pointers in trie
     s.print(s"""if( ${relsAttrsWithAttr.head}""")
     relsAttrsWithAttr.tail.foreach{rawa =>
@@ -324,10 +331,12 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
           s.println(s"""${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout},size_t>))) TrieBlock<${layout},size_t>();""")
       }
 
-      //////////should be a method emit intersections
-      s.println(s"""const size_t alloc_size_${attr} = sizeof(uint64_t)*${encodingName}_encoding->num_distinct*2;""")
-      s.println(s"""${attr}.data = output_buffer.get_next(${tid},alloc_size_${attr}); //initialize the memory""")
-            
+      //////////should be a method emit intersections          
+      if(!aggregate){
+        s.println(s"""const size_t alloc_size_${attr} = sizeof(uint64_t)*${encodingName}_encoding->num_distinct*2;""")
+        s.println(s"""${attr}.data = output_buffer.get_next(${tid},alloc_size_${attr}); //initialize the memory""")
+      }  
+
       //intersection
       val restOfRelsAttrsWithAttr = relsAttrsWithAttr.tail.tail 
       //even number of intersections means tmp should be second, odd means temp should be first
@@ -354,7 +363,10 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.println(s"""tmp_buffer.roll_back(${tid},alloc_size_${attr});""")
       }
 
-      s.println(s"""output_buffer.roll_back(${tid},alloc_size_${attr} - ${attr}.number_of_bytes);""")
+      if(!aggregate)
+        s.println(s"""output_buffer.roll_back(${tid},alloc_size_${attr} - ${attr}.number_of_bytes);""")
+
+      
       if(resultAttrs.contains(attr) && !aggregate){
         if(processed.size != 0){
           s.println(s"""${attr}_block->set = &${attr};""")
@@ -388,6 +400,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
           if(!init_agg_values && !lastBag){
             s.println(s"""aggregate_value += ${attr}.cardinality;""")
           }
+          s.println(s"""output_buffer.roll_back(${tid},alloc_size_${attr});""")
         } else {
           s.println(s"""if(${attr}.cardinality != 0){""")
           //update the count
@@ -435,7 +448,10 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
   }
 
-  private def emitAttrLoopOverResult(s: CodeStringBuilder, outermostLoop : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])], attrSelections:List[List[ASTCriterion]], aggregate:Boolean, lastBag:Boolean, equivalenceClasses:EquivalenceClasses, name:String, yanna:List[(String, String)], processed:List[String], resultProcessed:List[String], resultAttrs:List[String], init_agg_values:Boolean) = {
+  private def emitAttrLoopOverResult(s: CodeStringBuilder, outermostLoop : Boolean, attrs : List[String], 
+    relsAttrs : List[(String, List[String])], attrSelections:List[List[ASTCriterion]], aggregate:Boolean, 
+    lastBag:Boolean, equivalenceClasses:EquivalenceClasses, name:String, yanna:List[(String, String)], 
+    processed:List[String], resultProcessed:List[String], resultAttrs:List[String], init_agg_values:Boolean) = {
     // this should include the walking down the trie, so that when you recursively call emitNPRR, you do so with different rel names
     val next_processed = if(resultAttrs.contains(attrs.head)) resultProcessed++List(attrs.head) else resultProcessed
     val agg_in = (aggregate && lastBag) || (aggregate && !resultAttrs.contains(attrs.head))
@@ -483,10 +499,11 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.println(s"""output_buffer.roll_back(0,halloc_size-${attrs.head}.number_of_bytes);""")
       }
     } else {
-      if(agg_in)
+      if(agg_in){
         s.println(s"""${attrs.head}.foreach([&](uint32_t ${attrs.head}_d) {""")
-      else
+      } else{
         s.println(s"""${attrs.head}.foreach_index([&](uint32_t ${attrs.head}_i, uint32_t ${attrs.head}_d) {""")
+      }
 
       if(init_agg_values){
           s.println("size_t aggregate_value = 0;")
@@ -502,8 +519,11 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         else
           s.println(s"""${attrs.head}_block->set_data(${attrs.head}_i,${attrs.head}_d,aggregate_value);""")
       }
-
       s.println("});")
+
+      if(agg_in && !outermostLoop){
+        s.println(s"""output_buffer.roll_back(tid,alloc_size_${attrs.head});""")
+      }
     }
     
     if(resultAttrs.contains(attrs.head) && resultProcessed.size != 0 && !agg_in){
