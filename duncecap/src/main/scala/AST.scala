@@ -718,7 +718,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   def emitTrie(s:CodeStringBuilder,trie:List[(String,String,String,List[(String,String,String)])],
     tries:List[List[(String,String,String,List[(String,String,String)])]],eq:EquivalenceClasses,
     prevBlock:String,prevAttr:String,first:Boolean,setBlock:Boolean,seen:mutable.Set[String],
-    aggregate:Boolean, resultAttrs:List[String]) : Unit = {
+    aggregate:Boolean, resultAttrs:List[String], aggregates:List[String], lhs_name:String) : Unit = {
 
     println("SEEN: " + seen)
 
@@ -753,9 +753,9 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       val next_prev_attr = if(notSeen) tl._3 else prevAttr
 
       if(trie.size == 1){
-        emitTrie(s,tries.tail.head,tries.tail,eq,next_prev_block,next_prev_attr,true,true,seen,aggregate,resultAttrs)
+        emitTrie(s,tries.tail.head,tries.tail,eq,next_prev_block,next_prev_attr,true,true,seen,aggregate,resultAttrs,aggregates,lhs_name)
       } else{
-        emitTrie(s,trie.tail,tries,eq,next_prev_block,next_prev_attr,false,setBlock,seen,aggregate,resultAttrs)
+        emitTrie(s,trie.tail,tries,eq,next_prev_block,next_prev_attr,false,setBlock,seen,aggregate,resultAttrs,aggregates,lhs_name)
       }
 
       if(notSeen){
@@ -774,14 +774,23 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       if(notSeen && !aggregate){
         s.println(s"""${prevBlock}->set_block(${prevAttr}_i,${prevAttr}_d,${name}_block);""")
       } else{
-        emitTrie(s,trie.tail,tries,eq,prevBlock,prevAttr,false,false,seen,aggregate,resultAttrs)
+        emitTrie(s,trie.tail,tries,eq,prevBlock,prevAttr,false,false,seen,aggregate,resultAttrs,aggregates,lhs_name)
+      }
+    } else{
+      if(aggregate){
+        s.print(s"""size_t count = """)
+        s.print(s"""${aggregates.head}""")
+        aggregates.tail.foreach(agg => s.print(s"""*${agg}"""))
+        s.println(s""";""")
+        s.println(s"""${lhs_name}_cardinality.update(tid,count);""")
       }
     }
 
+
   }
 
-  def emitTopDown(s:CodeStringBuilder, accessor:(List[String],List[String],List[(List[(String,String,String,List[(String,String,String)])])]), eq:EquivalenceClasses, aggregate:Boolean, resultAttrs:List[String]) = {
-    val (preChecks,resultAttrs,trieStrings) = accessor
+  def emitTopDown(s:CodeStringBuilder, accessor:(List[String],List[String],List[(List[(String,String,String,List[(String,String,String)])])],List[String]), eq:EquivalenceClasses, aggregate:Boolean, resultAttrs:List[String]) = {
+    val (preChecks,resultAttrs,trieStrings,aggregates) = accessor
     val lhs_name = lhs.identifierName + "_" + resultAttrs.mkString("")
     val (encodingMap,attrMap,encodingNames,attributeToType) = eq
     s.println(s"""////////////TOP DOWN""")
@@ -820,9 +829,9 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val checksTrue = emitChecks(s,curChecks,next_level_in,encodingName,true)
 
     if(curTrie.size == 1){
-      emitTrie(s,trieStrings.tail.head,trieStrings.tail,eq,lhs_name + "_block",headBlock._3,true,true,mutable.Set[String](headBlock._3),aggregate,resultAttrs)
+      emitTrie(s,trieStrings.tail.head,trieStrings.tail,eq,lhs_name + "_block",headBlock._3,true,true,mutable.Set[String](headBlock._3),aggregate,resultAttrs,aggregates,lhs_name)
     } else{
-      emitTrie(s,curTrie.tail,trieStrings,eq,lhs_name + "_block",headBlock._3,false,false,mutable.Set[String](headBlock._3),aggregate,resultAttrs)
+      emitTrie(s,curTrie.tail,trieStrings,eq,lhs_name + "_block",headBlock._3,false,false,mutable.Set[String](headBlock._3),aggregate,resultAttrs,aggregates,lhs_name)
     }
 
     //Close off first attribute

@@ -5,7 +5,7 @@ import java.io.{FileWriter, BufferedWriter, File}
 
 object GHDSolver {
   type EquivalenceClasses = (Map[(String,Int),(Int,Int,String,Int)],Map[String,Int],Map[Int,String],Map[String,String])
-  type TopDown = (List[String],List[String],List[(List[(String,String,String,List[(String,String,String)])])])
+  type TopDown = (List[String],List[String],List[(List[(String,String,String,List[(String,String,String)])])],List[String])
 
   def getAttrSet(rels: List[Relation]): Set[String] = {
     return rels.foldLeft(Set[String]())(
@@ -111,21 +111,35 @@ object GHDSolver {
     return new_agg_attributes.toList
   }
 
-  private def top_down_PRE(seen: mutable.Set[GHDNode], curr: GHDNode, resultAttrs:List[String]): List[String] = {
+  private def top_down_PRE(seen: mutable.Set[GHDNode], curr: GHDNode, resultAttrs:List[String]): (List[String],List[String]) = {
     val newAttrs = curr.attribute_ordering.filter(resultAttrs.contains(_))
     val result = mutable.ListBuffer[String]()
+    val aggregates = mutable.ListBuffer[String]()
     if(newAttrs.size != 0){
       result += curr.name + "_block"
     }
-
+    //for the root we have the index in
+    if(seen.size == 1){
+      if(newAttrs.size == 1)
+        aggregates += (curr.name + "_block->get_data(" + newAttrs.last + "_i," + newAttrs.last + "_d)")
+      else
+        aggregates += (curr.name + "_" + newAttrs.last + "_block->get_data(" + newAttrs.last + "_i," + newAttrs.last + "_d)")
+    } else {
+      if(newAttrs.size == 1)
+        aggregates += (curr.name + "_block->get_data(" + newAttrs.last + "_d)")
+      else
+        aggregates += (curr.name + "_" + newAttrs.last + "_block->get_data(" + newAttrs.last + "_d)")
+    }
     curr.children.foreach { child =>
       // if these two hyperedges are connected
       if (!seen.contains(child)) {
         seen += child
-        result ++= top_down_PRE(seen, child, resultAttrs)
+        val tup = top_down_PRE(seen, child, resultAttrs)
+        result ++= tup._1
+        aggregates ++= tup._2
       }
     }
-    return result.toList
+    return (result.toList,aggregates.toList)
   }
 
   private def top_down_DFS(seen: mutable.Set[GHDNode], curr: GHDNode, search_attribute:String, resultAttrs:List[String], f:(Int => Int)): List[(String,String,String)] = {
@@ -138,11 +152,7 @@ object GHDSolver {
     val next_attr = if( i < newAttrs.size) newAttrs(i) else ""
     val access_string = if(i < newAttrs.size) (curr.name + prev_block_string + "_block" + iterator_string + get_string) else ""
 
-    println()
-
     val result = if(i < newAttrs.size) mutable.ListBuffer[(String,String,String)]( (next_attr,curr.name,access_string) ) else mutable.ListBuffer[(String,String,String)]()
-    println("NEW ATTRS: " + newAttrs)
-    println("CHILD ATTRS: " + i + " " + newAttrs.size)
     curr.children.foreach { child =>
       // if these two hyperedges are connected
       if (!seen.contains(child) && child.attribute_ordering.contains(search_attribute)) {
@@ -167,7 +177,7 @@ object GHDSolver {
     var final_checks = mutable.Map[String,mutable.Set[String]]()
 
     //Lets make sure the tries actually exist before we run the top down pass
-    val preChecks = top_down_PRE(mutable.LinkedHashSet[GHDNode](seen.head), seen.head, resultAttrs)
+    val (preChecks,aggregates) = top_down_PRE(mutable.LinkedHashSet[GHDNode](seen.head), seen.head, resultAttrs)
 
     while(frontier.size != 0){
       next_frontier.clear
@@ -213,7 +223,7 @@ object GHDSolver {
       depth += 1
     }
 
-    return (preChecks,result_attributes.toList,result.toList)
+    return (preChecks,result_attributes.toList,result.toList,aggregates)
   }
   private def breadth_first(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): (Int,Int) = {
     var depth = 0
