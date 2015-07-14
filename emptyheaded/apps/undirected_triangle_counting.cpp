@@ -48,7 +48,7 @@ struct undirected_triangle_counting: public application<T> {
 
     //add some sort of lambda to do selections 
     Trie<T> *TR_ab = Trie<T>::build(ER_ab,[&](size_t index){
-      return true;//ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
+      return ER_ab->at(0).at(index) > ER_ab->at(1).at(index);
     });
     
     debug::stop_clock("Build",bt);
@@ -66,7 +66,7 @@ struct undirected_triangle_counting: public application<T> {
 
     auto qt = debug::start_clock();
 
-    const TrieBlock<T> H = *TR_ab->head;
+    const TrieBlock<T,size_t> H = *TR_ab->head;
     const Set<T> A = H.set;
     A.par_foreach([&](size_t tid, uint32_t a_i){
       Set<T> B(B_buffer.get_memory(tid)); //initialize the memory
@@ -76,7 +76,7 @@ struct undirected_triangle_counting: public application<T> {
       //std::cout << "A: " << a_i << " card: " << B.cardinality << std::endl; 
       B.foreach([&](uint32_t b_i){ //Peel off B attributes
         //std::cout << "A: " << a_i << " B: " << b_i << std::endl; 
-        const TrieBlock<T>* l2 = H.get_block(b_i);
+        const TrieBlock<T,size_t>* l2 = H.get_block(b_i);
         const size_t count = ops::set_intersect(
           &l2->set,
           &op1);

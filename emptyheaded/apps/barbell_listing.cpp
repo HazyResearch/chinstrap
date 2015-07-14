@@ -54,20 +54,20 @@ struct barbell_listing: public application<T> {
         
     debug::stop_clock("Build",bt);
   
-    allocator::memory<uint8_t> output_buffer(20 * R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
+    allocator::memory<uint8_t> output_buffer(20 * R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T,size_t>));
 
 
 //////////////////////////////////////////////////////////////////////
     //Prints the relation
     //R(a,b) join T(b,c) join S(a,c)
-  TrieBlock<T>* a1_block; // bag BCD
+  TrieBlock<T,size_t>* a1_block; // bag BCD
   {
       //allocate memory
       auto qt = debug::start_clock();
 
-      const TrieBlock<T> H = *TR_ab->head;
+      const TrieBlock<T,size_t> H = *TR_ab->head;
       const Set<T> A = H.set;
-      a1_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T>))) TrieBlock<T>(H);
+      a1_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T,size_t>))) TrieBlock<T,size_t>(H);
       a1_block->init_pointers(0,&output_buffer,A.cardinality,a_encoding->num_distinct,false); 
 
       par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
@@ -77,7 +77,7 @@ struct barbell_listing: public application<T> {
       A.par_foreach([&](size_t tid, uint32_t a_d){
         const Set<T> matching_b = H.get_block(a_d)->set;
         //build output B block
-        TrieBlock<T>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
+        TrieBlock<T,size_t>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T,size_t>))) TrieBlock<T,size_t>(true);
         const size_t alloc_size = sizeof(uint64_t)*a_encoding->num_distinct*2;
 
         Set<T> B(output_buffer.get_next(tid, alloc_size));
@@ -90,9 +90,9 @@ struct barbell_listing: public application<T> {
 
         //Next attribute to peel off
         b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d){ // Peel off B attributes
-          const TrieBlock<T>* matching_c = H.get_block(b_d);
+          const TrieBlock<T,size_t>* matching_c = H.get_block(b_d);
           // Placement new!!
-          TrieBlock<T>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
+          TrieBlock<T,size_t>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T,size_t>))) TrieBlock<T,size_t>(true);
           c_block->set = Set<T>(output_buffer.get_next(tid, alloc_size));
 
           const size_t count = ops::set_intersect(&c_block->set, &matching_c->set, &matching_b)->cardinality;
@@ -107,14 +107,14 @@ struct barbell_listing: public application<T> {
       std::cout << num_triangles.evaluate(0) << std::endl;
       debug::stop_clock("Query",qt);
   }
-  TrieBlock<T>* a2_block; // bag AEF
+  TrieBlock<T,size_t>* a2_block; // bag AEF
   {
       //allocate memory
       auto qt = debug::start_clock();
 
-      const TrieBlock<T> H = *TR_ab->head;
+      const TrieBlock<T,size_t> H = *TR_ab->head;
       const Set<T> A = H.set;
-      a2_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T>))) TrieBlock<T>(H);
+      a2_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T,size_t>))) TrieBlock<T,size_t>(H);
       a2_block->init_pointers(0,&output_buffer,A.cardinality,a_encoding->num_distinct, false); 
 
       par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
@@ -124,7 +124,7 @@ struct barbell_listing: public application<T> {
       A.par_foreach([&](size_t tid, uint32_t a_d){
         const Set<T> matching_b = H.get_block(a_d)->set;
         //build output B block
-        TrieBlock<T>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
+        TrieBlock<T,size_t>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T,size_t>))) TrieBlock<T,size_t>(true);
         const size_t alloc_size = sizeof(uint64_t)*a_encoding->num_distinct*2;
 
         Set<T> B(output_buffer.get_next(tid, alloc_size));
@@ -137,9 +137,9 @@ struct barbell_listing: public application<T> {
 
         //Next attribute to peel off
         b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d){ // Peel off B attributes
-          const TrieBlock<T>* matching_c = H.get_block(b_d);
+          const TrieBlock<T,size_t>* matching_c = H.get_block(b_d);
           // Placement new!!
-          TrieBlock<T>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
+          TrieBlock<T,size_t>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T,size_t>))) TrieBlock<T,size_t>(true);
           c_block->set = Set<T>(output_buffer.get_next(tid, alloc_size));
 
           const size_t count = ops::set_intersect(&c_block->set, &matching_c->set, &matching_b)->cardinality;
@@ -155,21 +155,21 @@ struct barbell_listing: public application<T> {
       debug::stop_clock("Query",qt);
   }
   
-  TrieBlock<T>* a3_block; // this is the edgelist R(A,B) joined with the projection of the previous 2 bags on A and B
+  TrieBlock<T,size_t>* a3_block; // this is the edgelist R(A,B) joined with the projection of the previous 2 bags on A and B
   {      
     auto qt = debug::start_clock();
     const size_t alloc_size = sizeof(uint64_t)*a_encoding->num_distinct*2; // why this magic number ?
-    const TrieBlock<T> H = *TR_ab->head;
+    const TrieBlock<T,size_t> H = *TR_ab->head;
     const Set<T> A = H.set;
 
-    a3_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
+    a3_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T,size_t>))) TrieBlock<T,size_t>(true);
     Set<T> new_A(output_buffer.get_next(0, alloc_size));
     a3_block->set = ops::set_intersect(&new_A, &A, (const Set<T> *)(&a1_block->set));
     output_buffer.roll_back(0, alloc_size - a3_block->set.number_of_bytes);
     a3_block->init_pointers(0, &output_buffer, A.cardinality,a_encoding->num_distinct, false);
     a3_block->set.par_foreach_index([&](size_t tid, uint32_t a3_i, uint32_t a3_d) {
-      const TrieBlock<T>* matching_b = H.get_block(a3_d);
-      TrieBlock<T>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
+      const TrieBlock<T,size_t>* matching_b = H.get_block(a3_d);
+      TrieBlock<T,size_t>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T,size_t>))) TrieBlock<T,size_t>(true);
       Set<T> B(output_buffer.get_next(tid, alloc_size));
       b_block->set = ops::set_intersect(&B, &a2_block->set, &matching_b->set);
       output_buffer.roll_back(tid, alloc_size - b_block->set.number_of_bytes);
@@ -180,40 +180,40 @@ struct barbell_listing: public application<T> {
 
   // now do the topdown pass of yannakakis
   auto qt = debug::start_clock();
-  TrieBlock<T>* a_block = a3_block;
+  TrieBlock<T,size_t>* a_block = a3_block;
 
-  TrieBlockIterator<T> a_blockI(a_block);
-  TrieBlockIterator<T> a1_blockI(a1_block);
-  TrieBlockIterator<T> a2_blockI(a2_block);
+  TrieBlockIterator<T,size_t> a_blockI(a_block);
+  TrieBlockIterator<T,size_t> a1_blockI(a1_block);
+  TrieBlockIterator<T,size_t> a2_blockI(a2_block);
 
   Set<T> a_set = a_block->set;
 
   a_set.par_foreach([&](size_t tid, uint32_t a_d) {
-    TrieBlock<T>* b_block = (a_blockI.get_block(a_d)).trie_block;
+    TrieBlock<T,size_t>* b_block = (a_blockI.get_block(a_d)).trie_block;
     Set<T> b_set = b_block->set;
 
-    TrieBlock<T>* e_block = (a1_blockI.get_block(a_d)).trie_block;
+    TrieBlock<T,size_t>* e_block = (a1_blockI.get_block(a_d)).trie_block;
     Set<T> e_set = e_block->set;
 
     if (b_block && e_block) {
       b_block->init_pointers(tid, &output_buffer, b_block->set.cardinality,a_encoding->num_distinct, true);
       b_set.foreach_index([&](uint32_t b_i, uint32_t b_d) {
-        TrieBlockIterator<T> old_c_block = a2_blockI.get_block(b_d);
+        TrieBlockIterator<T,size_t> old_c_block = a2_blockI.get_block(b_d);
         if (old_c_block.trie_block) {
-          TrieBlock<T>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(old_c_block.trie_block);
+          TrieBlock<T,size_t>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T,size_t>))) TrieBlock<T,size_t>(old_c_block.trie_block);
           c_block->init_pointers(tid, &output_buffer, c_block->set.cardinality,a_encoding->num_distinct, true);
           b_block->set_block(b_i, b_d, c_block);
           c_block->set.foreach_index([&](uint32_t c_i, uint32_t c_d) {
-            TrieBlock<T>* old_d_block = old_c_block.get_block(c_d).trie_block;
+            TrieBlock<T,size_t>* old_d_block = old_c_block.get_block(c_d).trie_block;
             if (old_d_block) {
-              TrieBlock<T>* d_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(old_d_block);
+              TrieBlock<T,size_t>* d_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T,size_t>))) TrieBlock<T,size_t>(old_d_block);
               c_block->set_block(c_i, c_d, d_block);
               d_block->init_pointers(tid, &output_buffer, d_block->set.cardinality,a_encoding->num_distinct, true);
               d_block->set.foreach_index([&](uint32_t d_i, uint32_t d_d) {
                 d_block->set_block(d_i, d_d, e_block);
                 // e_block->init_pointers(tid, &output_buffer, TR_ab->ranges->at(1));
                 // e_block->set.foreach_index([&](uint32_t e_i, uint32_t e_d) {
-                //  TrieBlock<T>* f_block = e_block->get_block(e_d);
+                //  TrieBlock<T,size_t>* f_block = e_block->get_block(e_d);
                 //  f_block->set.foreach_index([&](uint32_t f_i, uint32_t f_d) {
                 //    std::cout << a_d << " " << b_d << " " << c_d << " " << d_d << " " << e_d << " " << f_d << std::endl;
                 //  });
@@ -235,23 +235,23 @@ struct barbell_listing: public application<T> {
   auto count_time = debug::start_clock();
   a_block->set.par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d) {
       // std::cout << a_d << std::endl;
-      TrieBlock<T>* b_block = a_block->get_block(a_i,a_d);
+      TrieBlock<T,size_t>* b_block = a_block->get_block(a_i,a_d);
       Set<T> b_set = b_block->set;
       if (b_block) {
         b_set.foreach_index([&](uint32_t b_i, uint32_t b_d) {
-            TrieBlock<T>* c_block = b_block->get_block(b_i,b_d);
+            TrieBlock<T,size_t>* c_block = b_block->get_block(b_i,b_d);
             Set<T> c_set = c_block->set;
             if (c_block) {
                 c_set.foreach_index([&](uint32_t c_i, uint32_t c_d) {
-                  TrieBlock<T>* d_block = c_block->get_block(c_i,c_d);
+                  TrieBlock<T,size_t>* d_block = c_block->get_block(c_i,c_d);
                   Set<T> d_set = d_block->set;
                   if (d_block) {
                     d_set.foreach_index([&](uint32_t d_i, uint32_t d_d){
-                      TrieBlock<T>* e_block = d_block->get_block(d_i,d_d);
+                      TrieBlock<T,size_t>* e_block = d_block->get_block(d_i,d_d);
                       Set<T> e_set = e_block->set;
                        if (e_block) {
                           e_set.foreach_index([&](uint32_t e_i, uint32_t e_d){
-                            TrieBlock<T>* f_block = e_block->get_block(e_i,e_d);
+                            TrieBlock<T,size_t>* f_block = e_block->get_block(e_i,e_d);
                             if (f_block) {
                               total_count.update(tid, f_block->set.cardinality);
                               // f_block->set.foreach([&](uint32_t f_d) {

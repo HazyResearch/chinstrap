@@ -59,13 +59,13 @@ struct undirected_triangle_listing: public application<T> {
     //R(a,b) join T(b,c) join S(a,c)
 
     //allocate memory
-    allocator::memory<uint8_t> output_buffer(R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T>));
+    allocator::memory<uint8_t> output_buffer(R_ab->num_rows * sizeof(uint64_t) * sizeof(TrieBlock<T,size_t>));
 
     auto qt = debug::start_clock();
 
-    const TrieBlock<T> H = *TR_ab->head;
+    const TrieBlock<T,size_t> H = *TR_ab->head;
     const Set<T> A = H.set;
-    TrieBlock<T>* a_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T>))) TrieBlock<T>(H);
+    TrieBlock<T,size_t>* a_block = new(output_buffer.get_next(0, sizeof(TrieBlock<T,size_t>))) TrieBlock<T,size_t>(H);
     a_block->init_pointers(0,&output_buffer,A.cardinality,a_encoding->num_distinct,false); 
 
     par::reducer<size_t> num_triangles(0,[](size_t a, size_t b){
@@ -81,7 +81,7 @@ struct undirected_triangle_listing: public application<T> {
       t_get_block += debug::stop_clock(it);
 
       //build output B block
-      TrieBlock<T>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
+      TrieBlock<T,size_t>* b_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T,size_t>))) TrieBlock<T,size_t>(true);
       const size_t alloc_size = sizeof(uint64_t)*a_encoding->num_distinct*2;
 
       Set<T> B(output_buffer.get_next(tid, alloc_size));
@@ -99,11 +99,11 @@ struct undirected_triangle_listing: public application<T> {
       //Next attribute to peel off
       b_block->set.foreach_index([&](uint32_t b_i, uint32_t b_d){ // Peel off B attributes
         it = debug::start_clock();
-        const TrieBlock<T>* matching_c = H.get_block(b_d);
+        const TrieBlock<T,size_t>* matching_c = H.get_block(b_d);
         t_get_block += debug::stop_clock(it);
 
         // Placement new!!
-        TrieBlock<T>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T>))) TrieBlock<T>(true);
+        TrieBlock<T,size_t>* c_block = new(output_buffer.get_next(tid, sizeof(TrieBlock<T,size_t>))) TrieBlock<T,size_t>(true);
         c_block->set = Set<T>(output_buffer.get_next(tid, alloc_size));
 
         it = debug::start_clock();
@@ -126,15 +126,15 @@ struct undirected_triangle_listing: public application<T> {
     std::cout << "INTERSECTION TIME: " << t_intersection << std::endl;
 
     unsigned long size = 0;
-    TrieBlockIterator<T> a_blockI(a_block);
+    TrieBlockIterator<T,size_t> a_blockI(a_block);
     a_block->set.foreach([&](uint32_t a_d) {
-        TrieBlockIterator<T> b_blockI = a_blockI.get_block(a_d);
-        TrieBlock<T> *b_block = b_blockI.trie_block;
+        TrieBlockIterator<T,size_t> b_blockI = a_blockI.get_block(a_d);
+        TrieBlock<T,size_t> *b_block = b_blockI.trie_block;
         Set<T> b_set = b_block->set;
         if (b_block) {
           b_set.foreach([&](uint32_t b_d) {
-              TrieBlockIterator<T> c_blockI = b_blockI.get_block(b_d);
-              TrieBlock<T> *c_block = c_blockI.trie_block;
+              TrieBlockIterator<T,size_t> c_blockI = b_blockI.get_block(b_d);
+              TrieBlock<T,size_t> *c_block = c_blockI.trie_block;
               Set<T> c_set = c_block->set;
               if (c_block) {
                 //std::cout << "A: " << a_d << " B: " << b_d << " Count: " << c_block->set.cardinality << std::endl;
