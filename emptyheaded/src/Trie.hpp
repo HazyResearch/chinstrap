@@ -23,9 +23,9 @@ struct SortColumns{
 
 template<class T>
 struct Trie{
-  TrieBlock<T> *head;
+  TrieBlock<T,size_t> *head;
 
-  Trie<T>(TrieBlock<T> *head_in){
+  Trie<T>(TrieBlock<T,size_t> *head_in){
     head = head_in;
   };
 
@@ -136,7 +136,7 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
   tbb::parallel_sort(indicies,iterator,SortColumns(attr_in));
 
   //Where all real data goes
-  const size_t alloc_size = (8*num_rows*num_levels*sizeof(uint64_t)*sizeof(TrieBlock<T>))/NUM_THREADS;
+  const size_t alloc_size = (8*num_rows*num_levels*sizeof(uint64_t)*sizeof(TrieBlock<T,size_t>))/NUM_THREADS;
   allocator::memory<uint8_t> data_allocator(alloc_size);
   //always just need two buffers(that swap)
   std::vector<allocator::memory<size_t>> *ranges_buffer = new std::vector<allocator::memory<size_t>>();
@@ -160,7 +160,7 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
   const size_t head_range = std::get<1>(tup);
 
   //Build the head set.
-  TrieBlock<T>* new_head = build_block<TrieBlock<T>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer->at(0).get_memory(0));
+  TrieBlock<T,size_t>* new_head = build_block<TrieBlock<T,size_t>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer->at(0).get_memory(0));
   new_head->init_pointers(0,&data_allocator,head_size,head_range,false);
 
   par::for_range(0,head_range,100,[&](size_t tid, size_t i){
@@ -175,7 +175,7 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
     const size_t end = ranges_buffer->at(0).get_memory(0)[i+1];
     const uint32_t data = set_data_buffer->at(0).get_memory(0)[i];    
 
-    recursive_build<TrieBlock<T>,T>(i,start,end,data,new_head,cur_level,num_levels,tid,attr_in,
+    recursive_build<TrieBlock<T,size_t>,T>(i,start,end,data,new_head,cur_level,num_levels,tid,attr_in,
       &data_allocator,num_rows,ranges_buffer,set_data_buffer,indicies);
 
   });

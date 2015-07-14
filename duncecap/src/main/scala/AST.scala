@@ -251,16 +251,20 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.println(s"""${name}_block->set= &${attr};""")
     }
   }
-  private def emitInitAggValues(s:CodeStringBuilder,init_agg_values:Boolean){
+  private def emitInitAggValues(s:CodeStringBuilder,name:String,attr:String,encodingName:String,init_agg_values:Boolean,tid:String){
     if(init_agg_values)
-      s.println(s"""///INIT AGG VALUES""")
+      s.println(s"""${name}_block->alloc_data(${tid},&output_buffer,${attr}.cardinality,${encodingName}_encoding->num_distinct);""")
   }
   private def emitInitPointers(s:CodeStringBuilder,name:String,attr:String,encodingName:String,lastIntersection:Boolean,tid:String) = {
     if(!lastIntersection)
       s.println(s"""${name}_block->init_pointers(${tid},&output_buffer,${attr}.cardinality,${encodingName}_encoding->num_distinct,${attr}.type == type::UINTEGER);""")
   }
 
-  private def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, sel: List[ASTCriterion], relsAttrs :  List[(String, List[String])], aggregate:Boolean, equivalenceClasses:EquivalenceClasses, name:String, yanna:List[(String, String)], processed:List[String], resultProcessed:List[String], resultAttrs:List[String], init_agg_values:Boolean) : List[(String, List[String])]= {
+  private def emitAttrIntersection(s: CodeStringBuilder, lastIntersection : Boolean, attr : String, 
+    sel: List[ASTCriterion], relsAttrs :  List[(String, List[String])], aggregate:Boolean, 
+    equivalenceClasses:EquivalenceClasses, name:String, yanna:List[(String, String)], 
+    processed:List[String], resultProcessed:List[String], resultAttrs:List[String], 
+    init_agg_values:Boolean) : List[(String, List[String])]= {
     val (encodingMap,attrMap,encodingNames,attributeToType) = equivalenceClasses
     val encodingName = encodingNames(attrMap(attr))
 
@@ -278,10 +282,11 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
 
     s.println(s"""Set<${layout}> ${attr};""")
     if(resultAttrs.contains(attr) && !aggregate){
-      if(resultProcessed.size == 0)
+      if(resultProcessed.size == 0){
         s.println(s"""${name}_block = NULL;""")
-      else
-        s.println(s"""TrieBlock<${layout}> *${attr}_block = NULL;""")
+      } else{
+        s.println(s"""TrieBlock<${layout},size_t> *${attr}_block = NULL;""")
+      }
     }
     //can have NULL pointers in trie
     s.print(s"""if( ${relsAttrsWithAttr.head}""")
@@ -290,39 +295,33 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
     s.println(s"""){""")
 
-    println("AGGREGATE: " + aggregate)
-    println("SIZES: " + resultProcessed.size + " " + resultAttrs.size)
-    
-
-    println("INIT: " + init_agg_values)
-
     if (relsAttrsWithAttr.size == 1) {
       // no need to emit an intersection
       s.println( s"""${attr} = ${relsAttrsWithAttr.head}->set;""")
       if(!aggregate){
         if(resultProcessed.size == 0){
           if(resultAttrs.contains(attr))
-            s.println(s"""${name}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${relsAttrsWithAttr.head});""")
+            s.println(s"""${name}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout},size_t>))) TrieBlock<${layout},size_t>(${relsAttrsWithAttr.head});""")
           emitSetSelection(s,attr,name,sel,tid,layout,resultAttrs.contains(attr))
-          if(resultAttrs.contains(attr) && !aggregate)
+          if(resultAttrs.contains(attr) && !aggregate && !init_agg_values)
             emitInitPointers(s,name,attr,encodingName,lastIntersection,tid)
-          emitInitAggValues(s,init_agg_values)
+          emitInitAggValues(s,name,attr,encodingName,init_agg_values,tid)
         }
         else{
           if(resultAttrs.contains(attr))
-            s.println(s"""${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${relsAttrsWithAttr.head});""")
+            s.println(s"""${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout},size_t>))) TrieBlock<${layout},size_t>(${relsAttrsWithAttr.head});""")
           emitSetSelection(s,attr,attr,sel,tid,layout,resultAttrs.contains(attr)) 
-          if(resultAttrs.contains(attr) && !aggregate)
+          if(resultAttrs.contains(attr) && !aggregate && !init_agg_values)
             emitInitPointers(s,attr,attr,encodingName,lastIntersection,tid)
-          emitInitAggValues(s,init_agg_values)
+          emitInitAggValues(s,attr,attr,encodingName,init_agg_values,tid)
         }
       }
      } else {
       if(resultAttrs.contains(attr) && !aggregate){
         if(resultProcessed.size == 0)
-          s.println(s"""${name}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>();""")
+          s.println(s"""${name}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout},size_t>))) TrieBlock<${layout},size_t>();""")
         else
-          s.println(s"""${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>();""")
+          s.println(s"""${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout},size_t>))) TrieBlock<${layout},size_t>();""")
       }
 
       //////////should be a method emit intersections
@@ -359,16 +358,27 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       if(resultAttrs.contains(attr) && !aggregate){
         if(processed.size != 0){
           s.println(s"""${attr}_block->set = &${attr};""")
-          emitInitPointers(s,attr,attr,encodingName,lastIntersection,tid)
-        }
-        else{
+          if(!init_agg_values)
+            emitInitPointers(s,attr,attr,encodingName,lastIntersection,tid)
+          emitInitAggValues(s,attr,attr,encodingName,init_agg_values,tid)
+
+        } else{
           s.println(s"""${name}_block->set= &${attr};""")
-          emitInitPointers(s,name,attr,encodingName,lastIntersection,tid)
+          if(!init_agg_values)
+            emitInitPointers(s,name,attr,encodingName,lastIntersection,tid)
+          emitInitAggValues(s,name,attr,encodingName,init_agg_values,tid)
         }
       }
-      emitInitAggValues(s,init_agg_values)
     }
     ////////////////////////////////////////// end intersection method
+
+    if(lastIntersection && init_agg_values){
+      if(processed.size != 0){
+          s.println(s"""${attr}_block->init_data(1,${attr}.cardinality,${encodingName}_encoding->num_distinct);""")  
+        } else{
+          s.println(s"""${name}_block->init_data(1,${attr}.cardinality,${encodingName}_encoding->num_distinct);""")  
+        }
+    }
 
     s.println("}")
 
@@ -376,7 +386,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       if(aggregate){
           s.println(s"""${name}_cardinality.update(${tid},${attr}.cardinality);""")
           if(!init_agg_values){
-            s.println(s"""///Update AGG Count""")
+            s.println(s"""aggregate_value += ${attr}.cardinality;""")
           }
         } else {
           s.println(s"""if(${attr}.cardinality != 0){""")
@@ -445,7 +455,21 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       else
         s.println(s"""${attrs.head}.par_foreach_index([&](size_t tid, uint32_t ${attrs.head}_i, uint32_t ${attrs.head}_d){""")
       
-      emitNPRR(s, false, attrs.tail, relsAttrs,attrSelections.tail,aggregate,lastBag,equivalenceClasses,name,yanna,processed++List(attrs.head),next_processed,resultAttrs)
+      if(init_agg_values){
+          s.println("size_t aggregate_value = 0;")
+      }
+
+      emitNPRR(s, false, attrs.tail, relsAttrs,attrSelections.tail,
+        aggregate,lastBag,equivalenceClasses,name,yanna,
+        processed++List(attrs.head),next_processed,resultAttrs)
+      
+      if(init_agg_values){
+        if(resultProcessed.size == 0)
+          s.println(s"""${name}_block->set_data(${attrs.head}_i,${attrs.head}_d,aggregate_value);""")
+        else
+          s.println(s"""${attrs.head}_block->set_data(${attrs.head}_i,${attrs.head}_d,aggregate_value);""")
+      }
+
       s.println("});")
 
       if(resultAttrs.size == 1 && attrs.size > 1 && new_data_for_head){
@@ -463,13 +487,25 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.println(s"""${attrs.head}.foreach([&](uint32_t ${attrs.head}_d) {""")
       else
         s.println(s"""${attrs.head}.foreach_index([&](uint32_t ${attrs.head}_i, uint32_t ${attrs.head}_d) {""")
-      emitNPRR(s, false, attrs.tail, relsAttrs,attrSelections.tail,aggregate,lastBag,equivalenceClasses,name,yanna,processed++List(attrs.head),next_processed,resultAttrs)
+
+      if(init_agg_values){
+          s.println("size_t aggregate_value = 0;")
+      }
+
+      emitNPRR(s, false, attrs.tail, relsAttrs,attrSelections.tail,
+        aggregate,lastBag,equivalenceClasses,name,yanna,processed++List(attrs.head),
+        next_processed,resultAttrs)
+        
+      if(init_agg_values){
+        if(resultProcessed.size == 0)
+          s.println(s"""${name}_block->set_data(${attrs.head}_i,${attrs.head}_d,aggregate_value);""")
+        else
+          s.println(s"""${attrs.head}_block->set_data(${attrs.head}_i,${attrs.head}_d,aggregate_value);""")
+      }
+
       s.println("});")
     }
     
-    if(init_agg_values){
-      s.println("//WRITING AGG VALUE")
-    }
     if(resultAttrs.contains(attrs.head) && resultProcessed.size != 0 && !agg_in){
       val blockName = if(resultProcessed.size == 1) name else resultProcessed.last
       s.println(s"""if(${attrs.head}_block_valid){""")
@@ -480,10 +516,13 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     }
   }
 
-  private def emitNPRR(s: CodeStringBuilder, initialCall : Boolean, attrs : List[String], relsAttrs : List[(String, List[String])], attrSelections:List[List[ASTCriterion]], aggregate:Boolean, lastBag:Boolean, equivalenceClasses:EquivalenceClasses, name:String, yanna:List[(String, String)],processed:List[String], resultProcessed:List[String], resultAttrs:List[String]) : Unit = {
+  private def emitNPRR(s: CodeStringBuilder, initialCall : Boolean, attrs : List[String], 
+    relsAttrs : List[(String, List[String])], attrSelections:List[List[ASTCriterion]], 
+    aggregate:Boolean, lastBag:Boolean, equivalenceClasses:EquivalenceClasses, name:String, 
+    yanna:List[(String, String)],processed:List[String], resultProcessed:List[String], resultAttrs:List[String]) : Unit = {
+    
     if (attrs.isEmpty) return
 
-    println("AGGREGATE: " + aggregate + " LAST BAG: " + lastBag)
     val agg_in = (aggregate && lastBag) || (aggregate && !resultAttrs.contains(attrs.head))
     val currAttr = attrs.head
     val init_agg_values = if(resultAttrs.contains(currAttr) && aggregate && 
@@ -491,7 +530,6 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     if (attrs.tail.isEmpty) {
       emitAttrIntersection(s, true, currAttr, attrSelections.head, relsAttrs, agg_in, equivalenceClasses,name,yanna,processed,resultProcessed,resultAttrs,init_agg_values)
     } else {
-      println("A: " + attrs.head + " R: " + resultAttrs)
       val updatedRelsAttrs = emitAttrIntersection(s, false, currAttr, attrSelections.head, relsAttrs, agg_in, equivalenceClasses,name,yanna,processed,resultProcessed,resultAttrs,init_agg_values)
       emitAttrLoopOverResult(s, initialCall, attrs, updatedRelsAttrs, attrSelections, aggregate, lastBag, equivalenceClasses,name, yanna, processed, resultProcessed, resultAttrs, init_agg_values)
     }
@@ -590,7 +628,10 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     Environment.addRelationBinding(lhs.identifierName,newTypes)
   }
 
-  def emitNPRR(s:CodeStringBuilder, current:GHDNode, attribute_ordering:List[String], attrSelections:List[List[ASTCriterion]], aggregate:Boolean, lastBag:Boolean, equivalenceClasses:EquivalenceClasses, resultAttrs:List[String]) : Unit = {
+  def emitNPRR(s:CodeStringBuilder, current:GHDNode, attribute_ordering:List[String], 
+    attrSelections:List[List[ASTCriterion]], aggregate:Boolean, lastBag:Boolean, 
+    equivalenceClasses:EquivalenceClasses, resultAttrs:List[String]) : Unit = {
+    
     println("Bag ordering")
     current.attribute_ordering = attribute_ordering
     attribute_ordering.foreach{
@@ -633,7 +674,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       s.println("return a + b;")
       s.println("});")
       if(!(lastBag && aggregate))
-        s.println(s"""TrieBlock<${layout}> *${name}_block;""")
+        s.println(s"""TrieBlock<${layout},size_t> *${name}_block;""")
       s.println("{")
       val firstBlockOfTrie = current.rels.map(( rel: Relation) => ("T" + rel.name + "->head", rel.attrs.sortBy(attribute_ordering.indexOf(_))))
       emitNPRR(s, true, attribute_ordering, firstBlockOfTrie, attrSelections, aggregate, lastBag, equivalenceClasses,name,yanna,List(),List(),resultAttrs.filter(attribute_ordering.contains(_)))
@@ -642,7 +683,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       s.println(s"std::cout << ${name}_cardinality.evaluate(0) << std::endl;")
     } else{
       val r_name = current.rels.head.name
-      s.println(s"""TrieBlock<${layout}> *${name}_block = T${r_name}->head;""")
+      s.println(s"""TrieBlock<${layout},size_t> *${name}_block = T${r_name}->head;""")
     }
   }
 
@@ -650,18 +691,18 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
   private def emitChecks(s:CodeStringBuilder, curChecks:List[(String,String,String)], next_level_in:(String,String,String), encodingName:String, firstLoop:Boolean) : Boolean = {
     val dec_names = curChecks.map{cc =>
       if(!firstLoop){
-        s.println(s"""TrieBlockIterator<${layout}> ${cc._2}_${cc._1}_block_iterator = ${cc._3};""")
-        s.println(s"""TrieBlock<${layout}>* ${cc._2}_${cc._1}_block = ${cc._2}_${cc._1}_block_iterator.trie_block;""")
+        s.println(s"""TrieBlockIterator<${layout},size_t> ${cc._2}_${cc._1}_block_iterator = ${cc._3};""")
+        s.println(s"""TrieBlock<${layout},size_t>* ${cc._2}_${cc._1}_block = ${cc._2}_${cc._1}_block_iterator.trie_block;""")
       } else{
         //Because you can't have the iterators outside of the parallel loop (will thrash caches)
-        s.println(s"""TrieBlock<${layout}>* ${cc._2}_${cc._1}_block = ${cc._3};""")
-        s.println(s"""TrieBlockIterator<${layout}> ${cc._2}_${cc._1}_block_iterator(${cc._2}_${cc._1}_block);""")
+        s.println(s"""TrieBlock<${layout},size_t>* ${cc._2}_${cc._1}_block = ${cc._3};""")
+        s.println(s"""TrieBlockIterator<${layout},size_t> ${cc._2}_${cc._1}_block_iterator(${cc._2}_${cc._1}_block);""")
       }
       s"""${cc._2}_${cc._1}_block"""
     }
     var next_level = ""
     if(next_level_in != ("","","") ){
-      s.println(s"""TrieBlock<${layout}>* ${next_level_in._2}_${next_level_in._1}_block = ${next_level_in._3};""")
+      s.println(s"""TrieBlock<${layout},size_t>* ${next_level_in._2}_${next_level_in._1}_block = ${next_level_in._3};""")
       next_level = s"""${next_level_in._2}_${next_level_in._1}_block"""
     }
     
@@ -674,7 +715,13 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     return next.size > 0
   }
 
-  def emitTrie(s:CodeStringBuilder,trie:List[(String,String,String,List[(String,String,String)])],tries:List[List[(String,String,String,List[(String,String,String)])]],eq:EquivalenceClasses,prevBlock:String,prevAttr:String,first:Boolean,setBlock:Boolean,seen:mutable.Set[String]) : Unit = {
+  def emitTrie(s:CodeStringBuilder,trie:List[(String,String,String,List[(String,String,String)])],
+    tries:List[List[(String,String,String,List[(String,String,String)])]],eq:EquivalenceClasses,
+    prevBlock:String,prevAttr:String,first:Boolean,setBlock:Boolean,seen:mutable.Set[String],
+    aggregate:Boolean, resultAttrs:List[String]) : Unit = {
+
+    println("SEEN: " + seen)
+
     if(trie.size > 0 && tries.size > 1){
       val tl = trie.head
       var checksTrue = false
@@ -687,12 +734,14 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         val encodingName = encodingNames(attrMap(tl._3))
         val last_level_with_more = ((trie.size == 1) && (tries.tail.size > 0)) && !setBlock
 
-        if(setBlock || last_level_with_more){
-          s.println(s"""TrieBlock<${layout}>* new_${name}_block = new (output_buffer.get_next(tid, sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${name}_block);""")
-          s.println(s"""new_${name}_block->init_pointers(tid,&output_buffer,${name}_block->set.cardinality,${encodingName}_encoding->num_distinct,true);""")
-          s.println(s"""${prevBlock}->set_block(${prevAttr}_i,${prevAttr}_d,new_${name}_block);""")
-        } else {
-          s.println(s"""TrieBlock<${layout}>* new_${name}_block = ${name}_block;""")
+        if(!aggregate){
+          if(setBlock || last_level_with_more){
+            s.println(s"""TrieBlock<${layout},size_t>* new_${name}_block = new (output_buffer.get_next(tid, sizeof(TrieBlock<${layout},size_t>))) TrieBlock<${layout},size_t>(${name}_block);""")
+            s.println(s"""new_${name}_block->init_pointers(tid,&output_buffer,${name}_block->set.cardinality,${encodingName}_encoding->num_distinct,true);""")
+            s.println(s"""${prevBlock}->set_block(${prevAttr}_i,${prevAttr}_d,new_${name}_block);""")
+          } else {
+            s.println(s"""TrieBlock<${layout},size_t>* new_${name}_block = ${name}_block;""")
+          }
         }
         s.println(s"""${name}_block->set.foreach_index([&](uint32_t ${tl._3}_i, uint32_t ${tl._3}_d){""")
 
@@ -704,13 +753,13 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       val next_prev_attr = if(notSeen) tl._3 else prevAttr
 
       if(trie.size == 1){
-        emitTrie(s,tries.tail.head,tries.tail,eq,next_prev_block,next_prev_attr,true,true,seen)
+        emitTrie(s,tries.tail.head,tries.tail,eq,next_prev_block,next_prev_attr,true,true,seen,aggregate,resultAttrs)
       } else{
-        emitTrie(s,trie.tail,tries,eq,next_prev_block,next_prev_attr,false,setBlock,seen)
+        emitTrie(s,trie.tail,tries,eq,next_prev_block,next_prev_attr,false,setBlock,seen,aggregate,resultAttrs)
       }
 
       if(notSeen){
-        if(checksTrue){
+        if(checksTrue && !aggregate){
           s.println("""}""")
           s.println(s"""else{new_${name}_block->set_block(${tl._3}_i,${tl._3}_d,NULL);}""")
         }
@@ -722,16 +771,16 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       val notSeen = !seen.contains(tl._3)
         seen += tl._3
       
-      if(notSeen){
+      if(notSeen && !aggregate){
         s.println(s"""${prevBlock}->set_block(${prevAttr}_i,${prevAttr}_d,${name}_block);""")
       } else{
-        emitTrie(s,trie.tail,tries,eq,prevBlock,prevAttr,false,false,seen)
+        emitTrie(s,trie.tail,tries,eq,prevBlock,prevAttr,false,false,seen,aggregate,resultAttrs)
       }
     }
 
   }
 
-  def emitTopDown(s:CodeStringBuilder, accessor:(List[String],List[String],List[(List[(String,String,String,List[(String,String,String)])])]), eq:EquivalenceClasses) = {
+  def emitTopDown(s:CodeStringBuilder, accessor:(List[String],List[String],List[(List[(String,String,String,List[(String,String,String)])])]), eq:EquivalenceClasses, aggregate:Boolean, resultAttrs:List[String]) = {
     val (preChecks,resultAttrs,trieStrings) = accessor
     val lhs_name = lhs.identifierName + "_" + resultAttrs.mkString("")
     val (encodingMap,attrMap,encodingNames,attributeToType) = eq
@@ -742,7 +791,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     s.println("});")
 
     //First check that all tries exist = prechecks
-    s.println(s"""TrieBlock<${layout}> *${lhs_name}_block = NULL;""")
+    s.println(s"""TrieBlock<${layout},size_t> *${lhs_name}_block = NULL;""")
     if(preChecks.size != 0){
       s.print(s"""if(${preChecks.head} != NULL""")
       preChecks.tail.foreach{pc => s.print(s""" && ${pc} != NULL""")}
@@ -754,33 +803,33 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     val headBlock = curTrie.head
 
     val last_level_with_more = ((curTrie.size == 1) && (trieStrings.tail.size > 0))
-    if(last_level_with_more){
+    if(last_level_with_more && !aggregate){
       val (encodingMap,attrMap,encodingNames,attributeToType) = eq
       val encodingName = encodingNames(attrMap(headBlock._3))
-      s.println(s"""${lhs_name}_block = new (output_buffer.get_next(0, sizeof(TrieBlock<${layout}>))) TrieBlock<${layout}>(${headBlock._2});""")
+      s.println(s"""${lhs_name}_block = new (output_buffer.get_next(0, sizeof(TrieBlock<${layout},size_t>))) TrieBlock<${layout},size_t>(${headBlock._2});""")
       s.println(s"""${lhs_name}_block->init_pointers(0,&output_buffer,${lhs_name}_block->set.cardinality,${encodingName}_encoding->num_distinct,true);""")
     } else{
       s.println(s"""${lhs_name}_block = ${headBlock._2};""")
     }
     s.println(s"""${lhs_name}_block->set.par_foreach_index([&](size_t tid, uint32_t ${headBlock._3}_i, uint32_t ${headBlock._3}_d){""")
-    preChecks.foreach{pc => s.println(s"""TrieBlockIterator<${layout}> ${pc}_iterator(${pc});""")}
+    preChecks.foreach{pc => s.println(s"""TrieBlockIterator<${layout},size_t> ${pc}_iterator(${pc});""")}
 
     val curChecks = headBlock._4
     val encodingName = encodingNames(attrMap(headBlock._3))
     val next_level_in = if(curTrie.tail.size > 0) (curTrie.tail.head._3,curTrie.tail.head._1,curTrie.tail.head._2) else ("","","")
     val checksTrue = emitChecks(s,curChecks,next_level_in,encodingName,true)
-    println(curTrie.tail)
 
     if(curTrie.size == 1){
-      emitTrie(s,trieStrings.tail.head,trieStrings.tail,eq,lhs_name + "_block",headBlock._3,true,true,mutable.Set[String](headBlock._3))
+      emitTrie(s,trieStrings.tail.head,trieStrings.tail,eq,lhs_name + "_block",headBlock._3,true,true,mutable.Set[String](headBlock._3),aggregate,resultAttrs)
     } else{
-      emitTrie(s,curTrie.tail,trieStrings,eq,lhs_name + "_block",headBlock._3,false,false,mutable.Set[String](headBlock._3))
+      emitTrie(s,curTrie.tail,trieStrings,eq,lhs_name + "_block",headBlock._3,false,false,mutable.Set[String](headBlock._3),aggregate,resultAttrs)
     }
 
     //Close off first attribute
     if(checksTrue){
       s.println("""}""")
-      s.println(s"""else { ${lhs_name}_block->set_block(${headBlock._3}_i,${headBlock._3}_d,NULL); } """)
+      if(!aggregate)
+        s.println(s"""else { ${lhs_name}_block->set_block(${headBlock._3}_i,${headBlock._3}_d,NULL); } """)
     }
     s.println("""});""")
     if(preChecks.size != 0){
@@ -798,7 +847,7 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     //get minimum GHD's
     val myghd = solver.getGHD(relations)
     val attribute_ordering = solver.getAttributeOrdering(myghd,lhs.attrs)
-    val resultAttrs = lhs.attrs.sortBy(attribute_ordering.indexOf(_))
+    val resultAttrs = if(aggregate) List[String]() else lhs.attrs.sortBy(attribute_ordering.indexOf(_))
     //////////////////////////////////////////////////////////////////////
     println("RESULT ATTRIBUTES")
     resultAttrs.foreach{
@@ -827,35 +876,32 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
     /**
      * Emit the buffers that we will do intersections for each attr in
      */
-    println("AGGREGATE: " + aggregate)
     val (e_to_index2,attributeToEncoding,encodingIDToName,attributeToType) = equivalenceClasses
     val size_string = encodingIDToName.head._2 + "_encoding->num_distinct" + encodingIDToName.tail.map{ e =>
       s"""+${e._2}_encoding->num_distinct"""
     }.mkString("")
-    s.println(s"""allocator::memory<uint8_t> output_buffer(${myghd.num_bags}*${attribute_ordering.size}*10*sizeof(TrieBlock<${layout}>)*(${size_string}));""")
-    s.println(s"""allocator::memory<uint8_t> tmp_buffer(${myghd.num_bags}*${attribute_ordering.size}*2*sizeof(TrieBlock<${layout}>)*(${size_string}));""")
+    s.println(s"""allocator::memory<uint8_t> output_buffer(${myghd.num_bags}*${attribute_ordering.size}*10*sizeof(TrieBlock<${layout},size_t>)*(${size_string}));""")
+    s.println(s"""allocator::memory<uint8_t> tmp_buffer(${myghd.num_bags}*${attribute_ordering.size}*2*sizeof(TrieBlock<${layout},size_t>)*(${size_string}));""")
 
     //Prepare the attributes that will need to be selected on the fly
     val attrSelections = emitAndDetectSelections(s,attribute_ordering,equivalenceClasses)
 
-    val top_down_unnecessary = myghd.children.size == 0 || resultAttrs.foldLeft(true){ (a,b) => (myghd.attribute_ordering.indexOf(a) == resultAttrs.indexOf(a)) && (myghd.attribute_ordering.indexOf(b) == resultAttrs.indexOf(b))}
+    val top_down_unnecessary = myghd.children.size == 0 || (!aggregate && resultAttrs.foldLeft(true){ (a,b) => (myghd.attribute_ordering.indexOf(a) == resultAttrs.indexOf(a)) && (myghd.attribute_ordering.indexOf(b) == resultAttrs.indexOf(b))})
     println("TOPD DOWN UNECCESSARY: " + top_down_unnecessary)
 
     s.println(s"""auto join_timer = debug::start_clock();""")
     val emptyGHD = new GHDNode(List[Relation]())
-    solver.bottom_up(mutable.LinkedHashSet[GHDNode](myghd), myghd, emitNPRR, s, attribute_ordering, attrSelections, aggregate, top_down_unnecessary, equivalenceClasses, resultAttrs, emptyGHD)
+    val new_agg_attributes = solver.bottom_up(mutable.LinkedHashSet[GHDNode](myghd), myghd, emitNPRR, s, attribute_ordering, attrSelections, aggregate, top_down_unnecessary, equivalenceClasses, resultAttrs, emptyGHD)
     if(!top_down_unnecessary){
-      val accessor = solver.top_down(mutable.LinkedHashSet[GHDNode](myghd), mutable.LinkedHashSet(myghd), resultAttrs)
-      emitTopDown(s,accessor,equivalenceClasses) 
-    }
-    else if(!aggregate){
+      val resultAttrsIn = if(!aggregate) resultAttrs else new_agg_attributes
+      val accessor = solver.top_down(mutable.LinkedHashSet[GHDNode](myghd), mutable.LinkedHashSet(myghd),resultAttrsIn)
+      emitTopDown(s,accessor,equivalenceClasses, aggregate, resultAttrsIn) 
+    } else if(!aggregate){
       emitResultTrie(s, lhs.identifierName, myghd.name, myghd.attribute_ordering, equivalenceClasses)
     }
 
     s.println(s"""debug::stop_clock("JOIN",join_timer);""")
     s.println(s"""tmp_buffer.free();""")
-
-
   }
 
   override def optimize: Unit = ???

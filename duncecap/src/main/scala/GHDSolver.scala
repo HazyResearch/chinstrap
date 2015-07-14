@@ -73,16 +73,22 @@ object GHDSolver {
     return attr.toList
   }
 
-  def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, fn:(CodeStringBuilder,GHDNode,List[String],List[List[ASTCriterion]],Boolean,Boolean,EquivalenceClasses,List[String]) => Unit, s:CodeStringBuilder, attribute_ordering:List[String], selections:List[List[ASTCriterion]], aggregate:Boolean, lastBag:Boolean, equivalenceClasses:EquivalenceClasses, resultAttrs:List[String], parent:GHDNode): Unit = {
+  def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, 
+    fn:(CodeStringBuilder,GHDNode,List[String],List[List[ASTCriterion]],Boolean,Boolean,EquivalenceClasses,List[String]) => Unit,
+    s:CodeStringBuilder, attribute_ordering:List[String], selections:List[List[ASTCriterion]], 
+    aggregate:Boolean, lastBag:Boolean, equivalenceClasses:EquivalenceClasses, 
+    resultAttrs:List[String], parent:GHDNode): List[String] = {
+    
     val root = if(seen.size == 1) true else false
     val bag_attrs = curr.rels.flatMap(r => r.attrs).toList.distinct
     val a_i = attribute_ordering.zipWithIndex.filter(a => bag_attrs.contains(a._1))
     val s_in = a_i.map{ i => selections(i._2) }
+    val new_agg_attributes = mutable.ListBuffer[String]()
     curr.attribute_ordering = a_i.map(_._1)
     for (child <- curr.children) {
       if (!seen.contains(child)) {
         seen += child
-        bottom_up(seen, child, fn, s, attribute_ordering, selections, aggregate, lastBag, equivalenceClasses, resultAttrs, curr)
+        new_agg_attributes ++= bottom_up(seen, child, fn, s, attribute_ordering, selections, aggregate, lastBag, equivalenceClasses, resultAttrs, curr)
       }
     }
 
@@ -94,12 +100,15 @@ object GHDSolver {
       //for the root we store attributes that appear in the children
       if(root && !lastBag){
        val common_child_attrs = curr.attribute_ordering.intersect( curr.children.flatMap{c => c.attribute_ordering} )
+       new_agg_attributes ++= curr.attribute_ordering.filter(common_child_attrs.contains(_))
        fn(s,curr,curr.attribute_ordering,s_in,aggregate,lastBag,equivalenceClasses,curr.attribute_ordering.filter(common_child_attrs.contains(_)))
       } else {
         //for the children we store attributes that occur in the parents
+        new_agg_attributes ++= curr.attribute_ordering.filter(shared_attrs.contains(_))
         fn(s,curr,curr.attribute_ordering,s_in,aggregate,lastBag,equivalenceClasses,curr.attribute_ordering.filter(shared_attrs.contains(_)))          
       }
     }
+    return new_agg_attributes.toList
   }
 
   private def top_down_PRE(seen: mutable.Set[GHDNode], curr: GHDNode, resultAttrs:List[String]): List[String] = {
@@ -129,7 +138,11 @@ object GHDSolver {
     val next_attr = if( i < newAttrs.size) newAttrs(i) else ""
     val access_string = if(i < newAttrs.size) (curr.name + prev_block_string + "_block" + iterator_string + get_string) else ""
 
+    println()
+
     val result = if(i < newAttrs.size) mutable.ListBuffer[(String,String,String)]( (next_attr,curr.name,access_string) ) else mutable.ListBuffer[(String,String,String)]()
+    println("NEW ATTRS: " + newAttrs)
+    println("CHILD ATTRS: " + i + " " + newAttrs.size)
     curr.children.foreach { child =>
       // if these two hyperedges are connected
       if (!seen.contains(child) && child.attribute_ordering.contains(search_attribute)) {
@@ -171,7 +184,6 @@ object GHDSolver {
             visited_attributes += a
             val get_string = if(i != 0) "->get_block"+"("+ newAttrs(i-1) + "_i," + newAttrs(i-1) + "_d)"  else ""
             val prev_block_string = if(i > 1) "_" + newAttrs(i-1) else ""
-            println(i + " " + newAttrs)
             access_string = cur.name + prev_block_string + "_block" + get_string
           }
           
@@ -182,6 +194,7 @@ object GHDSolver {
               seen += child
               next_frontier += child
             }
+            println("CHILD ATTRIBUTE ORDERING: " + child.attribute_ordering)
             if(child.attribute_ordering.contains(a)){
               //run DFS
               checks ++= top_down_DFS(mutable.LinkedHashSet[GHDNode](child), child, a, resultAttrs, i => i+1)
@@ -191,14 +204,12 @@ object GHDSolver {
           cur_result += ((cur.name,access_string,a,checks.toList))
 
         }
-        println("HERE")
-        cur_result.foreach{println}
+        println(cur_result.toList)
         result += cur_result.toList
       }
       var tmp = frontier
       frontier = next_frontier
       next_frontier = tmp
-
       depth += 1
     }
 
