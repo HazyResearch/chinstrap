@@ -14,9 +14,12 @@ struct TrieBlock{
     set = init->set;
     next_level = init->next_level;
     is_sparse = init->is_sparse;
+    values = init->values;
   }
 
-  TrieBlock(){}
+  TrieBlock(){
+    values = NULL;
+  }
   TrieBlock(bool sparse){
     is_sparse = sparse;
   }
@@ -24,7 +27,7 @@ struct TrieBlock{
   void init_pointers(size_t tid, allocator::memory<uint8_t> *allocator_in, const size_t cardinality, const size_t range, const bool is_sparse_in){
     is_sparse = is_sparse_in;
     if(!is_sparse){
-      next_level = (TrieBlock<T,F>**)allocator_in->get_next(tid, sizeof(TrieBlock<T,F>*)*range);
+      next_level = (TrieBlock<T,F>**)allocator_in->get_next(tid, sizeof(TrieBlock<T,F>*)*(range+1) );
     } else{
       next_level = (TrieBlock<T,F>**)allocator_in->get_next(tid, sizeof(TrieBlock<T,F>*)*cardinality);
     }
@@ -32,21 +35,19 @@ struct TrieBlock{
 
   void alloc_data(size_t tid, allocator::memory<uint8_t> *allocator_in, const size_t cardinality, const size_t range){
     if(!is_sparse){
-      values = (F*)allocator_in->get_next(tid, sizeof(F)*range);
+      values = (F*)allocator_in->get_next(tid, sizeof(F)*(range+1));
     } else{
       values = (F*)allocator_in->get_next(tid, sizeof(F)*cardinality);
     }
   }
 
-  void init_data(F value, const size_t cardinality, const size_t range){
+  void init_data(const size_t tid, allocator::memory<uint8_t> *allocator_in, const size_t cardinality, const size_t range, const F value){
     if(!is_sparse){
-      for(size_t i = 0; i < range; i++){
-        values[i] = value;
-      }
+      values = (F*)allocator_in->get_next(tid, sizeof(F)*(range+1));
+      std::fill(values,values+range+1,value);
     } else{
-      for(size_t i = 0; i < cardinality; i++){
-        values[i] = value;
-      }
+      values = (F*)allocator_in->get_next(tid, sizeof(F)*(cardinality));
+      std::fill(values,values+cardinality,value);
     }
   }
 

@@ -161,7 +161,7 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
 
   //Build the head set.
   TrieBlock<T,size_t>* new_head = build_block<TrieBlock<T,size_t>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer->at(0).get_memory(0));
-  new_head->init_pointers(0,&data_allocator,head_size,head_range,false);
+  new_head->init_pointers(0,&data_allocator,head_size,head_range,new_head->set.type == type::UINTEGER);
 
   par::for_range(0,head_range,100,[&](size_t tid, size_t i){
     (void) tid;

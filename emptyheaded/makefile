@@ -18,6 +18,10 @@ ifdef NOVECTOR
 	override CXXFLAGS += -fno-tree-vectorize
 endif
 
+ifdef NUM_THREADS_IN
+	override CXXFLAGS += -DNUM_THREADS_IN=$(NUM_THREADS_IN)
+endif
+
 ifdef TRAVIS
 	CXX = g++-4.9
 else 

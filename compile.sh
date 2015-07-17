@@ -3,5 +3,5 @@ set -e
 cd duncecap
 #sbt update
 sbt start-script
-target/start DunceCap.QueryCompiler $1 $2 $3
+target/start DunceCap.QueryCompiler $1 $2 $3 $4
 cd ..

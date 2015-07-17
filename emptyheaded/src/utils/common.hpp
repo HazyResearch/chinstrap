@@ -57,7 +57,11 @@
 #define BYTES_PER_REG 16
 #define BYTES_PER_CACHELINE 64
 
+#ifndef NUM_THREADS_IN
 static size_t NUM_THREADS = 48;
+#else
+static size_t NUM_THREADS = NUM_THREADS_IN; 
+#endif
 
 namespace common{
   static size_t bitset_length = 0;

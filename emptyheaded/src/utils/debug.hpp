@@ -49,14 +49,20 @@ namespace debug{
     delete[] data;
   }
   static void _mm128i_print_shorts(__m128i x) {
-    for(size_t i =0 ; i < 8; i++){
-      std::cout << "Data[" << i << "]: " << _mm_extract_epi16(x,i) << std::endl;
-    }
+    std::cout << "Data[" << 0 << "]: " << _mm_extract_epi16(x,0) << std::endl;
+    std::cout << "Data[" << 1 << "]: " << _mm_extract_epi16(x,1) << std::endl;
+    std::cout << "Data[" << 2 << "]: " << _mm_extract_epi16(x,2) << std::endl;
+    std::cout << "Data[" << 3 << "]: " << _mm_extract_epi16(x,3) << std::endl;
+    std::cout << "Data[" << 4 << "]: " << _mm_extract_epi16(x,4) << std::endl;
+    std::cout << "Data[" << 5 << "]: " << _mm_extract_epi16(x,5) << std::endl;
+    std::cout << "Data[" << 6 << "]: " << _mm_extract_epi16(x,6) << std::endl;
+    std::cout << "Data[" << 7 << "]: " << _mm_extract_epi16(x,7) << std::endl;
   }
   static void _mm128i_print(__m128i x) {
-    for(size_t i =0 ; i < 4; i++){
-      std::cout << "Data[" << i << "]: " << _mm_extract_epi32(x,i) << std::endl;
-    }
+    std::cout << "Data[" << 0 << "]: " << _mm_extract_epi32(x,0) << std::endl;
+    std::cout << "Data[" << 1 << "]: " << _mm_extract_epi32(x,1) << std::endl;
+    std::cout << "Data[" << 2 << "]: " << _mm_extract_epi32(x,2) << std::endl;
+    std::cout << "Data[" << 3 << "]: " << _mm_extract_epi32(x,3) << std::endl;
   }
   static void _mm256i_print(__m256i x) {
     int *data = new int[8];

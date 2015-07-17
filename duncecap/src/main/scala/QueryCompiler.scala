@@ -14,7 +14,7 @@ import scala.util.matching.Regex
  */
 object QueryCompiler extends App {
   val usage = "Usage: ./QueryCompiler QQuery.datalog"
-  if (args.length != 1 && args.length != 3) {
+  if (args.length != 1 && args.length != 4) {
     println(usage)
   } else {
     println("HEAD: " + args.head.head.equals('/'))
@@ -23,9 +23,10 @@ object QueryCompiler extends App {
     val ParseFile = """(.*)/(.*).datalog""".r
     val ParseFile(path,fname) = input_file
 
-    if(args.length == 3){
+    if(args.length == 4){
       Environment.yanna = if(args.tail.head == "yanna") true else false
       CodeGen.layout = args.tail.tail.head
+      CodeGen.numThreads = args.tail.tail.tail.head
     }
     println("HERE: " + path + " " + fname)
     println(Environment.yanna + " " + CodeGen.layout)
@@ -55,7 +56,7 @@ object QueryCompiler extends App {
         s"""clang-format -i ${file}""" !
 
         sys.process.Process(Seq("rm", "-rf",s"""bin/${outputFilename}"""), new File("../emptyheaded")).!
-        val result = sys.process.Process(Seq("make", s"""bin/${outputFilename}"""), new File("../emptyheaded")).!
+        val result = sys.process.Process(Seq("make","TRAVIS=true",s"""NUM_THREADS_IN=${CodeGen.numThreads}""", s"""bin/${outputFilename}"""), new File("../emptyheaded")).!
 
         if (result != 0) {
           println("FAILURE: Compilation errors.")

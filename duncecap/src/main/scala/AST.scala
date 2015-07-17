@@ -6,7 +6,7 @@ import scala.collection.mutable
  */
 object CodeGen {
   var layout = "hybrid"
-
+  var numThreads = "48"
   /**
    * This following method will get called in both compiler and repl mode
    */
@@ -262,13 +262,16 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
       }
     }
   }
-  private def emitInitAggValues(s:CodeStringBuilder,name:String,attr:String,encodingName:String,init_agg_values:Boolean,tid:String,force_dense_block:Boolean){
+  private def emitInitAggValues(s:CodeStringBuilder,name:String,attr:String,encodingName:String,init_agg_values:Boolean,tid:String,force_dense_block:Boolean,init_data:Boolean){
     if(init_agg_values){
       if(force_dense_block)
         s.println(s"""${name}_block->is_sparse = false;""")
       else
         s.println(s"""${name}_block->is_sparse = ${attr}.type == type::UINTEGER;""")
-      s.println(s"""${name}_block->alloc_data(${tid},&output_buffer,${attr}.cardinality,${encodingName}_encoding->num_distinct);""")
+      if(init_data)
+        s.println(s"""${name}_block->init_data(${tid},&output_buffer,${attr}.cardinality,${encodingName}_encoding->num_distinct,1);""")
+      else
+        s.println(s"""${name}_block->alloc_data(${tid},&output_buffer,${attr}.cardinality,${encodingName}_encoding->num_distinct);""")
     }
   }
   private def emitInitPointers(s:CodeStringBuilder,name:String,attr:String,encodingName:String,lastIntersection:Boolean,tid:String) = {
@@ -330,14 +333,14 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
           emitSetSelection(s,attr,name,sel,tid,layout,!resultAttrs.contains(attr) && lastIntersection,resultAttrs.contains(attr))
           if(resultAttrs.contains(attr) && !aggregate && !init_agg_values)
             emitInitPointers(s,name,attr,encodingName,lastIntersection,tid)
-          emitInitAggValues(s,name,attr,encodingName,init_agg_values,tid,force_dense_block)
+          emitInitAggValues(s,name,attr,encodingName,init_agg_values,tid,force_dense_block,lastIntersection && init_agg_values)
         } else{
           if(resultAttrs.contains(attr))
             s.println(s"""${attr}_block = new(output_buffer.get_next(${tid},sizeof(TrieBlock<${layout},size_t>))) TrieBlock<${layout},size_t>(${relsAttrsWithAttr.head});""")
           emitSetSelection(s,attr,attr,sel,tid,layout,!resultAttrs.contains(attr) && lastIntersection,resultAttrs.contains(attr)) 
           if(resultAttrs.contains(attr) && !aggregate && !init_agg_values)
             emitInitPointers(s,attr,attr,encodingName,lastIntersection,tid)
-          emitInitAggValues(s,attr,attr,encodingName,init_agg_values,tid,force_dense_block)
+          emitInitAggValues(s,attr,attr,encodingName,init_agg_values,tid,force_dense_block,lastIntersection && init_agg_values)
         }
       } else {
         emitSetSelection(s,attr,attr,sel,tid,layout,!resultAttrs.contains(attr) && lastIntersection,resultAttrs.contains(attr)) 
@@ -392,25 +395,17 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
           s.println(s"""${attr}_block->set = &${attr};""")
           if(!init_agg_values)
             emitInitPointers(s,attr,attr,encodingName,lastIntersection,tid)
-          emitInitAggValues(s,attr,attr,encodingName,init_agg_values,tid,force_dense_block)
+          emitInitAggValues(s,attr,attr,encodingName,init_agg_values,tid,force_dense_block,lastIntersection && init_agg_values)
 
         } else{
           s.println(s"""${name}_block->set= &${attr};""")
           if(!init_agg_values)
             emitInitPointers(s,name,attr,encodingName,lastIntersection,tid)
-          emitInitAggValues(s,name,attr,encodingName,init_agg_values,tid,force_dense_block)
+          emitInitAggValues(s,name,attr,encodingName,init_agg_values,tid,force_dense_block,lastIntersection && init_agg_values)
         }
       }
     }
     ////////////////////////////////////////// end intersection method
-
-    if(lastIntersection && init_agg_values){
-      if(processed.size != 0){
-          s.println(s"""${attr}_block->init_data(1,${attr}.cardinality,${encodingName}_encoding->num_distinct);""")  
-        } else{
-          s.println(s"""${name}_block->init_data(1,${attr}.cardinality,${encodingName}_encoding->num_distinct);""")  
-        }
-    }
 
     s.println("}")
 

@@ -56,15 +56,15 @@ namespace allocator{
 
   template<class T>
   struct memory{
-    static const size_t max_alloc = 3221225472/sizeof(T); //3GB
+    size_t max_alloc = ((uint64_t)12*1073741824)/(sizeof(T)); //12GB
     const size_t multplier = 2;
     std::vector<size_t> num_elems;
     std::vector<size_t> indicies;
     std::vector<std::vector<elem<T>>> elements;
     memory(){}
     memory(size_t num_elems_in){
-      if(num_elems_in > max_alloc){ //max of 3gb allocations
-        num_elems_in = max_alloc;
+      if(num_elems_in > (max_alloc/NUM_THREADS)){
+        num_elems_in = max_alloc/NUM_THREADS;
       }
       for(size_t i = 0; i < NUM_THREADS; i++){
         std::vector<elem<T>> current;
@@ -94,7 +94,7 @@ namespace allocator{
         while(num > num_elems.at(tid)){
           num_elems.at(tid) = (num_elems.at(tid)+1)*multplier;
         }
-        if(num_elems.at(tid) > max_alloc){ //max of 3gb allocations
+        if(num_elems.at(tid) > max_alloc){
           num_elems.at(tid) = max_alloc;
         }
         std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems.at(tid) << std::endl;
@@ -113,7 +113,7 @@ namespace allocator{
         while((num+align) > num_elems.at(tid)){
           num_elems.at(tid) = (num_elems.at(tid)+1)*multplier;
         }
-        if(num_elems.at(tid) > max_alloc){ //max of 3gb allocations
+        if(num_elems.at(tid) > max_alloc){
           num_elems.at(tid) = max_alloc;
         }
         std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems.at(tid) << std::endl;
