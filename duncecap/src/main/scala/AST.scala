@@ -6,7 +6,6 @@ import scala.collection.mutable
  */
 object CodeGen {
   var layout = "hybrid"
-  var numThreads = "48"
   /**
    * This following method will get called in both compiler and repl mode
    */
@@ -34,7 +33,6 @@ object CodeGen {
     s.println("#endif")
   }
 }
-
 
 /**
  * Explanation of types below:
@@ -268,8 +266,9 @@ case class ASTJoinAndSelect(rels : List[ASTRelation], selectCriteria : List[ASTC
         s.println(s"""${name}_block->is_sparse = false;""")
       else
         s.println(s"""${name}_block->is_sparse = ${attr}.type == type::UINTEGER;""")
+        //hack because get weird seg fault in gcc if we use the same output buffer oh well
       if(init_data)
-        s.println(s"""${name}_block->init_data(${tid},&output_buffer,${attr}.cardinality,${encodingName}_encoding->num_distinct,1);""")
+        s.println(s"""${name}_block->init_data(${tid},&tmp_buffer,${attr}.cardinality,${encodingName}_encoding->num_distinct,1);""")
       else
         s.println(s"""${name}_block->alloc_data(${tid},&output_buffer,${attr}.cardinality,${encodingName}_encoding->num_distinct);""")
     }

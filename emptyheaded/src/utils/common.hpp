@@ -28,34 +28,21 @@
 //static double BITSET_THRESHOLD = 1.0 / 16.0;
 
 // Experts only! Proceed with caution!
-#define ENABLE_PCM
+//#define ENABLE_PCM
 //#define ENABLE_PRINT_THREAD_TIMES
 //#define ENABLE_ATOMIC_UNION
-
-//TODO: Replace with new command line arguments.
 
 //Needed for parallelization, prevents false sharing of cache lines
 #define PADDING 300
 #define MAX_THREADS 512
-
 #define VECTORIZE 1
-#define WRITE_VECTOR 1
-#define NO_ALGORITHM
-//#define OPTIMIZER_OVERHEAD
-
-// Enables/disables pruning
-//#define NEW_BITSET
-
-// Enables/disables hybrid that always chooses U-Int
-//#define HYBRID_UINT
-
-//#define STATS
 
 //CONSTANTS THAT SHOULD NOT CHANGE
 #define SHORTS_PER_REG 8
 #define INTS_PER_REG 4
 #define BYTES_PER_REG 16
 #define BYTES_PER_CACHELINE 64
+
 
 #ifndef NUM_THREADS_IN
 static size_t NUM_THREADS = 48;
@@ -70,7 +57,6 @@ namespace common{
 #else
   static double bitset_req = 2.0;
 #endif
-  //static size_t block_bitset_req = 16;
 }
 
 struct aggregate{};

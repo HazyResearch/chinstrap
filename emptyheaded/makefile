@@ -14,19 +14,27 @@ HEADERS=$(wildcard src/*hpp)
 SOURCES=$(wildcard src/*cpp)
 OBJECTS=$(SOURCES:src/%.cpp=$(OBJDIR)/%.o)
 
-ifdef NOVECTOR
-	override CXXFLAGS += -fno-tree-vectorize
+
+ifdef NO_VECTOR
+	override CXXFLAGS += -fno-tree-vectorize -DVECTORIZE=0
+else
+	override CXXFLAGS += -DVECTORIZE=1
 endif
 
-ifdef NUM_THREADS_IN
-	override CXXFLAGS += -DNUM_THREADS_IN=$(NUM_THREADS_IN)
+ifdef NO_ALGORITHM
+	override CXXFLAGS += -DNO_ALGORITHM=1
 endif
 
-ifdef TRAVIS
-	CXX = g++-4.9
-else 
+ifdef NUM_THREADS
+	override CXXFLAGS += -DNUM_THREADS_IN=$(NUM_THREADS)
+endif
+
+ifdef CLANG
 	CXX = clang++
+else 
+	CXX = g++-4.9
 endif
+
 ifdef INTEL_PCM_HOME
 	INCLUDE_DIRS+=-I$(INTEL_PCM_HOME)
 	EXT_OBJECTS=$(INTEL_PCM_HOME)/cpucounters.o $(INTEL_PCM_HOME)/msr.o $(INTEL_PCM_HOME)/pci.o $(INTEL_PCM_HOME)/client_bw.o

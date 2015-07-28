@@ -112,7 +112,7 @@ void recursive_build(const size_t index, const size_t start, const size_t end, c
     auto tup = produce_ranges(start,end,ranges_buffer->at(level).get_memory(tid),set_data_buffer->at(level).get_memory(tid),indicies,&attr_in->at(level));
     const size_t set_size = std::get<0>(tup);
     const size_t set_range = std::get<1>(tup);
-    tail->init_pointers(0,data_allocator,set_size,set_range,true);
+    tail->init_pointers(0,data_allocator,set_size,set_range,(((double)set_size)/set_range) > common::bitset_req);
     for(size_t i = 0; i < set_size; i++){
       const size_t next_start = ranges_buffer->at(level).get_memory(tid)[i];
       const size_t next_end = ranges_buffer->at(level).get_memory(tid)[i+1];
@@ -161,7 +161,7 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
 
   //Build the head set.
   TrieBlock<T,size_t>* new_head = build_block<TrieBlock<T,size_t>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer->at(0).get_memory(0));
-  new_head->init_pointers(0,&data_allocator,head_size,head_range,new_head->set.type == type::UINTEGER);
+  new_head->init_pointers(0,&data_allocator,head_size,head_range,false);
 
   par::for_range(0,head_range,100,[&](size_t tid, size_t i){
     (void) tid;

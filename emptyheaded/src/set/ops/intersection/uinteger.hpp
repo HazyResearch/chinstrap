@@ -1213,14 +1213,15 @@ namespace ops{
   template<class N, typename F>
   inline Set<uinteger>* run_intersection(Set<uinteger> *C_in, const Set<uinteger> *rare, const Set<uinteger> *freq, F f){
     #ifndef NO_ALGORITHM 
-        const unsigned long min_size = 1;
-        if(std::max(rare->cardinality,freq->cardinality) / std::max(min_size, std::min(rare->cardinality,freq->cardinality)) > 32)
+        const auto min = std::min(rare->cardinality,freq->cardinality);
+        const auto max = std::max(rare->cardinality,freq->cardinality);
+        if(min != 0 && ((double)max/min)  > 32.0){
         #if VECTORIZE == 1
           return set_intersect_galloping<N>(C_in, rare, freq, f);
         #else 
           return scalar_gallop<N>(C_in,rare,freq,f);
         #endif
-        else
+        } else
     #endif
       //return set_intersect_ibm<N>(C_in, rare, freq, f);
       //return set_intersect_v3<N>(C_in, rare, freq, f);

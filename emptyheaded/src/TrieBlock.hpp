@@ -107,18 +107,19 @@ struct TrieBlock{
         return std::make_tuple(find_index,(TrieBlock<T,F>*)NULL);
     }
   }
-  TrieBlock<T,F>* get_block(uint32_t data) const{
+  inline TrieBlock<T,F>* get_block(uint32_t data) const{
+    TrieBlock<T,F>* result = NULL;
     if(!is_sparse){
-      return next_level[data];
+      result = next_level[data];
     } else{
       //something like get the index from the set then move forward.
       const long index = set.find(data);
       if(index != -1)
-        return next_level[index];
+        result = next_level[index];
     }
-    return NULL;
+    return result;
   }
-  TrieBlock<T,F>* get_block(uint32_t index, uint32_t data) const{
+  inline TrieBlock<T,F>* get_block(uint32_t index, uint32_t data) const{
     if(!is_sparse){
       return next_level[data];
     } else{

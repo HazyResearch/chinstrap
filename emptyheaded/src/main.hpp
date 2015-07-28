@@ -3,8 +3,6 @@
 
 template<class T> application<T>* init_app();
 
-typedef hybrid mylayout;
-
 inline void printUsage() {
   std::cout << "USAGE: ./application <OPTIONS>" << std::endl;
   std::cout << "OPTIONS: " << std::endl;

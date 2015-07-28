@@ -13,23 +13,26 @@ import scala.util.matching.Regex
  * from the emptyheaded/bin directory
  */
 object QueryCompiler extends App {
-  val usage = "Usage: ./QueryCompiler QQuery.datalog"
-  if (args.length != 1 && args.length != 4) {
+  val usage = "Usage: ./QueryCompiler <path to datalog file> [optional: <yanna or nprr> <layout> <numThreads> <algorithm> <vectorize>] "
+  if (args.length != 1 && args.length != 6) {
     println(usage)
   } else {
-    println("HEAD: " + args.head.head.equals('/'))
     val input_file = if(args.head.head.equals('/')) args.head else ("../" + args.head)
     val source = scala.io.Source.fromFile(input_file)
     val ParseFile = """(.*)/(.*).datalog""".r
     val ParseFile(path,fname) = input_file
 
-    if(args.length == 4){
-      Environment.yanna = if(args.tail.head == "yanna") true else false
-      CodeGen.layout = args.tail.tail.head
-      CodeGen.numThreads = args.tail.tail.tail.head
+    var algorithm = "ALGORITHM=true"
+    var vectorize = "VECTORIZE=true"
+    var numThreads = "48"
+    if(args.length == 6){
+      Environment.yanna = if(args(1) == "yanna") true else false
+      CodeGen.layout = args(2)
+      algorithm = if(args(3) == "noalgorithm") "NO_ALGORITHM=true" else "ALGORITHM=true"
+      vectorize = if(args(4) == "novector") "NO_VECTOR=true" else "VECTORIZE=true"
+      numThreads = args(5)
     }
-    println("HERE: " + path + " " + fname)
-    println(Environment.yanna + " " + CodeGen.layout)
+    println("ARGUMENTS: " + fname + " " + Environment.yanna + " " + CodeGen.layout + " " + algorithm + " " + vectorize + " " + numThreads)
 
     val outputFilename = fname
     val lines = try source.mkString finally source.close()
@@ -56,7 +59,7 @@ object QueryCompiler extends App {
         s"""clang-format -i ${file}""" !
 
         sys.process.Process(Seq("rm", "-rf",s"""bin/${outputFilename}"""), new File("../emptyheaded")).!
-        val result = sys.process.Process(Seq("make","TRAVIS=true",s"""NUM_THREADS_IN=${CodeGen.numThreads}""", s"""bin/${outputFilename}"""), new File("../emptyheaded")).!
+        val result = sys.process.Process(Seq("make",s"""NUM_THREADS=${numThreads}""",algorithm,vectorize, s"""bin/${outputFilename}"""), new File("../emptyheaded")).!
 
         if (result != 0) {
           println("FAILURE: Compilation errors.")
