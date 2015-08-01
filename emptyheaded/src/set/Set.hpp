@@ -71,6 +71,16 @@ class Set{
       }
 
     //A set that is just a buffer.
+    Set(uint8_t *data_in, Set<T> in):
+      data(data_in){
+        cardinality = in.cardinality;
+        number_of_bytes = in.number_of_bytes;
+        density = in.density;
+        type = in.type;
+        memcpy(data_in,in.data,in.number_of_bytes);
+      }
+      
+    //A set that is just a buffer.
     Set(uint8_t *data_in):
       data(data_in){
         cardinality = 0;

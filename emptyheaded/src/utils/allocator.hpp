@@ -96,9 +96,10 @@ namespace allocator{
         }
         if(num_elems.at(tid) > max_alloc){
           num_elems.at(tid) = max_alloc;
+          num = max_alloc;
         }
-        std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems.at(tid) << std::endl;
-        assert(num < num_elems.at(tid));
+        //std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems.at(tid) << std::endl;
+        assert(num <+ num_elems.at(tid));
         elements.at(tid).push_back(elem<T>(num_elems.at(tid)));
         indicies.at(tid)++;
         val = elements.at(tid).at(indicies.at(tid)).get_next(num);
@@ -115,9 +116,10 @@ namespace allocator{
         }
         if(num_elems.at(tid) > max_alloc){
           num_elems.at(tid) = max_alloc;
+          num = max_alloc;
         }
-        std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems.at(tid) << std::endl;
-        assert(num < num_elems.at(tid));
+        //std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems.at(tid) << std::endl;
+        assert(num <= num_elems.at(tid));
         elements.at(tid).push_back(elem<T>(num_elems.at(tid)));
         indicies.at(tid)++;
         val = elements.at(tid).at(indicies.at(tid)).get_next(num,align);
