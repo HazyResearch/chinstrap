@@ -1,3 +1,12 @@
+/******************************************************************************
+*
+* Author: Christopher R. Aberger
+*
+* Stores a relation in a column wise fashion. Can take in any number of 
+* different template arguments. Each template arguments corresponds to the
+* type of the column. 
+******************************************************************************/
+
 #ifndef _RELATION_H_
 #define _RELATION_H_
 
@@ -47,7 +56,6 @@ class RelationElem
 public:
   Column<T>&       get()       { return elem; }
   const Column<T>& get() const { return elem; }
-  
   RelationElem(){}
 
 };
@@ -74,35 +82,10 @@ public:
 template <typename... T>
 struct Relation : RelationImpl <range <sizeof...(T)>, T...>
 {
+  //return the number of columns (depends on the input thus a function)
   static constexpr std::size_t num_columns() { return sizeof...(T); }
+  //stores the number of rows.
   size_t num_rows;
-
-  /*
-  // primary template
-  template <int DIM, typename F>
-  class ForeachRow {
-    public:
-      static void result(F f) {
-        f(DIM);
-        ForeachRow<DIM+1,F>::result(f);
-      }
-  };
-
-  // partial specialization as end criteria
-  template <typename F>
-  class ForeachRow<num_rows()-1,F> {
-    public:
-      static void result (F f) {
-        f(0);
-        //return *a * *b;
-      }
-  };
-
-  template<typename F>
-  inline void foreach_row(F f){
-    ForeachRow<0,F>::result(f);
-  }
-  */
 };
 
 

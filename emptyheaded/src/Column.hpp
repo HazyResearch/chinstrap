@@ -1,3 +1,12 @@
+/******************************************************************************
+*
+* Author: Christopher R. Aberger
+*
+* This is just a vector so why do you have a separate class? Because I need 
+* to overload the "append_from_string" method. Currently we support input 
+* types of (uint64_t,uint32_t,std::string) as valid column types.
+******************************************************************************/
+
 #ifndef _COLUMN_H_
 #define _COLUMN_H_
 
@@ -25,27 +34,9 @@ struct Column{
   inline void assign(T * start, T* end){
     col.assign(start,end);
   }
-
-  void append_from_string(const char *string_element);
+  inline void append_from_string(const char *string_element){
+    col.push_back(utils::from_string<T>(string_element));
+  }
 };
-
-template<>
-inline void Column<uint64_t>::append_from_string(const char *string_element){
-  uint64_t element;
-  sscanf(string_element,"%lu",&element);
-  col.push_back(element);
-}
-
-template<>
-inline void Column<uint32_t>::append_from_string(const char *string_element){
-  uint32_t element;
-  sscanf(string_element,"%u",&element);
-  col.push_back(element);
-}
-
-template<>
-inline void Column<std::string>::append_from_string(const char *string_element){
-  col.push_back(string_element);
-}
 
 #endif

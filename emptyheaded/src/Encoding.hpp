@@ -1,101 +1,54 @@
+/******************************************************************************
+*
+* Author: Christopher R. Aberger
+*
+* The encoding class performs the dictionary encoding and stores both
+* a hash map from values to keys and an array from keys to values. Values
+* here are the original values that appeared in the relations. Keys are the 
+* distinct 32 bit integers assigned to each value.
+******************************************************************************/
+
 #ifndef _ENCODING_H_
 #define _ENCODING_H_
 
+#include <mutex>
 #include <unordered_map>
 #include "Column.hpp"
-#include "tbb/parallel_sort.h"
-#include "tbb/task_scheduler_init.h"
-
-template<class T>
-struct OrderByFrequency{
-  std::vector<size_t> *frequency;
-  OrderByFrequency(std::vector<size_t> *frequency_in){
-    frequency = frequency_in;
-  }
-  bool operator()(std::pair<uint32_t,T> i, std::pair<uint32_t,T> j) const {
-    size_t i_size = frequency->at(i.first);
-    size_t j_size = frequency->at(j.first);
-    return i_size > j_size;
-  }
-};
 
 template <class T>
 struct Encoding{
-  std::vector<Column<uint32_t>> encoded;
   std::unordered_map<T,uint32_t> value_to_key;
   std::vector<T> key_to_value;
-  size_t num_distinct;
+  uint32_t num_distinct;
 
-  Encoding(std::vector<Column<T>> *attr_in){
-    const size_t num_attributes = attr_in->size();
-    const size_t num_rows = attr_in->at(0).size();
+  Encoding(){
+    num_distinct = 0;
+  }
 
-    //auto a = debug::start_clock();
-    
-    //Get the frequency of each value
-    std::vector<std::pair<uint32_t,T>> sorted_values;
-    std::vector<size_t> frequency;
+  //Given a column add its values to the encoding.
+  uint32_t add_value(const T value){
+    value_to_key.insert(std::make_pair(value,num_distinct));
+    key_to_value.push_back(value);
+    return ++num_distinct;
+  }
 
-    sorted_values.reserve(num_rows*num_attributes);
-    frequency.reserve(num_rows*num_attributes);
-    value_to_key.reserve(num_rows*num_attributes);
-
-    //TODO: Parallelize, cleanup memory usage.
-    size_t alloc_size = 0;
-    for(size_t i = 0; i < num_attributes; i++){
-      const Column<T> input = attr_in->at(i);
-      alloc_size += input.size();
-      for(size_t j = 0; j < input.size(); j++){
-        const T value = input.at(j);
-        if(!value_to_key.count(value)){
-          value_to_key.insert(std::make_pair(value,sorted_values.size()));
-          sorted_values.push_back(std::make_pair(sorted_values.size(),value));
-          frequency.push_back(1);
-        } else{
-          frequency.at(value_to_key.at(value))++;
-        }
-      }
-    }
-    //debug::stop_clock("serial",a);
-
-    //a = debug::start_clock();
-    //sort by the frequency
-    tbb::task_scheduler_init init(NUM_THREADS);
-    tbb::parallel_sort(sorted_values.begin(),sorted_values.end(),OrderByFrequency<T>(&frequency));
-
-    //reassign id's
-    T *k2v = new T[sorted_values.size()];
-    key_to_value.assign(k2v,k2v+sorted_values.size());
-    par::for_range(0,sorted_values.size(),100,[&](size_t tid, size_t i){
+  //Given a column add its values to the encoding.
+  Column<uint32_t> add_column(Column<T> *attr_in){
+    std::mutex mtx;
+    Column<uint32_t> encoded_column;
+    encoded_column.reserve(attr_in->size());
+    par::for_range(0,attr_in->size(),50,[&](size_t tid, size_t i){
       (void) tid;
-      key_to_value.at(i) = sorted_values.at(i).second;
-      value_to_key.at(sorted_values.at(i).second) = i;
+      const T value = attr_in->at(i);
+      if(!value_to_key.count(value)){
+        mtx.lock();
+        add_element(value);
+        mtx.unlock();
+        encoded_column.set(i,value);
+      }
     });
-
-    //create new encoded column
-    //encoded.reserve(num_attributes);
-
-    uint32_t *new_columns = new uint32_t[alloc_size];
-    uint32_t *pointer_start = new_columns;
-    uint32_t *pointer_end = new_columns;
-    for(size_t i = 0; i < num_attributes; i++){
-      const Column<T> input = attr_in->at(i);
-      Column<uint32_t> output;
-      pointer_start = pointer_end;
-      pointer_end = pointer_start+input.size();
-      output.assign(pointer_start,pointer_end);
-      par::for_range(0,input.size(),100,[&](size_t tid, size_t j){
-        (void) tid;
-        const T value = input.at(j);
-        const uint32_t key = value_to_key.at(value);
-        output.set(j,key);
-      });
-      encoded.push_back(output);
-    }
-    //debug::stop_clock("parallel",a);
-
-    num_distinct = key_to_value.size();
-  };
+    return encoded_column;
+  }
 };
 
 #endif
