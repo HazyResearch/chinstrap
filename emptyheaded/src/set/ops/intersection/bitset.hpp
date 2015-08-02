@@ -651,9 +651,7 @@ namespace ops{
       C_in->number_of_bytes = total_size*(sizeof(uint64_t)+sizeof(uint32_t))+sizeof(uint64_t);
     }
 
-    const double density = 0.0;
     C_in->cardinality = count;
-    C_in->density = density;
     C_in->type= type::RANGE_BITSET;
 
     return C_in;
@@ -686,7 +684,6 @@ namespace ops{
     if(A_in->number_of_bytes == 0 || B_in->number_of_bytes == 0){
       C_in->cardinality = 0;
       C_in->number_of_bytes = 0;
-      C_in->density = 0.0;
       C_in->type= type::BLOCK_BITSET;
       return C_in;
     }
@@ -729,7 +726,6 @@ namespace ops{
     std::cout << "num bytes: " << C-C_start << std::endl;
     C_in->cardinality = count;
     C_in->number_of_bytes = C-C_start;
-    C_in->density = 0.0;
     C_in->type= type::BLOCK_BITSET;
 
     return C_in;

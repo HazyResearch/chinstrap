@@ -1,13 +1,16 @@
+/******************************************************************************
+*
+* Author: Christopher R. Aberger
+*
+* TOP LEVEL CLASS FOR OUR SORTED SETS.  PROVIDE A SET OF GENERAL PRIMITIVE 
+* TYPES THAT WE PROVIDE (PSHORT,UINT,VARIANT,BITPACKED,BITSET).  WE ALSO
+* PROVIDE A HYBRID SET IMPLEMENTATION THAT DYNAMICALLY CHOOSES THE TYPE
+* FOR THE DEVELOPER. IMPLEMENTATION FOR PRIMITIVE TYPE OPS CAN BE 
+* FOUND IN STATIC CLASSES IN THE LAYOUT FOLDER.
+******************************************************************************/
+
 #ifndef _SET_H_
 #define _SET_H_
-
-/*
-TOP LEVEL CLASS FOR OUR SORTED SETS.  PROVIDE A SET OF GENERAL PRIMITIVE 
-TYPES THAT WE PROVIDE (PSHORT,UINT,VARIANT,BITPACKED,BITSET).  WE ALSO
-PROVIDE A HYBRID SET IMPLEMENTATION THAT DYNAMICALLY CHOOSES THE TYPE
-FOR THE DEVELOPER. IMPLEMENTATION FOR PRIMITIVE TYPE OPS CAN BE 
-FOUND IN STATIC CLASSES IN THE LAYOUT FOLDER.
-*/
 
 #include "layouts/hybrid.hpp"
 #include "layouts/block.hpp"
@@ -16,14 +19,15 @@ template <class T>
 class Set{ 
   public: 
     uint8_t *data;
-    size_t cardinality;
+    uint32_t cardinality;
+    uint32_t range;
     size_t number_of_bytes;
-    double density;
     type::layout type;
 
     Set(){
       number_of_bytes = 0;
       cardinality = 0;
+      range = 0;
       data = NULL;
       type = type::NOT_VALID;
     };
@@ -32,38 +36,26 @@ class Set{
     Set(const Set &obj):
       data(obj.data),
       cardinality(obj.cardinality),
+      range(obj.range),
       number_of_bytes(obj.number_of_bytes),
-      density(obj.density),
       type(obj.type){}    
     //All values passed in
     Set(uint8_t *data_in, 
-      size_t cardinality_in, 
+      uint32_t cardinality_in, 
+      uint32_t range_in,
       size_t number_of_bytes_in,
-      double density_in,
       type::layout type_in):
       data(data_in),
       cardinality(cardinality_in),
+      range(range_in),
       number_of_bytes(number_of_bytes_in),
-      density(density_in),
       type(type_in){}
-
-    //Density is optional in read-only sets
-    Set(uint8_t *data_in, 
-      size_t cardinality_in, 
-      size_t number_of_bytes_in,
-      type::layout type_in):
-      data(data_in),
-      cardinality(cardinality_in),
-      number_of_bytes(number_of_bytes_in),
-      type(type_in){
-        density = 0.0;
-      }
 
     //A set that is just a buffer zeroed out to certain size.
     Set(size_t number_of_bytes_in){
         cardinality = 0;
+        range = 0;
         number_of_bytes = number_of_bytes_in;
-        density = 0.0;
         type = T::get_type();
 
         data = new uint8_t[number_of_bytes];
@@ -74,8 +66,8 @@ class Set{
     Set(uint8_t *data_in, Set<T> in):
       data(data_in){
         cardinality = in.cardinality;
+        range = in.range;
         number_of_bytes = in.number_of_bytes;
-        density = in.density;
         type = in.type;
         memcpy(data_in,in.data,in.number_of_bytes);
       }
@@ -84,8 +76,8 @@ class Set{
     Set(uint8_t *data_in):
       data(data_in){
         cardinality = 0;
+        range = 0;
         number_of_bytes = 0;
-        density = 0.0;
         type = T::get_type();
       }
 
@@ -94,16 +86,16 @@ class Set{
     Set<T>(Set<U> in){
       data = in.data;
       cardinality = in.cardinality;
+      range = in.range;
       number_of_bytes = in.number_of_bytes;
-      density = in.density;
       type = in.type;
     }
 
     Set(uint8_t* data_in, size_t number_of_bytes_in):
       data(data_in), number_of_bytes(number_of_bytes_in) {
         cardinality = 0;
+        range = 0;
         number_of_bytes = number_of_bytes_in;
-        density = 0.0;
         type = T::get_type();
     }
 
@@ -111,8 +103,8 @@ class Set{
     Set<T>(Set<U> *in){
       data = in->data;
       cardinality = in->cardinality;
+      range = in->range;
       number_of_bytes = in->number_of_bytes;
-      density = in->density;
       type = in->type;
     }
 
@@ -191,8 +183,8 @@ template <class T>
 inline void Set<T>::copy_from(Set<T> src){ 
   memcpy(data,src.data,src.number_of_bytes);
   cardinality = src.cardinality;
+  range = src.range;
   number_of_bytes = src.number_of_bytes;
-  density = src.density;
   type = src.type;
 }
 ///////////////////////////////////////////////////////////////////////////////
@@ -204,7 +196,7 @@ inline Set<uinteger> Set<T>::decode(uint32_t *buffer){
   T::foreach( ([&i,&buffer] (uint32_t data){
     buffer[i++] = data;
   }),data,cardinality,number_of_bytes,type);
-  return Set<uinteger>((uint8_t*)buffer,cardinality,cardinality*sizeof(int),density,type::UINTEGER);
+  return Set<uinteger>((uint8_t*)buffer,cardinality,range,cardinality*sizeof(int),type::UINTEGER);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -212,29 +204,9 @@ inline Set<uinteger> Set<T>::decode(uint32_t *buffer){
 ///////////////////////////////////////////////////////////////////////////////
 template <class T>
 inline Set<T> Set<T>::from_array(uint8_t *set_data, uint32_t *array_data, size_t data_size){
-  const double density = ((data_size > 0) ? (double)((array_data[data_size-1]-array_data[0])/data_size) : 0.0);
+  const uint32_t range = (data_size > 0) ? (array_data[data_size-1]-array_data[0]) : 0;
   const std::tuple<size_t,type::layout> bl = T::build(set_data,array_data,data_size);
-  return Set<T>(set_data,data_size,std::get<0>(bl),density,std::get<1>(bl));
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//CREATE A SET FROM A FLATTENED ARRAY WITH INFO.  
-//THIS IS USED FOR A CSR GRAPH IMPLEMENTATION.
-//Assume these are already packaged and re-optimized, density is not adjusted
-///////////////////////////////////////////////////////////////////////////////
-template <class T>
-inline Set<T> Set<T>::from_flattened(uint8_t *set_data, size_t cardinality_in){
-  auto flattened_data = T::get_flattened_data(set_data,cardinality_in);
-  return Set<T>(&set_data[std::get<0>(flattened_data)],cardinality_in,std::get<1>(flattened_data),std::get<2>(flattened_data));
-}
-
-///////////////////////////////////////////////////////////////////////////////
-//FLATTEN A SET INTO AN ARRAY.  
-//THIS IS USED FOR A CSR GRAPH IMPLEMENTATION.
-///////////////////////////////////////////////////////////////////////////////
-template <class T>
-inline size_t Set<T>::flatten_from_array(uint8_t *set_data, const uint32_t * const array_data, const size_t data_size){
-  return T::build_flattened(set_data,array_data,data_size);
+  return Set<T>(set_data,data_size,range,std::get<0>(bl),std::get<1>(bl));
 }
 
 #endif

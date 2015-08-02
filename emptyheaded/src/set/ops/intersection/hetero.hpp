@@ -50,12 +50,9 @@ namespace ops{
         break;
       }
     }
-    // XXX: Correct density computation
-    const double density = 0.0;//((count > 1) ? ((double)count/(C[count - 1]-C[0])) : 0.0);
 
     C_in->cardinality = count;
     C_in->number_of_bytes = count*sizeof(uint32_t);
-    C_in->density = density;
     C_in->type= type::UINTEGER;
 
     return C_in;
@@ -111,7 +108,6 @@ namespace ops{
     if(A_in->number_of_bytes == 0 || B_in->number_of_bytes == 0){
       C_in->cardinality = 0;
       C_in->number_of_bytes = 0;
-      C_in->density = 0.0;
       C_in->type= type::UINTEGER;
       return C_in;
     }
@@ -150,7 +146,6 @@ namespace ops{
 
     C_in->cardinality = count;
     C_in->number_of_bytes = count*sizeof(uint32_t);
-    C_in->density = 0.0;
     C_in->type= type::UINTEGER;
 
     return C_in;
@@ -259,10 +254,8 @@ namespace ops{
       }
     }
 
-    const double density = 0.0;
     C_in->cardinality = count;
     C_in->number_of_bytes = num_bytes;
-    C_in->density = density;
     C_in->type= type::BLOCK_BITSET;
 
     return C_in;

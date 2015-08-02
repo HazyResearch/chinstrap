@@ -1,3 +1,10 @@
+/******************************************************************************
+*
+* Author: Christopher R. Aberger
+*
+* The top level datastructure. This class holds the methods to create the 
+* trie from a table. The TrieBlock class holds the more interesting methods.
+******************************************************************************/
 #ifndef _TRIE_H_
 #define _TRIE_H_
 
@@ -6,9 +13,12 @@
 #include "tbb/parallel_sort.h"
 #include "tbb/task_scheduler_init.h"
 
+/*
+* Recursive sort function to get the relation in order for the trie.
+*/
 struct SortColumns{
-  std::vector<Column<uint32_t>> *columns; 
-  SortColumns(std::vector<Column<uint32_t>> *columns_in){
+  std::vector<std::vector<uint32_t>> *columns; 
+  SortColumns(std::vector<std::vector<uint32_t>> *columns_in){
     columns = columns_in;
   }
   bool operator()(uint32_t i, uint32_t j) const {
@@ -21,21 +31,31 @@ struct SortColumns{
   }
 };
 
+/*
+* Very simple tree structure stores the trie. All that is needed is the 
+* head and number of levels.  Methods are to build a trie from an encoded
+* table.
+*/
 template<class T>
 struct Trie{
+  size_t num_levels;
   TrieBlock<T,size_t> *head;
 
-  Trie<T>(TrieBlock<T,size_t> *head_in){
+  Trie<T>(TrieBlock<T,size_t> *head_in,size_t num_levels_in){
+    num_levels = num_levels_in;
     head = head_in;
   };
 
   template<typename F>
-  static Trie<T>* build(std::vector<Column<uint32_t>> *attr_in, F f);
+  static Trie<T>* build(std::vector<std::vector<uint32_t>> *attr_in, F f);
 };
 
+/*
+* Given a range of values figure out the distinct values to go in the set.
+*/
 std::tuple<size_t,size_t> produce_ranges(size_t start, size_t end, 
   size_t *next_ranges, uint32_t *data,
-  uint32_t *indicies, Column<uint32_t> * current){
+  uint32_t *indicies, std::vector<uint32_t> * current){
 
   size_t range = 0;
 
@@ -60,15 +80,18 @@ std::tuple<size_t,size_t> produce_ranges(size_t start, size_t end,
   }
   FINISH:
   next_ranges[num_distinct] = end;
-  return std::tuple<size_t,size_t>(num_distinct,range+1); //should be all you need.
+  return std::tuple<size_t,size_t>(num_distinct,range+1);
 }
 
-void encode_tail(size_t start, size_t end, uint32_t *data, Column<uint32_t> *current, uint32_t *indicies){
+void encode_tail(size_t start, size_t end, uint32_t *data, std::vector<uint32_t> *current, uint32_t *indicies){
   for(size_t i = start; i < end; i++){
     *data++ = current->at(indicies[i]);
   }
 }
 
+/*
+* We opitionally provide the ability to materialize selections while building the trie.
+*/
 template<typename F>
 uint32_t* perform_selection(uint32_t *iterator, size_t num_rows, F f){
   for(size_t i = 0; i < num_rows; i++){
@@ -79,6 +102,9 @@ uint32_t* perform_selection(uint32_t *iterator, size_t num_rows, F f){
   return iterator;
 }
 
+/*
+* Produce a TrieBlock
+*/
 template<class B, class T>
 B* build_block(const size_t tid, allocator::memory<uint8_t> *data_allocator, 
   const size_t max_set_size, const size_t set_size, uint32_t *set_data_buffer){
@@ -92,11 +118,13 @@ B* build_block(const size_t tid, allocator::memory<uint8_t> *data_allocator,
   data_allocator->roll_back(tid,set_alloc_size-block->set.number_of_bytes);
   return block;
 }
-
+/*
+* Recursively build the trie. Terminates when we hit the number of levels.
+*/
 template<class B,class T>
 void recursive_build(const size_t index, const size_t start, const size_t end, const uint32_t data, B* prev_block, 
   const size_t level, const size_t num_levels, const size_t tid, 
-  std::vector<Column<uint32_t>> *attr_in,
+  std::vector<std::vector<uint32_t>> *attr_in,
   allocator::memory<uint8_t> *data_allocator, const size_t num_rows, 
   std::vector<allocator::memory<size_t>> *ranges_buffer, 
   std::vector<allocator::memory<uint32_t>> *set_data_buffer, 
@@ -123,8 +151,8 @@ void recursive_build(const size_t index, const size_t start, const size_t end, c
 }
 
 template<class T> template <typename F>
-inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
-  const size_t num_levels = attr_in->size();
+inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, F f){
+  const size_t num_levels_in = attr_in->size();
   const size_t num_rows = attr_in->at(0).size();
 
   //Filter rows via selection and sort for the Trie
@@ -136,13 +164,13 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
   tbb::parallel_sort(indicies,iterator,SortColumns(attr_in));
 
   //Where all real data goes
-  const size_t alloc_size = (8*num_rows*num_levels*sizeof(uint64_t)*sizeof(TrieBlock<T,size_t>))/NUM_THREADS;
+  const size_t alloc_size = (8*num_rows*num_levels_in*sizeof(uint64_t)*sizeof(TrieBlock<T,size_t>))/NUM_THREADS;
   allocator::memory<uint8_t> data_allocator(alloc_size);
   //always just need two buffers(that swap)
   std::vector<allocator::memory<size_t>> *ranges_buffer = new std::vector<allocator::memory<size_t>>();
   std::vector<allocator::memory<uint32_t>> *set_data_buffer = new std::vector<allocator::memory<uint32_t>>();
   
-  for(size_t i = 0; i < num_levels; i++){
+  for(size_t i = 0; i < num_levels_in; i++){
     allocator::memory<size_t> ranges((num_rows_post_filter+1));
     allocator::memory<uint32_t> sd((num_rows_post_filter+1));
     ranges_buffer->push_back(ranges);
@@ -175,12 +203,12 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
     const size_t end = ranges_buffer->at(0).get_memory(0)[i+1];
     const uint32_t data = set_data_buffer->at(0).get_memory(0)[i];    
 
-    recursive_build<TrieBlock<T,size_t>,T>(i,start,end,data,new_head,cur_level,num_levels,tid,attr_in,
+    recursive_build<TrieBlock<T,size_t>,T>(i,start,end,data,new_head,cur_level,num_levels_in,tid,attr_in,
       &data_allocator,num_rows,ranges_buffer,set_data_buffer,indicies);
 
   });
   
-  for(size_t i = 0; i < num_levels; i++){
+  for(size_t i = 0; i < num_levels_in; i++){
     ranges_buffer->at(i).free();
     set_data_buffer->at(i).free();
   }
@@ -189,6 +217,6 @@ inline Trie<T>* Trie<T>::build(std::vector<Column<uint32_t>> *attr_in, F f){
   //should be a 1-1 between pointers in block and next ranges
   //also a 1-1 between blocks and numbers of next ranges
 
-  return new Trie(new_head);
+  return new Trie(new_head,num_levels_in);
 }
 #endif

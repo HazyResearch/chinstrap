@@ -12,7 +12,6 @@ namespace ops{
     if(A_in->number_of_bytes == 0 || B_in->number_of_bytes == 0){
       C_in->cardinality = 0;
       C_in->number_of_bytes = 0;
-      C_in->density = 0.0;
       C_in->type= type::BLOCK;
       return C_in;
     }
@@ -98,7 +97,6 @@ namespace ops{
 
     C_in->cardinality = count;
     C_in->number_of_bytes = sizeof(size_t)+(num_uint*sizeof(uint32_t))+BSBS.number_of_bytes;
-    C_in->density = 0.0;
     C_in->type= type::BLOCK;
 
     return C_in;

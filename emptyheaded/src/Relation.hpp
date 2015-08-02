@@ -88,5 +88,26 @@ struct Relation : RelationImpl <range <sizeof...(T)>, T...>
   size_t num_rows;
 };
 
+//Stores the dictionary encoded relation
+struct EncodedRelation {
+  size_t num_rows;
+  size_t num_columns;
+  std::vector<std::vector<uint32_t>> data;
+  EncodedRelation(const size_t num_columns_in){
+    num_rows = 0;
+    num_columns = num_columns_in;
+    for(size_t i = 0; i < num_columns; i++){
+      data.push_back(std::vector<uint32_t>());
+    }
+  }
+  //Return a pointer to the column of the encoded relation
+  inline std::vector<uint32_t>* column(size_t i){
+    return &data.at(i); 
+  }
+  //Append a value to a column.
+  inline void append(const size_t col_index, const uint32_t value){
+    data.at(col_index).push_back(value);
+  }
+};
 
 #endif

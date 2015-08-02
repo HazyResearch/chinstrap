@@ -401,10 +401,8 @@ namespace ops{
       const uint32_t *startRare = rare;
 
       if (lenFreq == 0 || lenRare == 0){
-        const size_t density = 0.0;
         C_in->cardinality = 0;
         C_in->number_of_bytes = (0)*sizeof(uint32_t);
-        C_in->density = density;
         C_in->type= type::UINTEGER;
         return C_in;
       }
@@ -494,10 +492,8 @@ namespace ops{
 
     size_t tail = scalar<N>(freq, lenFreq, rare, lenRare, matchOut,f,rare-startRare,freq-startFreq);
 
-    const size_t density = 0.0;
     C_in->cardinality = count + tail;
     C_in->number_of_bytes = (count+tail)*sizeof(uint32_t);
-    C_in->density = density;
     C_in->type= type::UINTEGER;
 
     return C_in;  
@@ -528,10 +524,8 @@ namespace ops{
       const uint32_t *startFreq = freq;
 
       if (lenFreq == 0 || lenRare == 0){
-        const size_t density = 0.0;
         C_in->cardinality = 0;
         C_in->number_of_bytes = (0)*sizeof(uint32_t);
-        C_in->density = density;
         C_in->type= type::UINTEGER;
         return C_in;
       }
@@ -546,10 +540,8 @@ namespace ops{
       const uint32_t *stopRare = rare + lenRare - rarespace;
       if (freq > stopFreq) {
         const size_t final_count = scalar<N>(freq, lenFreq, rare, lenRare, out,f,freq-startFreq,rare-startRare);
-        const size_t density = 0.0;
         C_in->cardinality = final_count;
         C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
-        C_in->density = density;
         C_in->type= type::UINTEGER;
         return C_in;
       }
@@ -737,10 +729,8 @@ namespace ops{
 
   FINISH_SCALAR: 
     const size_t final_count = count + scalar<N>(rare, stopRare + rarespace - rare, freq,stopFreq + freqspace - freq, out, f, rare-startRare, freq-startFreq);
-    const size_t density = 0.0;
     C_in->cardinality = final_count;
     C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
-    C_in->density = density;
     C_in->type= type::UINTEGER;
     return C_in;
   }
@@ -771,10 +761,8 @@ namespace ops{
       size_t count = 0;
 
       if (lenFreq == 0 || lenRare == 0){
-        const size_t density = 0.0;
         C_in->cardinality = 0;
         C_in->number_of_bytes = (0)*sizeof(uint32_t);
-        C_in->density = density;
         C_in->type= type::UINTEGER;
         return C_in;
       }
@@ -789,10 +777,8 @@ namespace ops{
       const uint32_t *stopRare = rare + lenRare - rarespace;
       if (freq > stopFreq) {
         const size_t final_count = scalar<N>(freq, lenFreq, rare, lenRare, out, f, freq-startFreq, rare-startRare);
-        const size_t density = 0.0;
         C_in->cardinality = final_count;
         C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
-        C_in->density = density;
         C_in->type= type::UINTEGER;
         return C_in;
       }
@@ -1003,10 +989,8 @@ namespace ops{
 
   FINISH_SCALAR: 
     const size_t final_count = count + scalar<N>(rare, stopRare + rarespace - rare, freq,stopFreq + freqspace - freq, out, f, rare-startRare, freq-startFreq);
-    const size_t density = 0.0;
     C_in->cardinality = final_count;
     C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
-    C_in->density = density;
     C_in->type= type::UINTEGER;
     return C_in;
   }
@@ -1108,12 +1092,8 @@ namespace ops{
     // intersect the tail using scalar intersection
     count += scalar<N>(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,C,f,i_a,i_b);
 
-    //XXX: Fix
-    const double density = 0.0;//((count > 0) ? ((double)count/(C[count]-C[0])) : 0.0);
-
     C_in->cardinality = count;
     C_in->number_of_bytes = count*sizeof(uint32_t);
-    C_in->density = density;
     C_in->type= type::UINTEGER;
 
     return C_in;
@@ -1198,13 +1178,9 @@ namespace ops{
 
     // intersect the tail using scalar intersection
     count += scalar<N>(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,C,f,i_a,i_b);
-
-    //XXX: Fix
-    const double density = 0.0;
     
     C_in->cardinality = count;
     C_in->number_of_bytes = count*sizeof(uint32_t);
-    C_in->density = density;
     C_in->type= type::UINTEGER;
 
     return C_in;  
