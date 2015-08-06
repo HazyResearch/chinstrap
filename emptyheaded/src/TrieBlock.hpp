@@ -42,12 +42,12 @@ struct TrieBlock{
     }
   }
 
-  static std::pair<uint32_t,uint32_t> from_binary(std::ifstream* infile){
+  static std::tuple<TrieBlock<T,size_t>,uint32_t,uint32_t> from_binary(std::ifstream* infile){
     uint32_t prev_index; uint32_t prev_data;
 
     infile->read((char *)&prev_index, sizeof(prev_index));
     infile->read((char *)&prev_data, sizeof(prev_data));
-    
+    //pull 
     /*
     outfile->write((char *)&is_sparse, sizeof(is_sparse));
     set.to_binary(outfile);

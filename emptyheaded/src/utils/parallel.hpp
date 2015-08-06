@@ -5,6 +5,115 @@
 #include <thread>
 #include <atomic>
 #include <cstring>
+#include <pthread.h>
+#include <sched.h>
+
+//Inspired (read copied) from Delite
+namespace thread_pool {
+  pthread_t* threadPool;
+  pthread_mutex_t* locks;
+  pthread_cond_t* readyConds;
+  pthread_cond_t* doneConds;
+  std::atomic<size_t> init_barrier; // barrier synchronization object
+
+  void** workPool;
+  void** argPool;
+
+  void initializeThread(size_t threadId) {
+    #ifdef __linux__
+      cpu_set_t cpu;
+      CPU_ZERO(&cpu);
+      CPU_SET(threadId, &cpu);
+      sched_setaffinity(0, sizeof(cpu_set_t), &cpu);
+
+      #ifdef __DELITE_CPP_NUMA__
+        if (numa_available() >= 0) {
+          int socketId = config->threadToSocket(threadId);
+          if (socketId < numa_num_configured_nodes()) {
+            bitmask* nodemask = numa_allocate_nodemask();
+            numa_bitmask_setbit(nodemask, socketId);
+            numa_set_membind(nodemask);
+          }
+          //VERBOSE("Binding thread %d to cpu %d, socket %d\n", threadId, threadId, socketId);
+        }
+      #endif
+    #endif
+
+    #ifdef __sun
+      processor_bind(P_LWPID, P_MYID, threadId, NULL);
+    #endif
+  }
+
+  void submitWork(size_t threadId, void *(*work) (void *), void *arg) {
+    pthread_mutex_lock(&locks[threadId]);
+    while (argPool[threadId] != NULL) {
+      pthread_cond_wait(&doneConds[threadId], &locks[threadId]);
+    }
+    workPool[threadId] = (void*)work;
+    argPool[threadId] = arg;
+    pthread_cond_signal(&readyConds[threadId]);
+    pthread_mutex_unlock(&locks[threadId]);
+  }
+
+  void* processWork(void* threadId) {
+    size_t id = (size_t)threadId;
+
+    /////////////////////////////////////////////////
+    //Per Thead Initialization code
+    //VERBOSE("Initialized thread with id %d\n", id);
+    pthread_mutex_init(&locks[id], NULL);
+    pthread_cond_init(&readyConds[id], NULL);
+    pthread_cond_init(&doneConds[id], NULL);
+    workPool[id] = NULL;
+    argPool[id] = NULL;
+    initializeThread(id);
+    void *(*work) (void *);
+    void *arg;
+    /////////////////////////////////////////////////
+
+    //don't use a barrier here because we don't want to block.
+    //tell the init code that the thread is alive and rocking
+    init_barrier.fetch_add(1);
+    while(true) {
+      pthread_mutex_lock(&locks[id]);
+      while (argPool[id] == NULL) {
+        pthread_cond_wait(&readyConds[id], &locks[id]);
+      }      
+      work = (void *(*)(void *))workPool[id];
+      workPool[id] = NULL;
+      arg = argPool[id];
+      argPool[id] = NULL;
+      pthread_cond_signal(&doneConds[id]);
+      pthread_mutex_unlock(&locks[id]);
+      work(arg);
+    }
+  }
+
+  void initializeThreadPool() {
+    threadPool = new pthread_t[NUM_THREADS];
+    locks = new pthread_mutex_t[NUM_THREADS];
+    readyConds = new pthread_cond_t[NUM_THREADS];
+    doneConds = new pthread_cond_t[NUM_THREADS];
+    workPool = new void*[NUM_THREADS];
+    argPool = new void*[NUM_THREADS];
+
+    init_barrier = 0;
+    for (size_t i=0; i<NUM_THREADS; i++) {
+      std::cout << "CREATING: " << i << std::endl; 
+      pthread_create(&threadPool[i], NULL, processWork, (void*)i);
+    }
+    while(init_barrier.load() != NUM_THREADS){}
+  }
+  void* killThread(void *args_in){
+    (void) args_in;
+    pthread_exit(NULL);
+  }
+  void deleteThreadPool() {
+    for(size_t k = 0; k < NUM_THREADS; k++) { 
+      submitWork(k,killThread,(void *)NULL);
+    }
+  }
+}
 
 namespace par{
   template<class T>
@@ -31,119 +140,35 @@ namespace par{
       }
       return init;
     }
-
   };
 
-  static std::thread* threads = NULL;
-  static void init_threads() {
-    threads = new std::thread[NUM_THREADS];
-  }
+  pthread_barrier_t barrier; // barrier synchronization object
 
   // Iterates over a range of numbers in parallel
+  void* for_body(void *args_in){
+    (void) args_in;
+    std::cout << "THREAD BODY "  << std::endl;
+    pthread_barrier_wait (&barrier); 
+    return NULL;
+  }
+
+  struct parFor {
+    size_t block_size;
+    parFor(size_t block_size_in){
+      block_size = block_size_in;
+    }
+  };
+
   template<typename F>
-  static size_t for_range(const size_t from, const size_t to, const size_t block_size, F body) {
-     const size_t range_len = to - from;
-     //std::cout << range_len << " " << block_size << std::endl;
-     const size_t real_num_threads = std::min(range_len / block_size + 1, NUM_THREADS);
-     //std::cout << "Range length: " << range_len << " Threads: " << real_num_threads << std::endl;
+  void for_range(const size_t from, const size_t to, const size_t block_size, F body) {
+    const size_t range_len = to - from;
+    parFor pf(block_size);
 
-     if(real_num_threads == 1) {
-        for(size_t i = from; i < to; i++) {
-           body(0, i);
-        }
-     }
-     else {
-        auto t_begin = debug::start_clock();
-        double* thread_times = NULL;
-
-#ifdef ENABLE_PRINT_THREAD_TIMES
-        thread_times = new double[real_num_threads];
-#endif
-        std::thread* threads = new std::thread[real_num_threads];
-        const size_t range_len = to - from;
-        std::atomic<size_t> next_work;
-        next_work = 0;
-
-        for(size_t k = 0; k < real_num_threads; k++) {
-           threads[k] = std::thread([&block_size](std::chrono::time_point<std::chrono::system_clock> t_begin, double* thread_times, int k, std::atomic<size_t>* next_work, size_t offset, size_t range_len, std::function<void(size_t, size_t)> body) -> void {
-              size_t local_block_size = block_size;
-
-              while(true) {
-                 size_t work_start = next_work->fetch_add(local_block_size, std::memory_order_relaxed);
-                 if(work_start > range_len)
-                    break;
-
-                 size_t work_end = std::min(work_start + local_block_size, range_len);
-                 local_block_size = block_size;//100 + (work_start / range_len) * block_size;
-                 for(size_t j = work_start; j < work_end; j++) {
-                     body(k, offset + j);
-                 }
-              }
-
-
-#ifdef ENABLE_PRINT_THREAD_TIMES
-              thread_times[k] = debug::stop_clock(t_begin);
-#else
-              (void) t_begin;
-              (void) thread_times;
-#endif
-           }, t_begin, thread_times, k, &next_work, from, range_len, body);
-        }
-
-        for(size_t k = 0; k < real_num_threads; k++) {
-           threads[k].join();
-        }
-
-#ifdef ENABLE_PRINT_THREAD_TIMES
-        for(size_t k = 0; k < real_num_threads; k++){
-            std::cout << "Execution time of thread " << k << ": " << thread_times[k] << std::endl;
-        }
-        delete[] thread_times;
-#endif
-     }
-
-     return real_num_threads;
-  }
-  static size_t for_range(const size_t from, const size_t to, const size_t block_size,
-    std::function<void(size_t)> setup,
-    std::function<void(size_t, size_t)> body,
-    std::function<void(size_t)> tear_down) {
-
-    #ifdef ENABLE_PRINT_THREAD_TIMES
-    double setup1 = debug::start_clock();
-    #endif
-
-    for(size_t i = 0; i < NUM_THREADS; i++){
-      setup(i);
+    pthread_barrier_init (&barrier, NULL, NUM_THREADS+1);
+    for(size_t k = 0; k < NUM_THREADS; k++) { 
+      thread_pool::submitWork(k,for_body,(void *)(&pf));
     }
-
-    #ifdef ENABLE_PRINT_THREAD_TIMES
-    debug::stop_clock("PARALLEL SETUP",setup1);
-    #endif
-
-    size_t real_num_threads = for_range(from,to,block_size,body);
-
-    #ifdef ENABLE_PRINT_THREAD_TIMES
-    double td = debug::start_clock();
-    #endif
-
-    for(size_t i = 0; i < NUM_THREADS; i++){
-      tear_down(i);
-    }
-
-    #ifdef ENABLE_PRINT_THREAD_TIMES
-    debug::stop_clock("PARALLEL TEAR DOWN",td);
-    #endif
-
-    return real_num_threads;
-  }
-
-  static std::vector<uint32_t> range(uint32_t max) {
-    std::vector<uint32_t> result;
-    result.reserve(max);
-    for(uint32_t i = 0; i < max; i++)
-      result.push_back(i);
-    return result;
+    pthread_barrier_wait (&barrier);
   }
 }
 #endif
