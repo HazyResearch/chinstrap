@@ -24,12 +24,50 @@ struct TrieBlock{
     is_sparse = sparse;
   }
 
-  void init_pointers(size_t tid, allocator::memory<uint8_t> *allocator_in, const size_t cardinality, const size_t range, const bool is_sparse_in){
-    is_sparse = is_sparse_in;
+  /*
+  * Write to a binary file. The prev_index and prev_data allow us to set the pointers
+  * from the previous level to the current level. We write out these first, followed
+  * by the set data then next the pointers to the next level.
+  */
+  void to_binary(std::ofstream* outfile, const uint32_t prev_index, const uint32_t prev_data){
+    std::cout << prev_index << " " << prev_data << std::endl;
+    outfile->write((char *)&prev_index, sizeof(prev_index));
+    outfile->write((char *)&prev_data, sizeof(prev_data));
+    set.to_binary(outfile);
+    outfile->write((char *)&is_sparse, sizeof(is_sparse));
     if(!is_sparse){
-      next_level = (TrieBlock<T,F>**)allocator_in->get_next(tid, sizeof(TrieBlock<T,F>*)*(range+1) );
+      outfile->write((char *)&(set.range), sizeof(set.range));
     } else{
-      next_level = (TrieBlock<T,F>**)allocator_in->get_next(tid, sizeof(TrieBlock<T,F>*)*cardinality);
+      outfile->write((char *)&(set.cardinality), sizeof(set.cardinality));
+    }
+  }
+
+  static std::pair<uint32_t,uint32_t> from_binary(std::ifstream* infile){
+    uint32_t prev_index; uint32_t prev_data;
+
+    infile->read((char *)&prev_index, sizeof(prev_index));
+    infile->read((char *)&prev_data, sizeof(prev_data));
+    
+    /*
+    outfile->write((char *)&is_sparse, sizeof(is_sparse));
+    set.to_binary(outfile);
+    if(!is_sparse){
+      outfile->write((char *)&(set.range), sizeof(set.range));
+    } else{
+      outfile->write((char *)&(set.cardinality), sizeof(set.cardinality));
+    }
+    */
+    return std::pair<uint32_t,uint32_t>(prev_index,prev_data);
+  }
+
+  //refactor this code
+
+  void init_pointers(const size_t tid, allocator::memory<uint8_t> *allocator_in){
+    is_sparse = (set.range == 0) ? ((double)set.cardinality/(double)set.range) > (1.0/256.0) : true;
+    if(!is_sparse){
+      next_level = (TrieBlock<T,F>**)allocator_in->get_next(tid, sizeof(TrieBlock<T,F>*)*(set.range+1) );
+    } else{
+      next_level = (TrieBlock<T,F>**)allocator_in->get_next(tid, sizeof(TrieBlock<T,F>*)*set.cardinality);
     }
   }
 

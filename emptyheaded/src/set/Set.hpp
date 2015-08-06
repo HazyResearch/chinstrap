@@ -169,6 +169,7 @@ class Set{
 
     Set<uinteger> decode(uint32_t *buffer);
     void copy_from(Set<T> src);
+    void to_binary(std::ofstream* outfile); 
 
     //Constructors
     static Set<T> from_array(uint8_t *set_data, uint32_t *array_data, size_t data_size);
@@ -187,6 +188,22 @@ inline void Set<T>::copy_from(Set<T> src){
   number_of_bytes = src.number_of_bytes;
   type = src.type;
 }
+
+///////////////////////////////////////////////////////////////////////////////
+//Write a set in a binary format to disk
+///////////////////////////////////////////////////////////////////////////////
+template <class T>
+inline void Set<T>::to_binary(std::ofstream* outfile){ 
+  outfile->write((char *)&cardinality, sizeof(cardinality));
+  outfile->write((char *)&range, sizeof(range));
+  outfile->write((char *)&number_of_bytes, sizeof(number_of_bytes));
+  outfile->write((char *)&type, sizeof(type));
+
+  for(size_t i = 0; i < number_of_bytes; i++){
+    outfile->write((char *)&data, sizeof(data[i]));
+  }
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 //DECODE ARRAY
 ///////////////////////////////////////////////////////////////////////////////

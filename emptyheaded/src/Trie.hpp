@@ -48,8 +48,91 @@ struct Trie{
 
   template<typename F>
   static Trie<T>* build(std::vector<std::vector<uint32_t>> *attr_in, F f);
+
+  void to_binary(const std::string path);
+  static void from_binary(std::string path, size_t num_levels_in);
 };
 
+template<class T>
+void recursive_visit(
+  const size_t tid,
+  TrieBlock<T,size_t> *current, 
+  const size_t level, 
+  const size_t num_levels,
+  const uint32_t prev_index,
+  const uint32_t prev_data, 
+  std::vector<std::vector<std::ofstream*>>* writefiles){
+
+  current->to_binary(writefiles->at(level).at(tid),prev_index,prev_data);
+  current->set.foreach_index([&](uint32_t a_i, uint32_t a_d){
+    //if not done recursing and we have data
+    if(level+1 != num_levels && current->get_block(a_i,a_d) != NULL){
+      recursive_visit(tid,current->get_block(a_i,a_d),level+1,num_levels,a_i,a_d,writefiles);
+    }
+  });
+}
+
+/*
+* Write the trie to a binary file 
+*/
+template<class T>
+void Trie<T>::to_binary(const std::string path){
+  //open files for writing
+  std::vector<std::vector<std::ofstream*>> writefiles;
+  for(size_t l = 0; l < num_levels; l++){
+    std::vector<std::ofstream*> myv;
+    for(size_t i = 0; i < NUM_THREADS; i++){
+      std::ofstream *writefile = new std::ofstream();
+      std::string file = path+std::to_string(l)+std::string("_")+std::to_string(i)+".bin";
+      writefile->open(file, std::ios::binary | std::ios::out);
+      myv.push_back(writefile);
+    }
+    writefiles.push_back(myv);
+  }
+
+  head->to_binary(writefiles.at(0).at(0),0,0);
+  //dump the set contents
+  const Set<T> A = head->set;
+  A.par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d){
+    if(head->get_block(a_i,a_d) != NULL){
+      recursive_visit<T>(tid,head->get_block(a_i,a_d),1,num_levels,a_i,a_d,&writefiles);
+    }
+  });
+
+  //close the files
+  for(size_t l = 0; l < num_levels; l++){
+    for(size_t i = 0; i < NUM_THREADS; i++){
+      writefiles.at(l).at(i)->close();
+    }
+  }
+}
+
+template<class T>
+void Trie<T>::from_binary(const std::string path, size_t num_levels_in){
+  //open files for reading
+  std::vector<std::vector<std::ifstream*>> infiles;
+  for(size_t l = 0; l < num_levels_in; l++){
+    std::vector<std::ifstream*> myv;
+    for(size_t i = 0; i < NUM_THREADS; i++){
+      std::ifstream *infile = new std::ifstream();
+      std::string file = path+std::to_string(l)+std::string("_")+std::to_string(i)+".bin";
+      infile->open(file, std::ios::binary | std::ios::in);
+      myv.push_back(infile);
+    }
+    infiles.push_back(myv);
+  }
+
+  auto tup = TrieBlock<T,size_t>::from_binary(infiles.at(0).at(0));
+  std::cout << "TUP: " << tup.first << " " << tup.second << std::endl;
+ 
+  //close the files
+  for(size_t l = 0; l < num_levels_in; l++){
+    for(size_t i = 0; i < NUM_THREADS; i++){
+      infiles.at(l).at(i)->close();
+    }
+  }
+
+}
 /*
 * Given a range of values figure out the distinct values to go in the set.
 */
@@ -137,10 +220,9 @@ void recursive_build(const size_t index, const size_t start, const size_t end, c
   prev_block->set_block(index,data,tail);
 
   if(level < (num_levels-1)){
+    tail->init_pointers(tid,data_allocator);
     auto tup = produce_ranges(start,end,ranges_buffer->at(level).get_memory(tid),set_data_buffer->at(level).get_memory(tid),indicies,&attr_in->at(level));
     const size_t set_size = std::get<0>(tup);
-    const size_t set_range = std::get<1>(tup);
-    tail->init_pointers(0,data_allocator,set_size,set_range,(((double)set_size)/set_range) > common::bitset_req);
     for(size_t i = 0; i < set_size; i++){
       const size_t next_start = ranges_buffer->at(level).get_memory(tid)[i];
       const size_t next_end = ranges_buffer->at(level).get_memory(tid)[i+1];
@@ -177,6 +259,8 @@ inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, F f)
     set_data_buffer->push_back(sd); 
   }
 
+  assert(num_levels_in != 0  && num_rows_post_filter != 0);
+
   //Find the ranges for distinct values in the head
   auto tup = produce_ranges(0,
     num_rows_post_filter,
@@ -189,7 +273,7 @@ inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, F f)
 
   //Build the head set.
   TrieBlock<T,size_t>* new_head = build_block<TrieBlock<T,size_t>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer->at(0).get_memory(0));
-  new_head->init_pointers(0,&data_allocator,head_size,head_range,false);
+  new_head->init_pointers(0,&data_allocator);
 
   par::for_range(0,head_range,100,[&](size_t tid, size_t i){
     (void) tid;
