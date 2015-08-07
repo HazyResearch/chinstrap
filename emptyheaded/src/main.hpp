@@ -93,6 +93,8 @@ int main(int argc, char **argv) {
 }
 #elif !defined GENERATED
 int main (int argc, char* argv[]) {
+  thread_pool::initializeThreadPool();
+
   std::tuple<std::string,std::string> tup_in = parse(argc,argv);
   std::string l = std::get<0>(tup_in);
   std::string p = std::get<1>(tup_in);
@@ -123,6 +125,8 @@ int main (int argc, char* argv[]) {
     std::cout << "No valid layout entered" << std::endl;
     abort ();
   }
+  
+  thread_pool::deleteThreadPool();
   return 0;
 }
 #endif

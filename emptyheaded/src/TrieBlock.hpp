@@ -30,11 +30,10 @@ struct TrieBlock{
   * by the set data then next the pointers to the next level.
   */
   void to_binary(std::ofstream* outfile, const uint32_t prev_index, const uint32_t prev_data){
-    std::cout << prev_index << " " << prev_data << std::endl;
     outfile->write((char *)&prev_index, sizeof(prev_index));
     outfile->write((char *)&prev_data, sizeof(prev_data));
-    set.to_binary(outfile);
     outfile->write((char *)&is_sparse, sizeof(is_sparse));
+    set.to_binary(outfile);
     if(!is_sparse){
       outfile->write((char *)&(set.range), sizeof(set.range));
     } else{
@@ -42,22 +41,32 @@ struct TrieBlock{
     }
   }
 
-  static std::tuple<TrieBlock<T,size_t>,uint32_t,uint32_t> from_binary(std::ifstream* infile){
+  static std::tuple<TrieBlock<T,size_t>*,uint32_t,uint32_t> from_binary(std::ifstream* infile, 
+      allocator::memory<uint8_t> *allocator_in, 
+      const size_t tid){
+    
     uint32_t prev_index; uint32_t prev_data;
 
     infile->read((char *)&prev_index, sizeof(prev_index));
     infile->read((char *)&prev_data, sizeof(prev_data));
-    //pull 
-    /*
-    outfile->write((char *)&is_sparse, sizeof(is_sparse));
-    set.to_binary(outfile);
-    if(!is_sparse){
-      outfile->write((char *)&(set.range), sizeof(set.range));
+
+    //pull from an allocator and create a trieblock
+    TrieBlock<T,size_t>* output_block = new (
+              allocator_in->get_next(tid, sizeof(TrieBlock<T, size_t>)))
+              TrieBlock<T, size_t>();
+
+    infile->read((char *)&output_block->is_sparse, sizeof(output_block->is_sparse));
+    
+    output_block->set = *Set<T>::from_binary(infile,allocator_in,tid);
+    
+    std::cout << output_block->is_sparse << std::endl;
+
+    if(!output_block->is_sparse){
+      infile->read((char *)&(output_block->set.range), sizeof(output_block->set.range));
     } else{
-      outfile->write((char *)&(set.cardinality), sizeof(set.cardinality));
+      infile->read((char *)&(output_block->set.cardinality), sizeof(output_block->set.cardinality));
     }
-    */
-    return std::pair<uint32_t,uint32_t>(prev_index,prev_data);
+    return std::tuple<TrieBlock<T,size_t>*,uint32_t,uint32_t>(output_block,prev_index,prev_data);
   }
 
   //refactor this code
