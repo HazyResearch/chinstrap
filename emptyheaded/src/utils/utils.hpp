@@ -9,7 +9,7 @@
 #define UTILS_H
 
 #include "io.hpp"
-#include "parallel.hpp"
+#include "parallel.cpp"
 #include "allocator.hpp"
 //#include "pcm_helper.hpp"
 #include "debug.hpp"

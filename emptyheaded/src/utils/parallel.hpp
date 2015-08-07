@@ -20,27 +20,21 @@ namespace thread_pool {
   void** argPool;
 
   void initializeThread(size_t threadId) {
-    #ifdef __linux__
-      cpu_set_t cpu;
-      CPU_ZERO(&cpu);
-      CPU_SET(threadId, &cpu);
-      sched_setaffinity(0, sizeof(cpu_set_t), &cpu);
+    cpu_set_t cpu;
+    CPU_ZERO(&cpu);
+    CPU_SET(threadId, &cpu);
+    sched_setaffinity(0, sizeof(cpu_set_t), &cpu);
 
-      #ifdef __DELITE_CPP_NUMA__
-        if (numa_available() >= 0) {
-          int socketId = config->threadToSocket(threadId);
-          if (socketId < numa_num_configured_nodes()) {
-            bitmask* nodemask = numa_allocate_nodemask();
-            numa_bitmask_setbit(nodemask, socketId);
-            numa_set_membind(nodemask);
-          }
-          //VERBOSE("Binding thread %d to cpu %d, socket %d\n", threadId, threadId, socketId);
+    #ifdef __DELITE_CPP_NUMA__
+      if (numa_available() >= 0) {
+        int socketId = config->threadToSocket(threadId);
+        if (socketId < numa_num_configured_nodes()) {
+          bitmask* nodemask = numa_allocate_nodemask();
+          numa_bitmask_setbit(nodemask, socketId);
+          numa_set_membind(nodemask);
         }
-      #endif
-    #endif
-
-    #ifdef __sun
-      processor_bind(P_LWPID, P_MYID, threadId, NULL);
+        //VERBOSE("Binding thread %d to cpu %d, socket %d\n", threadId, threadId, socketId);
+      }
     #endif
   }
 
@@ -66,9 +60,10 @@ namespace thread_pool {
     pthread_cond_init(&doneConds[id], NULL);
     workPool[id] = NULL;
     argPool[id] = NULL;
-    initializeThread(id);
     void *(*work) (void *);
     void *arg;
+
+    initializeThread(id);
     /////////////////////////////////////////////////
 
     //don't use a barrier here because we don't want to block.
@@ -112,6 +107,12 @@ namespace thread_pool {
     for(size_t k = 0; k < NUM_THREADS; k++) { 
       submitWork(k,killThread,(void *)NULL);
     }
+    delete[] threadPool;
+    delete[] locks;
+    delete[] readyConds;
+    delete[] doneConds;
+    delete[] workPool;
+    delete[] argPool;
   }
 }
 
@@ -145,28 +146,41 @@ namespace par{
   pthread_barrier_t barrier; // barrier synchronization object
 
   // Iterates over a range of numbers in parallel
-  void* for_body(void *args_in){
-    (void) args_in;
-    std::cout << "THREAD BODY "  << std::endl;
-    pthread_barrier_wait (&barrier); 
+  template<class F>
+  void* general_body(void *args_in){
+    F* arg = (F*)args_in;
+    arg->run();
+    pthread_barrier_wait(&barrier); 
     return NULL;
   }
 
   struct parFor {
-    size_t block_size;
-    parFor(size_t block_size_in){
-      block_size = block_size_in;
+    size_t tid;
+    static std::atomic<size_t> next_work;
+    static size_t block_size;
+    static size_t range_len;
+    static size_t offset;
+    static std::function<void(size_t, size_t)> body;
+    parFor(size_t tid_in){
+      tid = tid_in;
     }
+    void* run();
   };
 
   template<typename F>
   void for_range(const size_t from, const size_t to, const size_t block_size, F body) {
     const size_t range_len = to - from;
-    parFor pf(block_size);
-
+    const size_t offset = from;
     pthread_barrier_init (&barrier, NULL, NUM_THREADS+1);
+
+    parFor::next_work = 0;
+    parFor::block_size = block_size;
+    parFor::range_len = range_len;
+    parFor::offset = from;
+    parFor::body = body;
     for(size_t k = 0; k < NUM_THREADS; k++) { 
-      thread_pool::submitWork(k,for_body,(void *)(&pf));
+      parFor* pf = new parFor(k);
+      thread_pool::submitWork(k,general_body<parFor>,(void *)(pf));
     }
     pthread_barrier_wait (&barrier);
   }
