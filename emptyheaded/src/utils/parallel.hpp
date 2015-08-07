@@ -48,9 +48,10 @@ namespace par{
   size_t for_range(const size_t from, const size_t to, const size_t block_size, F body) {
     const size_t range_len = to - from;
     
+    const size_t actual_block_size = (block_size > range_len) ? 1:block_size; 
     thread_pool::init_threads();
     parFor::next_work = 0;
-    parFor::block_size = block_size;
+    parFor::block_size = actual_block_size;
     parFor::range_len = range_len;
     parFor::offset = from;
     parFor::body = body;
@@ -59,6 +60,7 @@ namespace par{
       thread_pool::submitWork(k,thread_pool::general_body<parFor>,(void *)(pf));
     }
     thread_pool::join_threads();
+
     return 1;
   }
 }

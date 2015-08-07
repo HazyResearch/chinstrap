@@ -34,11 +34,6 @@ struct TrieBlock{
     outfile->write((char *)&prev_data, sizeof(prev_data));
     outfile->write((char *)&is_sparse, sizeof(is_sparse));
     set.to_binary(outfile);
-    if(!is_sparse){
-      outfile->write((char *)&(set.range), sizeof(set.range));
-    } else{
-      outfile->write((char *)&(set.cardinality), sizeof(set.cardinality));
-    }
   }
 
   static std::tuple<TrieBlock<T,size_t>*,uint32_t,uint32_t> from_binary(std::ifstream* infile, 
@@ -58,14 +53,13 @@ struct TrieBlock{
     infile->read((char *)&output_block->is_sparse, sizeof(output_block->is_sparse));
     
     output_block->set = *Set<T>::from_binary(infile,allocator_in,tid);
-    
-    std::cout << output_block->is_sparse << std::endl;
+    /*
+    std::cout << "reading binary: " << tid << std::endl;
+    output_block->set.foreach([&](uint32_t data){
+      std::cout << data << std::endl;
+    });
+    */
 
-    if(!output_block->is_sparse){
-      infile->read((char *)&(output_block->set.range), sizeof(output_block->set.range));
-    } else{
-      infile->read((char *)&(output_block->set.cardinality), sizeof(output_block->set.cardinality));
-    }
     return std::tuple<TrieBlock<T,size_t>*,uint32_t,uint32_t>(output_block,prev_index,prev_data);
   }
 

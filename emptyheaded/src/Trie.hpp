@@ -51,7 +51,7 @@ struct Trie{
   void print();
   void recursive_print(TrieBlock<T,size_t> *current, const size_t level, const size_t num_levels,std::vector<uint32_t>* tuple);
   void to_binary(const std::string path);
-  static void from_binary(std::string path, size_t num_levels_in);
+  static Trie<T>* from_binary(std::string path, size_t num_levels_in);
 };
 
 template<class T>
@@ -111,13 +111,14 @@ void recursive_build_binary(
   auto tup = TrieBlock<T,size_t>::from_binary(infiles->at(level).at(tid),allocator_in,tid);
 
   TrieBlock<T,size_t>* current = std::get<0>(tup);
-  uint32_t index = std::get<1>(tup);
-  uint32_t data = std::get<2>(tup);
+  const uint32_t index = std::get<1>(tup);
+  const uint32_t data = std::get<2>(tup);
   prev->set_block(index,data,current);
 
-  if(level+1 != num_levels)
+  if(level+1 == num_levels)
     return;
 
+  current->init_pointers(tid,allocator_in);
   for(size_t i = 0; i < current->set.cardinality; i++){
     recursive_build_binary<T>(tid,current,level+1,num_levels,infiles,allocator_in);
   }
@@ -174,7 +175,7 @@ void Trie<T>::to_binary(const std::string path){
 }
 
 template<class T>
-void Trie<T>::from_binary(const std::string path, size_t num_levels_in){
+Trie<T>* Trie<T>::from_binary(const std::string path, size_t num_levels_in){
   //open files for reading
   std::vector<std::vector<std::ifstream*>> infiles;
   for(size_t l = 0; l < num_levels_in; l++){
@@ -190,19 +191,14 @@ void Trie<T>::from_binary(const std::string path, size_t num_levels_in){
 
   allocator::memory<uint8_t> *allocator_in = new allocator::memory<uint8_t>(10000);
   auto tup = TrieBlock<T,size_t>::from_binary(infiles.at(0).at(0),allocator_in,0);
-
-  TrieBlock<T,size_t>* head = std::get<0>(tup);
-  uint32_t index = std::get<1>(tup);
-  uint32_t data = std::get<2>(tup);
-  (void) index; (void) data; 
-  
-  /*
+  TrieBlock<T,size_t>* head = std::get<0>(tup);  
+  head->init_pointers(0,allocator_in);
   const Set<T> A = head->set;
+  //this is not a par for each this needs to be 1 per thread statically scheduled
   A.par_foreach([&](size_t tid, uint32_t a_d){
     (void) a_d;
     recursive_build_binary<T>(tid,head,1,num_levels_in,&infiles,allocator_in);
   });
-  */
 
   //close the files
   for(size_t l = 0; l < num_levels_in; l++){
@@ -211,6 +207,7 @@ void Trie<T>::from_binary(const std::string path, size_t num_levels_in){
     }
   }
 
+  return new Trie<T>(head,num_levels_in);
 }
 /*
 * Given a range of values figure out the distinct values to go in the set.
