@@ -19,4 +19,12 @@ namespace par{
     }
     return NULL;
   }
+
+  std::function<void(size_t, size_t)> staticParFor::body;
+  void* staticParFor::run(){
+     for(size_t j = work_start; j < work_end; j++) {
+        staticParFor::body(tid, j);
+     }
+    return NULL;
+  }
 }
