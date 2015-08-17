@@ -167,6 +167,11 @@ class Set{
       return T::par_foreach_index(f, data, cardinality, number_of_bytes, type);
     }
 
+    template<typename F>
+    size_t static_par_foreach_index(F f) const {
+      return T::static_par_foreach_index(f, data, cardinality, number_of_bytes, type);
+    }
+
     Set<uinteger> decode(uint32_t *buffer);
     void copy_from(Set<T> src);
     void to_binary(std::ofstream* outfile); 

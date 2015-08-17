@@ -53,6 +53,14 @@ class hybrid{
       const type::layout t);
 
     template<typename F>
+    static size_t static_par_foreach_index(
+      F f,
+      const uint8_t *data_in,
+      const size_t cardinality,
+      const size_t number_of_bytes,
+      const type::layout t);
+
+    template<typename F>
     static size_t par_foreach_index(
       F f,
       const uint8_t *data_in,
@@ -216,6 +224,31 @@ inline size_t hybrid::par_foreach_index(
       break;
     case type::BLOCK_BITSET :
       return block_bitset::par_foreach_index(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
+      break;
+    default:
+      return 0;
+      break;
+  }
+}
+
+template<typename F>
+inline size_t hybrid::static_par_foreach_index(
+      F f,
+      const uint8_t *data_in,
+      const size_t cardinality,
+      const size_t number_of_bytes,
+      const type::layout t) {
+  switch(t){
+    case type::UINTEGER :
+      return uinteger::static_par_foreach_index(f,data_in,cardinality,number_of_bytes,type::UINTEGER);
+      break;
+    case type::RANGE_BITSET :
+      return range_bitset::static_par_foreach_index(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
+      break;
+    case type::BLOCK_BITSET :
+      std::cout << "ERROR" << std::endl;
+      exit(1);
+      //return block_bitset::par_foreach_index(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
       break;
     default:
       return 0;

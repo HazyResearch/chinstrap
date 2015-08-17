@@ -160,7 +160,8 @@ void Trie<T>::to_binary(const std::string path){
   head->to_binary(writefiles.at(0).at(0),0,0);
   //dump the set contents
   const Set<T> A = head->set;
-  A.par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d){
+  std::cout << "WRITING TO BINARY" << std::endl;
+  A.static_par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d){
     if(head->get_block(a_i,a_d) != NULL){
       recursive_visit<T>(tid,head->get_block(a_i,a_d),1,num_levels,a_i,a_d,&writefiles);
     }
@@ -194,9 +195,9 @@ Trie<T>* Trie<T>::from_binary(const std::string path, size_t num_levels_in){
   TrieBlock<T,size_t>* head = std::get<0>(tup);  
   head->init_pointers(0,allocator_in);
   const Set<T> A = head->set;
-  //this is not a par for each this needs to be 1 per thread statically scheduled
-  A.par_foreach([&](size_t tid, uint32_t a_d){
-    (void) a_d;
+  //use the same parallel call so we read in properly
+  A.static_par_foreach_index([&](size_t tid, uint32_t a_d, uint32_t a_i){
+    (void) a_d; (void) a_i;
     recursive_build_binary<T>(tid,head,1,num_levels_in,&infiles,allocator_in);
   });
 
@@ -351,6 +352,7 @@ inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, F f)
   TrieBlock<T,size_t>* new_head = build_block<TrieBlock<T,size_t>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer->at(0).get_memory(0));
   new_head->init_pointers(0,&data_allocator);
 
+  std::cout << "par for" << std::endl;
   par::for_range(0,head_range,100,[&](size_t tid, size_t i){
     (void) tid;
     new_head->next_level[i] = NULL;
@@ -365,7 +367,6 @@ inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, F f)
 
     recursive_build<TrieBlock<T,size_t>,T>(i,start,end,data,new_head,cur_level,num_levels_in,tid,attr_in,
       &data_allocator,num_rows,ranges_buffer,set_data_buffer,indicies);
-
   });
   
   for(size_t i = 0; i < num_levels_in; i++){

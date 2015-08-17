@@ -12,7 +12,9 @@ namespace par{
        if(work_start > parFor::range_len)
           break;
 
-       const size_t work_end = std::min(work_start + parFor::block_size, parFor::range_len);
+       const size_t work_end = std::min(parFor::offset + work_start + parFor::block_size, parFor::range_len);
+       //std::cout << tid << " " << work_start << " " << work_end << " " << parFor::range_len << std::endl;
+
        for(size_t j = work_start; j < work_end; j++) {
           parFor::body(tid, parFor::offset + j);
        }

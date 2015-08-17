@@ -50,6 +50,14 @@ class uinteger{
       const type::layout t);
 
     template<typename F>
+    static size_t static_par_foreach_index(
+      F f,
+      const uint8_t *data_in,
+      const size_t cardinality,
+      const size_t number_of_bytes,
+      const type::layout t);
+
+    template<typename F>
     static size_t par_foreach_index(
       F f,
       const uint8_t *data_in,
@@ -151,6 +159,23 @@ inline size_t uinteger::par_foreach_index(
         f(tid, (uint32_t)i, data[i]);
      });
 }
+
+template<typename F>
+inline size_t uinteger::static_par_foreach_index(
+      F f,
+      const uint8_t *data_in,
+      const size_t cardinality,
+      const size_t number_of_bytes,
+      const type::layout t) {
+   (void) number_of_bytes; (void) t; (void) data_in;
+
+   const uint32_t * const data = (uint32_t*) data_in;
+   return par::for_range(0, cardinality,
+     [&](size_t tid, size_t i) {
+        f(tid, (uint32_t)i, data[i]);
+     });
+}
+
 inline std::tuple<size_t,bool> uinteger::find(uint32_t start_index,
   uint32_t key, 
   const uint8_t *data_in, 

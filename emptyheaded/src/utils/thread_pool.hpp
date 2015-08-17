@@ -22,7 +22,7 @@ namespace thread_pool {
   void* general_body(void *args_in){
     F* arg = (F*)args_in;
     arg->run();
-    pthread_barrier_wait(&barrier); 
+    pthread_barrier_wait(&barrier);
     return NULL;
   }
   //init a thread barrier
@@ -32,6 +32,7 @@ namespace thread_pool {
   //join threads on the thread barrier
   void join_threads(){
     pthread_barrier_wait(&barrier);
+    pthread_barrier_destroy(&barrier);
   }
 
   ////////////////////////////////////////////////////
@@ -45,7 +46,6 @@ namespace thread_pool {
   pthread_mutex_t* locks;
   pthread_cond_t* readyConds;
   pthread_cond_t* doneConds;
-  std::atomic<size_t> init_barrier; // barrier synchronization object
 
   void** workPool;
   void** argPool;
@@ -81,7 +81,7 @@ namespace thread_pool {
   }
 
   void* processWork(void* threadId) {
-    size_t id = (size_t)threadId;
+    const size_t id = (size_t)threadId;
 
     /////////////////////////////////////////////////
     //Per Thead Initialization code
@@ -97,9 +97,8 @@ namespace thread_pool {
     initializeThread(id);
     /////////////////////////////////////////////////
 
-    //don't use a barrier here because we don't want to block.
     //tell the init code that the thread is alive and rocking
-    init_barrier.fetch_add(1);
+    pthread_barrier_wait(&barrier);
     while(true) {
       pthread_mutex_lock(&locks[id]);
       while (argPool[id] == NULL) {
@@ -123,12 +122,13 @@ namespace thread_pool {
     workPool = new void*[NUM_THREADS];
     argPool = new void*[NUM_THREADS];
 
-    init_barrier = 0;
+    pthread_barrier_init (&barrier, NULL, NUM_THREADS+1);
     for (size_t i=0; i<NUM_THREADS; i++) {
       //std::cout << "CREATING: " << i << std::endl; 
       pthread_create(&threadPool[i], NULL, processWork, (void*)i);
     }
-    while(init_barrier.load() != NUM_THREADS){}
+    pthread_barrier_wait(&barrier);
+    pthread_barrier_destroy(&barrier);
   }
   void* killThread(void *args_in){
     (void) args_in;

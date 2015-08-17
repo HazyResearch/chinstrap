@@ -64,6 +64,14 @@ class range_bitset{
       const size_t cardinality,
       const size_t number_of_bytes,
       const type::layout t);
+
+    template<typename F>
+    static size_t static_par_foreach_index(
+      F f,
+      const uint8_t* A,
+      const size_t cardinality,
+      const size_t number_of_bytes,
+      const type::layout t);
 };
 inline size_t range_bitset::get_number_of_words(size_t num_bytes){
   return ((num_bytes-sizeof(uint64_t))/(BYTES_PER_WORD+sizeof(uint32_t)));
@@ -270,6 +278,41 @@ inline size_t range_bitset::par_foreach_index(
 
   return 1;
 }
+
+// Iterates over set applying a lambda in parallel.
+template<typename F>
+inline size_t range_bitset::static_par_foreach_index(
+      F f,
+      const uint8_t* A,
+      const size_t cardinality,
+      const size_t number_of_bytes,
+      const type::layout t) {
+   (void) t; (void) cardinality;
+
+  if(number_of_bytes > 0){
+    const size_t num_data_words = get_number_of_words(number_of_bytes);
+    const uint64_t offset = ((uint64_t*)A)[0];
+    const uint64_t* A64 = (uint64_t*)(A+sizeof(uint64_t));
+    const uint32_t* A32_index = (uint32_t*)(A64+num_data_words);
+
+    return par::for_range(0, num_data_words,
+           [&](size_t tid, size_t i) {
+              const uint64_t cur_word = A64[i];
+              uint32_t index = A32_index[i];
+              if(cur_word != 0) {
+                for(size_t j = 0; j < BITS_PER_WORD; j++){
+                  const uint32_t curr_nb = BITS_PER_WORD*(i+offset) + j;
+                  if((cur_word >> j) % 2) {
+                    f(tid,index++,curr_nb);
+                  }
+                }
+              }
+           });
+  }
+
+  return 1;
+}
+
 inline size_t range_bitset::get_num_set(const uint32_t key, const uint64_t data, const uint32_t offset){
   const uint64_t masked_word = data & (masks::find_mask[(key%BITS_PER_WORD)]);
   return _mm_popcnt_u64(masked_word) + offset;
