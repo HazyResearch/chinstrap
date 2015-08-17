@@ -40,42 +40,44 @@ template<class T>
 struct Trie{
   size_t num_levels;
   TrieBlock<T,size_t>* head;
-  std::vector<Encoding<long>*>* encodings;
 
-  Trie<T>(TrieBlock<T,size_t>* head_in, std::vector<Encoding<long>*>* encodings_in, size_t num_levels_in){
+  Trie<T>(TrieBlock<T,size_t>* head_in, size_t num_levels_in){
     num_levels = num_levels_in;
     head = head_in;
-    encodings = encodings_in;
   };
 
   template<typename F>
-  static Trie<T>* build(std::vector<std::vector<uint32_t>>* attr_in, std::vector<Encoding<long>*>* encodings_in, F f);
-  void print();
-  void recursive_print(TrieBlock<T,size_t> *current, const size_t level, const size_t num_levels,std::vector<uint32_t>* tuple);
+  static Trie<T>* build(std::vector<std::vector<uint32_t>>* attr_in, F f);
+
+  template<typename F>
+  void foreach(const F body);
+  
+  template<typename F>
+  void recursive_foreach(TrieBlock<T,size_t> *current, const size_t level, const size_t num_levels,std::vector<uint32_t>* tuple, const F body);
   void to_binary(const std::string path);
   static Trie<T>* from_binary(std::string path);
 };
 
-template<class T>
-void Trie<T>::recursive_print(
+template<class T> template <typename F>
+void Trie<T>::recursive_foreach(
   TrieBlock<T,size_t> *current, 
   const size_t level, 
   const size_t num_levels,
-  std::vector<uint32_t>* tuple){
+  std::vector<uint32_t>* tuple,
+  const F body){
 
   if(level+1 == num_levels){
     current->set.foreach([&](uint32_t a_d){
-      for(size_t i = 0 ; i< tuple->size(); i++){
-        std::cout << tuple->at(i) << "\t";
-      }
-      std::cout << a_d << std::endl;
+      tuple->push_back(a_d);
+      body(tuple);
+      tuple->pop_back();
     });
   } else {
     current->set.foreach_index([&](uint32_t a_i, uint32_t a_d){
       //if not done recursing and we have data
       tuple->push_back(a_d);
       if(current->get_block(a_i,a_d) != NULL){
-        recursive_print(current->get_block(a_i,a_d),level+1,num_levels,tuple);
+        recursive_foreach(current->get_block(a_i,a_d),level+1,num_levels,tuple,body);
       }
     });
   }
@@ -129,14 +131,14 @@ void recursive_build_binary(
 /*
 * Write the trie to a binary file 
 */
-template<class T>
-void Trie<T>::print(){
+template<class T> template<typename F>
+void Trie<T>::foreach(const F body){
   const Set<T> A = head->set;
   std::vector<uint32_t>* tuple = new std::vector<uint32_t>();
   A.foreach_index([&](uint32_t a_i, uint32_t a_d){
     tuple->push_back(a_d);
     if(head->get_block(a_i,a_d) != NULL){
-      recursive_print(head->get_block(a_i,a_d),1,num_levels,tuple);
+      recursive_foreach(head->get_block(a_i,a_d),1,num_levels,tuple,body);
     }
   });
 }
@@ -158,14 +160,16 @@ void Trie<T>::to_binary(const std::string path){
   for(size_t l = 0; l < num_levels; l++){
     std::vector<std::ofstream*> myv;
     for(size_t i = 0; i < NUM_THREADS; i++){
+      //prepare the data files (one per level per thread)
       writefile = new std::ofstream();
-      file = path+std::to_string(l)+std::string("_")+std::to_string(i)+".bin";
+      file = path+std::string("_data_l")+std::to_string(l)+std::string("_t")+std::to_string(i)+std::string(".bin");
       writefile->open(file, std::ios::binary | std::ios::out);
       myv.push_back(writefile);
     }
     writefiles.push_back(myv);
   }
 
+  //write the data
   head->to_binary(writefiles.at(0).at(0),0,0);
   //dump the set contents
   const Set<T> A = head->set;
@@ -199,7 +203,7 @@ Trie<T>* Trie<T>::from_binary(const std::string path){
     std::vector<std::ifstream*> myv;
     for(size_t i = 0; i < NUM_THREADS; i++){
       infile = new std::ifstream();
-      file = path+std::to_string(l)+std::string("_")+std::to_string(i)+".bin";
+      file = path+std::string("_data_l")+std::to_string(l)+std::string("_t")+std::to_string(i)+std::string(".bin");
       infile->open(file, std::ios::binary | std::ios::in);
       myv.push_back(infile);
     }
@@ -224,7 +228,7 @@ Trie<T>* Trie<T>::from_binary(const std::string path){
     }
   }
 
-  return new Trie<T>(head,NULL,num_levels_in);
+  return new Trie<T>(head,num_levels_in);
 }
 /*
 * Given a range of values figure out the distinct values to go in the set.
@@ -326,7 +330,7 @@ void recursive_build(const size_t index, const size_t start, const size_t end, c
 }
 
 template<class T> template <typename F>
-inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, std::vector<Encoding<long>*>* encodings_in, F f){
+inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, F f){
   const size_t num_levels_in = attr_in->size();
   const size_t num_rows = attr_in->at(0).size();
 
@@ -393,6 +397,6 @@ inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, std:
   //should be a 1-1 between pointers in block and next ranges
   //also a 1-1 between blocks and numbers of next ranges
 
-  return new Trie(new_head,encodings_in,num_levels_in);
+  return new Trie(new_head,num_levels_in);
 }
 #endif

@@ -88,25 +88,23 @@ struct FrequencyEncodingMap{
   }
 };
 ///////////////////////////////////////////////////////////////////////////////
+//Stores the maps for the dictionary encoding.
 template <class T>
 struct Encoding{
   std::unordered_map<T,uint32_t> value_to_key;
   std::vector<T> key_to_value;
   uint32_t num_distinct;
-  size_t disk_index;
 
   Encoding(){
     num_distinct = 0;
-    disk_index = 0;
   }
   ~Encoding(){}
 
   //Given a column add its values to the encoding.
   template <class K>
   void build(K* encodingMap){
-    uint32_t index = 0;
     encodingMap->foreach([&](T value){
-      value_to_key.insert(std::pair<T,uint32_t>(value,index++));
+      value_to_key.insert(std::pair<T,uint32_t>(value,num_distinct++));
       key_to_value.push_back(value);
     });
   }
@@ -119,6 +117,42 @@ struct Encoding{
       column->at(i) = value_to_key.at(encodingMap->at(i));
     });
     return column;
+  }
+
+  void to_binary(const std::string path){
+      std::ofstream *writefile = new std::ofstream();
+      std::string file = path+std::string("_encoding.bin");
+      writefile->open(file, std::ios::binary | std::ios::out);
+      writefile->write((char *)&num_distinct, sizeof(num_distinct));
+      //could be a par for
+      for(uint32_t index = 0; index < num_distinct; index++){
+        writefile->write((char *)&key_to_value.at(index), sizeof(T));
+      }
+      writefile->close();
+  }
+  static Encoding<T>* from_binary(const std::string path){
+      std::ifstream *infile = new std::ifstream();
+      std::string file = path+std::string("_encoding.bin");
+      infile->open(file, std::ios::binary | std::ios::in);
+
+      Encoding<T>* new_encoding = new Encoding();
+      infile->read((char *)&new_encoding->num_distinct, sizeof(new_encoding->num_distinct));
+      
+      //reserve memory (and init memory for unordered memory)
+      new_encoding->key_to_value.resize(new_encoding->num_distinct);
+      new_encoding->value_to_key.reserve(new_encoding->num_distinct);      
+      //could be a par for
+      for(uint32_t index = 0; index < new_encoding->num_distinct; index++){
+        T value;
+        infile->read((char *)&value, sizeof(value));
+
+        new_encoding->value_to_key.insert(std::make_pair(value,index));
+        new_encoding->key_to_value.at(index) = value;
+      }
+
+      infile->close();
+
+      return new_encoding;
   }
 };
 
