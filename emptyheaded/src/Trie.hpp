@@ -39,19 +39,21 @@ struct SortColumns{
 template<class T>
 struct Trie{
   size_t num_levels;
-  TrieBlock<T,size_t> *head;
+  TrieBlock<T,size_t>* head;
+  std::vector<Encoding<long>*>* encodings;
 
-  Trie<T>(TrieBlock<T,size_t> *head_in,size_t num_levels_in){
+  Trie<T>(TrieBlock<T,size_t>* head_in, std::vector<Encoding<long>*>* encodings_in, size_t num_levels_in){
     num_levels = num_levels_in;
     head = head_in;
+    encodings = encodings_in;
   };
 
   template<typename F>
-  static Trie<T>* build(std::vector<std::vector<uint32_t>> *attr_in, F f);
+  static Trie<T>* build(std::vector<std::vector<uint32_t>>* attr_in, std::vector<Encoding<long>*>* encodings_in, F f);
   void print();
   void recursive_print(TrieBlock<T,size_t> *current, const size_t level, const size_t num_levels,std::vector<uint32_t>* tuple);
   void to_binary(const std::string path);
-  static Trie<T>* from_binary(std::string path, size_t num_levels_in);
+  static Trie<T>* from_binary(std::string path);
 };
 
 template<class T>
@@ -144,13 +146,20 @@ void Trie<T>::print(){
 */
 template<class T>
 void Trie<T>::to_binary(const std::string path){
+  //write the number of levels out first
+  std::ofstream *writefile = new std::ofstream();
+  std::string file = path+std::string("_levels.bin");
+  writefile->open(file, std::ios::binary | std::ios::out);
+  writefile->write((char *)&num_levels, sizeof(num_levels));
+  writefile->close();
+
   //open files for writing
   std::vector<std::vector<std::ofstream*>> writefiles;
   for(size_t l = 0; l < num_levels; l++){
     std::vector<std::ofstream*> myv;
     for(size_t i = 0; i < NUM_THREADS; i++){
-      std::ofstream *writefile = new std::ofstream();
-      std::string file = path+std::to_string(l)+std::string("_")+std::to_string(i)+".bin";
+      writefile = new std::ofstream();
+      file = path+std::to_string(l)+std::string("_")+std::to_string(i)+".bin";
       writefile->open(file, std::ios::binary | std::ios::out);
       myv.push_back(writefile);
     }
@@ -160,7 +169,6 @@ void Trie<T>::to_binary(const std::string path){
   head->to_binary(writefiles.at(0).at(0),0,0);
   //dump the set contents
   const Set<T> A = head->set;
-  std::cout << "WRITING TO BINARY" << std::endl;
   A.static_par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d){
     if(head->get_block(a_i,a_d) != NULL){
       recursive_visit<T>(tid,head->get_block(a_i,a_d),1,num_levels,a_i,a_d,&writefiles);
@@ -176,14 +184,22 @@ void Trie<T>::to_binary(const std::string path){
 }
 
 template<class T>
-Trie<T>* Trie<T>::from_binary(const std::string path, size_t num_levels_in){
+Trie<T>* Trie<T>::from_binary(const std::string path){
+  size_t num_levels_in;
+  //first read the number of levels
+  std::ifstream *infile = new std::ifstream();
+  std::string file = path+std::string("_levels.bin");
+  infile->open(file, std::ios::binary | std::ios::in);
+  infile->read((char *)&num_levels_in, sizeof(num_levels_in));
+  infile->close();
+
   //open files for reading
   std::vector<std::vector<std::ifstream*>> infiles;
   for(size_t l = 0; l < num_levels_in; l++){
     std::vector<std::ifstream*> myv;
     for(size_t i = 0; i < NUM_THREADS; i++){
-      std::ifstream *infile = new std::ifstream();
-      std::string file = path+std::to_string(l)+std::string("_")+std::to_string(i)+".bin";
+      infile = new std::ifstream();
+      file = path+std::to_string(l)+std::string("_")+std::to_string(i)+".bin";
       infile->open(file, std::ios::binary | std::ios::in);
       myv.push_back(infile);
     }
@@ -208,7 +224,7 @@ Trie<T>* Trie<T>::from_binary(const std::string path, size_t num_levels_in){
     }
   }
 
-  return new Trie<T>(head,num_levels_in);
+  return new Trie<T>(head,NULL,num_levels_in);
 }
 /*
 * Given a range of values figure out the distinct values to go in the set.
@@ -310,7 +326,7 @@ void recursive_build(const size_t index, const size_t start, const size_t end, c
 }
 
 template<class T> template <typename F>
-inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, F f){
+inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, std::vector<Encoding<long>*>* encodings_in, F f){
   const size_t num_levels_in = attr_in->size();
   const size_t num_rows = attr_in->at(0).size();
 
@@ -352,7 +368,6 @@ inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, F f)
   TrieBlock<T,size_t>* new_head = build_block<TrieBlock<T,size_t>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer->at(0).get_memory(0));
   new_head->init_pointers(0,&data_allocator);
 
-  std::cout << "par for" << std::endl;
   par::for_range(0,head_range,100,[&](size_t tid, size_t i){
     (void) tid;
     new_head->next_level[i] = NULL;
@@ -378,6 +393,6 @@ inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, F f)
   //should be a 1-1 between pointers in block and next ranges
   //also a 1-1 between blocks and numbers of next ranges
 
-  return new Trie(new_head,num_levels_in);
+  return new Trie(new_head,encodings_in,num_levels_in);
 }
 #endif

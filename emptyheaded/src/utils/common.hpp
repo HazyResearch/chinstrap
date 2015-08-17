@@ -45,7 +45,7 @@
 
 
 #ifndef NUM_THREADS_IN
-static size_t NUM_THREADS = 10;
+static size_t NUM_THREADS = 52;
 #else
 static size_t NUM_THREADS = NUM_THREADS_IN; 
 #endif
