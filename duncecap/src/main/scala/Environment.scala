@@ -43,6 +43,6 @@ object Environment {
   }
 
   def emitASTNodes(s:CodeStringBuilder): Unit = {
-    CodeGen.emitCode(s, astNodes.toList)
+    CodeGen.emitCode(s, astNodes.toList.sortBy(astN => astN.order))
   }
 }

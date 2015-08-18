@@ -53,7 +53,42 @@ object CodeGen {
     s.print("\n")
   }
 
-  def emitBuildRelation(): Unit = {
-    println("PLACE BUILD RELATION CODE HERE")
+  def emitLoadRelation(s: CodeStringBuilder,sourcePath:String,rel:Relation): Unit = {
+    s.println("""////////////////////emitLoadRelation////////////////////""")
+    s.println("{")
+    s.println("""auto start_time = debug::start_clock();""")
+    val codeString = s"""tsv_reader f_reader("${sourcePath}");
+                         char *next = f_reader.tsv_get_first();
+                         while(next != NULL){ """
+    s.println(codeString)
+    for (i <- 0 until rel.attrs.length){
+      s.println(s"""${rel.encoding(i)}_encodingMap->update(${rel.name}->append_from_string<${i}>(next));""") 
+      s.println(s"""next = f_reader.tsv_get_next();""")
+    }
+    s.println(s"""${rel.name}->num_rows++; }""")
+    s.println(s"""debug::stop_clock("READING RELATION ${rel.name}",start_time);""")
+    s.println("}")
+    s.print("\n")
   }
+
+  def emitBuildEncodings(s: CodeStringBuilder): Unit = {
+    s.println("""////////////////////emitBuildEncodings////////////////////""")
+    s.println("{")
+    s.println("""auto start_time = debug::start_clock();""")
+    Environment.encodings.foreach(tuple => {
+      val (name,encoding) = tuple
+      s.println(s"""${name}_encoding->build(${name}_encodingMap);""")
+      s.println(s"""delete ${name}_encodingMap;""")
+    })
+    s.println(s"""debug::stop_clock("BUILDING ENCODINGS",start_time);""")
+    s.println("} \n")
+  }
+
+  def emitBuildTrie(s: CodeStringBuilder,sourcePath:String,rel:Relation): Unit = {
+    s.println("""////////////////////emitBuildTrie////////////////////""")
+    s.println("{")
+    s.println("""auto start_time = debug::start_clock();""")
+    s.println("} \n")
+  }
+
 }

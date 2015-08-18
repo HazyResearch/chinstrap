@@ -5,5 +5,5 @@ set -e
 cd duncecap
 #sbt update
 sbt start-script
-target/start DunceCap.QueryCompiler $@
 cd ..
+duncecap/target/start DunceCap.DBLoader $@

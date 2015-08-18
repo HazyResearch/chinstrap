@@ -26,6 +26,7 @@ object DBLoader extends App {
   
   //load JSON file (creates directory structure for DB as well)
   Environment.addASTNode(ASTCreateDB())
+  Environment.addASTNode(ASTBuildEncodings())
   Utils.loadEnvironmentFromJSON(config,true)
 
   //emit code

@@ -50,23 +50,30 @@ object Utils{
       val attribute_types = attributes.map(a => a("type"))
       val attribute_encodings = attributes.map(a => a("encoding"))
 
+      if(create_db){
+        val master_relation = new Relation(name,attribute_names,attribute_types,attribute_encodings)
+        Environment.addASTNode(ASTLoadRelation(source,master_relation))
+      }
+
       val ordering = r("ordering").asInstanceOf[List[String]]
       val orderings = if(ordering.length == 1 && ordering(0) == "all") attribute_names.permutations.toList else List(ordering)
-      orderings.foreach(o => {      
-        val o_name = o.mkString("")
-        val rel_name = s"""${name}_${o_name}""" 
-        val relationIn = new Relation(rel_name,attribute_names,attribute_types,attribute_encodings)
+      orderings.foreach(o_attrs => {      
+        val o_aname = o_attrs.mkString("")
+        val o_name = s"""${name}_${o_aname}""" 
+        val o_types = o_attrs.map(a => attribute_types(attribute_names.indexOf(a)) )
+        val o_encod = o_attrs.map(a => attribute_encodings(attribute_names.indexOf(a)) )
+        val relationIn = new Relation(o_name,o_attrs,o_types,o_encod)
         Environment.addRelation(name,relationIn)
         if(create_db){
-          Environment.addASTNode(ASTLoadRelation(source,relationIn))
-          s"""mkdir ${db_folder}/relations/${rel_name}""" !
+          Environment.addASTNode(ASTBuildTrie(source,relationIn))
+          s"""mkdir ${db_folder}/relations/${o_name}""" !
         }
       })
     })
   }
 
   def compileAndRun(codeStringBuilder:CodeStringBuilder):Unit = {
-    val cppDir = "../emptyheaded/generated"
+    val cppDir = "emptyheaded/generated"
     val dbName = Environment.dbPath.split("/").toList.last
     val cppFilepath = s"""${cppDir}/load_${dbName}.cpp"""
     if (!Files.exists(Paths.get(cppDir))) {
@@ -82,14 +89,14 @@ object Utils{
     bw.close()
     s"""clang-format -style=llvm -i ${file}""" !
 
-    sys.process.Process(Seq("rm", "-rf",s"""bin/load_${dbName}"""), new File("../emptyheaded")).!
-    val result = sys.process.Process(Seq("make",s"""NUM_THREADS=${Environment.numThreads}""", s"""bin/load_${dbName}"""), new File("../emptyheaded")).!
+    sys.process.Process(Seq("rm", "-rf",s"""bin/load_${dbName}"""), new File("emptyheaded")).!
+    val result = sys.process.Process(Seq("make",s"""NUM_THREADS=${Environment.numThreads}""", s"""bin/load_${dbName}"""), new File("emptyheaded")).!
 
     if (result != 0) {
       println("FAILURE: Compilation errors.")
       System.exit(1)
     }
 
-    s"""../emptyheaded/bin/load_${dbName}""" !
+    s"""emptyheaded/bin/load_${dbName}""" !
   }
 }
