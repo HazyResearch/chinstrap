@@ -14,6 +14,7 @@ import scala.util.matching.Regex
  */
 object QueryCompiler extends App {
   val usage = "Usage: ./QueryCompiler <path to datalog file> [optional: <yanna or nprr> <layout> <numThreads> <algorithm> <vectorize>] "
+ /*
   if (args.length != 1 && args.length != 6) {
     println(usage)
   } else {
@@ -70,4 +71,5 @@ object QueryCompiler extends App {
       case x => println(x)
     }
   }
+  */
 }
