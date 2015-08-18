@@ -124,7 +124,6 @@ namespace thread_pool {
 
     pthread_barrier_init (&barrier, NULL, NUM_THREADS+1);
     for (size_t i=0; i<NUM_THREADS; i++) {
-      //std::cout << "CREATING: " << i << std::endl; 
       pthread_create(&threadPool[i], NULL, processWork, (void*)i);
     }
     pthread_barrier_wait(&barrier);

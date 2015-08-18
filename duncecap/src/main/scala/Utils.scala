@@ -65,7 +65,7 @@ object Utils{
         val relationIn = new Relation(o_name,o_attrs,o_types,o_encod)
         Environment.addRelation(name,relationIn)
         if(create_db){
-          Environment.addASTNode(ASTBuildTrie(source,relationIn))
+          Environment.addASTNode(ASTBuildTrie(source,relationIn,name))
           s"""mkdir ${db_folder}/relations/${o_name}""" !
         }
       })

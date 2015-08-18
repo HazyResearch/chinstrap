@@ -37,9 +37,29 @@ case class ASTBuildEncodings() extends ASTNode {
   }
 }
 
-case class ASTBuildTrie(sourcePath:String,rel:Relation) extends ASTNode {
+case class ASTBuildTrie(sourcePath:String,rel:Relation,name:String) extends ASTNode {
   override val order = 4
   override def code(s: CodeStringBuilder): Unit = {
-    CodeGen.emitBuildTrie(s,sourcePath,rel)
+    CodeGen.emitEncodeRelation(s,rel,name)
+    CodeGen.emitBuildTrie(s,rel)
+  }
+}
+
+case class ASTWriteBinaries() extends ASTNode {
+  override val order = 100
+  override def code(s: CodeStringBuilder): Unit = {
+    //write tries
+    Environment.relations.foreach( tuple => {
+      val (name,rmap) = tuple
+      rmap.foreach(tup2 => {
+        val (rname,rel) = tup2
+          CodeGen.emitWriteBinaryTrie(s,rel)
+      })
+    })
+    //write encodings
+    Environment.encodings.foreach(tuple => {
+      val (name,encoding) = tuple
+      CodeGen.emitWriteBinaryEncoding(s,encoding)
+    })
   }
 }

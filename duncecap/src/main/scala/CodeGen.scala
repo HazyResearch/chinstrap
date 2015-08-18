@@ -5,8 +5,7 @@ import scala.collection.mutable
  * All code generation methods start from this object:
  */
 object CodeGen {
-  var layout = "hybrid"
-  
+
   def emitCode(s: CodeStringBuilder, root: List[ASTNode]) = {
     emitHeader(s,root)
     emitMainMethod(s)
@@ -15,10 +14,9 @@ object CodeGen {
   def emitHeader(s:CodeStringBuilder, root:List[ASTNode]) = {
     s.println("#define GENERATED")
     s.println("#include \"main.hpp\"")
-    s.println(s"""extern \"C\" long run(std::unordered_map<std::string, void*>& relations, std::unordered_map<std::string, Trie<${layout}>*> tries, std::unordered_map<std::string, std::vector<void*>*> encodings) {""")
-    s.println(s"""long query_result = -1;""")
+    s.println(s"""extern \"C\" void* run(std::unordered_map<std::string, void*>& relations, std::unordered_map<std::string, Trie<${Environment.layout}>*> tries, std::unordered_map<std::string, std::vector<void*>*> encodings) {""")
     root.foreach{_.code(s)}
-    s.println(s"""return query_result;""")
+    s.println("return NULL;")
     s.println("}")  
   }
   /**
@@ -28,8 +26,9 @@ object CodeGen {
     s.println("#ifndef GOOGLE_TEST")
     s.println("int main() {")
     s.println("std::unordered_map<std::string, void*> relations;")
-    s.println(s"std::unordered_map<std::string, Trie<${layout}>*> tries;")
+    s.println(s"std::unordered_map<std::string, Trie<${Environment.layout}>*> tries;")
     s.println(s"std::unordered_map<std::string, std::vector<void*>*> encodings;")
+    s.println("thread_pool::initializeThreadPool();")
     s.println("run(relations,tries,encodings);")
     s.println("}")
     s.println("#endif")
@@ -38,6 +37,7 @@ object CodeGen {
   def emitInitCreateDB(s:CodeStringBuilder): Unit = {
     s.println("""////////////////////emitInitCreateDB////////////////////""")
     s.println("""//init relations""")
+    s.println("""(void) relations; (void) tries; (void) encodings;""")
     Environment.relations.foreach( tuple => {
       val (name,rmap) = tuple
       val typeString = rmap.head._2.types.mkString(",")
@@ -48,7 +48,7 @@ object CodeGen {
     Environment.encodings.foreach(tuple => {
       val (name,encoding) = tuple
       s.println(s"""SortableEncodingMap<${encoding._type}>* ${encoding.name}_encodingMap = new SortableEncodingMap<${encoding._type}>();""")
-      s.println(s"""Encoding<${encoding._type}>* ${encoding.name}_encoding = new Encoding<${encoding._type}>();""")
+      s.println(s"""Encoding<${encoding._type}>* Encoding_${encoding.name} = new Encoding<${encoding._type}>();""")
     })
     s.print("\n")
   }
@@ -77,17 +77,54 @@ object CodeGen {
     s.println("""auto start_time = debug::start_clock();""")
     Environment.encodings.foreach(tuple => {
       val (name,encoding) = tuple
-      s.println(s"""${name}_encoding->build(${name}_encodingMap);""")
+      s.println(s"""Encoding_${name}->build(${name}_encodingMap);""")
       s.println(s"""delete ${name}_encodingMap;""")
     })
     s.println(s"""debug::stop_clock("BUILDING ENCODINGS",start_time);""")
     s.println("} \n")
   }
 
-  def emitBuildTrie(s: CodeStringBuilder,sourcePath:String,rel:Relation): Unit = {
-    s.println("""////////////////////emitBuildTrie////////////////////""")
+  def emitEncodeRelation(s: CodeStringBuilder,rel:Relation,name:String): Unit = {
+    s.println("""////////////////////emitEncodeRelation////////////////////""")
+    s.println(s"""std::vector<std::vector<uint32_t>>* Encoded_${rel.name} = new std::vector<std::vector<uint32_t>>();""")
     s.println("{")
     s.println("""auto start_time = debug::start_clock();""")
+    s.println("//encodeRelation")
+    for (i <- 0 until rel.attrs.length){
+      s.println(s"""Encoded_${rel.name}->push_back(*Encoding_${rel.encoding(i)}->encode_column(&${name}->get<${i}>()));""")
+    }
+    s.println(s"""debug::stop_clock("ENCODING ${rel.name}",start_time);""")
+    s.println("} \n")
+  }
+
+  def emitBuildTrie(s: CodeStringBuilder,rel:Relation): Unit = {
+    s.println("""////////////////////emitBuildTrie////////////////////""")
+    s.println(s"""Trie<${Environment.layout}>* Trie_${rel.name} = NULL;""")
+    s.println("{")
+    s.println("""auto start_time = debug::start_clock();""")
+    s.println("//buildTrie")
+    s.println(s"""Trie_${rel.name} = Trie<${Environment.layout}>::build(Encoded_${rel.name},[&](size_t index){ (void) index; return true;});""")
+    s.println(s"""debug::stop_clock("BUILDING TRIE ${rel.name}",start_time);""")
+    s.println("} \n")
+  }
+
+  def emitWriteBinaryTrie(s: CodeStringBuilder,rel:Relation): Unit = {
+    s.println("""////////////////////emitWriteBinaryTrie////////////////////""")
+    s.println("{")
+    s.println("""auto start_time = debug::start_clock();""")
+    s.println("//buildTrie")
+    s.println(s"""Trie_${rel.name}->to_binary("${Environment.dbPath}/relations/${rel.name}");""")
+    s.println(s"""debug::stop_clock("WRITING BINARY TRIE ${rel.name}",start_time);""")
+    s.println("} \n")
+  }
+
+  def emitWriteBinaryEncoding(s: CodeStringBuilder,enc:Encoding): Unit = {
+    s.println("""////////////////////emitWriteBinaryEncoding////////////////////""")
+    s.println("{")
+    s.println("""auto start_time = debug::start_clock();""")
+    s.println("//buildTrie")
+    s.println(s"""Encoding_${enc.name}->to_binary("${Environment.dbPath}/encodings/${enc.name}");""")
+    s.println(s"""debug::stop_clock("WRITING ENCODING ${enc.name}",start_time);""")
     s.println("} \n")
   }
 
