@@ -11,7 +11,6 @@ import scala.io._
  * from the emptyheaded/bin directory
  */
 object DBLoader extends App {
-  println("DBLoader")
   if (args.length != 1){
     val usage = "Usage: ./DBLoader <path to JSON config file> "
     println(usage)
@@ -35,5 +34,5 @@ object DBLoader extends App {
   Environment.emitASTNodes(codeStringBuilder) //builds the relations & encodings
 
   //compile and run C++ code
-  Utils.compileAndRun(codeStringBuilder)
+  Utils.compileAndRun(codeStringBuilder,"load_" + Environment.dbPath.split("/").toList.last)
 }

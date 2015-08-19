@@ -61,8 +61,8 @@ object CodeGen {
                          char *next = f_reader.tsv_get_first();
                          while(next != NULL){ """
     s.println(codeString)
-    for (i <- 0 until rel.attrs.length){
-      s.println(s"""${rel.encoding(i)}_encodingMap->update(${rel.name}->append_from_string<${i}>(next));""") 
+    for (i <- 0 until rel.types.length){
+      s.println(s"""${rel.encodings(i)}_encodingMap->update(${rel.name}->append_from_string<${i}>(next));""") 
       s.println(s"""next = f_reader.tsv_get_next();""")
     }
     s.println(s"""${rel.name}->num_rows++; }""")
@@ -90,8 +90,8 @@ object CodeGen {
     s.println("{")
     s.println("""auto start_time = debug::start_clock();""")
     s.println("//encodeRelation")
-    for (i <- 0 until rel.attrs.length){
-      s.println(s"""Encoded_${rel.name}->push_back(*Encoding_${rel.encoding(i)}->encode_column(&${name}->get<${i}>()));""")
+    for (i <- 0 until rel.types.length){
+      s.println(s"""Encoded_${rel.name}->push_back(*Encoding_${rel.encodings(i)}->encode_column(&${name}->get<${i}>()));""")
     }
     s.println(s"""debug::stop_clock("ENCODING ${rel.name}",start_time);""")
     s.println("} \n")
@@ -113,7 +113,7 @@ object CodeGen {
     s.println("{")
     s.println("""auto start_time = debug::start_clock();""")
     s.println("//buildTrie")
-    s.println(s"""Trie_${rel.name}->to_binary("${Environment.dbPath}/relations/${rel.name}");""")
+    s.println(s"""Trie_${rel.name}->to_binary("${Environment.dbPath}/relations/${rel.name}/");""")
     s.println(s"""debug::stop_clock("WRITING BINARY TRIE ${rel.name}",start_time);""")
     s.println("} \n")
   }
@@ -123,9 +123,27 @@ object CodeGen {
     s.println("{")
     s.println("""auto start_time = debug::start_clock();""")
     s.println("//buildTrie")
-    s.println(s"""Encoding_${enc.name}->to_binary("${Environment.dbPath}/encodings/${enc.name}");""")
+    s.println(s"""Encoding_${enc.name}->to_binary("${Environment.dbPath}/encodings/${enc.name}/");""")
     s.println(s"""debug::stop_clock("WRITING ENCODING ${enc.name}",start_time);""")
     s.println("} \n")
+  }
+  def emitLoadBinaryEncoding(s: CodeStringBuilder,encodings:List[String]): Unit = {
+    s.println("""////////////////////emitLoadBinaryEncoding////////////////////""")
+    s.println("""auto belt = debug::start_clock();""")
+    encodings.foreach(e => {
+      s.println(s"""Encoding<${Environment.encodings(e)._type}>* Encoding_${e} = Encoding<${Environment.encodings(e)._type}>::from_binary("${Environment.dbPath}/encodings/${e}/");""")
+    })
+    s.println(s"""debug::stop_clock("LOADING ENCODINGS",belt);""")
+    s.print("\n")
+  }
+  def emitLoadBinaryRelation(s: CodeStringBuilder,relations:List[String]): Unit = {
+    s.println("""////////////////////emitLoadBinaryEncoding////////////////////""")
+    s.println("""auto btlt = debug::start_clock();""")
+    relations.foreach(qr => {
+      s.println(s"""Trie<${Environment.layout}>* Trie_${qr} = Trie<${Environment.layout}>::from_binary("${Environment.dbPath}/relations/${qr}/");""")
+    })
+    s.println(s"""debug::stop_clock("LOADING RELATIONS",btlt);""")
+    s.print("\n")
   }
 
 }

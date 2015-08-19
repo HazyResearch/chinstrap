@@ -62,7 +62,7 @@ class SelectionCondition(val condition:String,val value:String)
 class QueryRelation(val name:String,val attrs:List[String]) {
   override def equals(that: Any): Boolean =
     that match {
-      case that: Relation => that.attrs.equals(attrs) && that.name.equals(name)
+      case that: QueryRelation => that.attrs.equals(attrs) && that.name.equals(name)
       case _ => false
     }
 }
@@ -97,7 +97,28 @@ case class ASTQueryStatement(lhs:QueryRelation,aggs:List[Aggregate],join:List[Se
     //find attr ordering
     val attributeOrdering = GHDSolver.getAttributeOrdering(myghd,lhs.attrs)
     println("GLOBAL ATTR ORDER: " + attributeOrdering)
+    
+    //Figure out the relations and encodings you need for the query
+    val reorderedRelations = relations.map(qr => {
+      val reorderedAttrs = qr.attrs.sortBy(attributeOrdering.indexOf(_))
+      val rName = qr.name + "_" + reorderedAttrs.map(qr.attrs.indexOf(_)).mkString("")
+      assert(Environment.relations.contains(qr.name))
+      assert(Environment.relations(qr.name).contains(rName))
+      ((qr.name,new QueryRelation(rName,reorderedAttrs)))
+    })
+    val encodings = reorderedRelations.flatMap(r => Environment.relations(r._1).head._2.encodings ).toList.distinct
+
+    reorderedRelations.foreach(tup => {
+      val (name,qr) = tup
+      println(qr.name + " " +  qr.attrs)
+    })
+    println("Encodings: " + encodings)
+
+
     //load binaries you need
+    CodeGen.emitLoadBinaryEncoding(s,encodings)
+    CodeGen.emitLoadBinaryRelation(s,reorderedRelations.map(_._2.name).distinct)
+
     //run algorithm
   }
 }

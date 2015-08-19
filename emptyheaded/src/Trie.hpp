@@ -150,7 +150,7 @@ template<class T>
 void Trie<T>::to_binary(const std::string path){
   //write the number of levels out first
   std::ofstream *writefile = new std::ofstream();
-  std::string file = path+std::string("_levels.bin");
+  std::string file = path+std::string("levels.bin");
   writefile->open(file, std::ios::binary | std::ios::out);
   writefile->write((char *)&num_levels, sizeof(num_levels));
   writefile->close();
@@ -162,7 +162,7 @@ void Trie<T>::to_binary(const std::string path){
     for(size_t i = 0; i < NUM_THREADS; i++){
       //prepare the data files (one per level per thread)
       writefile = new std::ofstream();
-      file = path+std::string("_data_l")+std::to_string(l)+std::string("_t")+std::to_string(i)+std::string(".bin");
+      file = path+std::string("data_l")+std::to_string(l)+std::string("_t")+std::to_string(i)+std::string(".bin");
       writefile->open(file, std::ios::binary | std::ios::out);
       myv.push_back(writefile);
     }
@@ -192,7 +192,7 @@ Trie<T>* Trie<T>::from_binary(const std::string path){
   size_t num_levels_in;
   //first read the number of levels
   std::ifstream *infile = new std::ifstream();
-  std::string file = path+std::string("_levels.bin");
+  std::string file = path+std::string("levels.bin");
   infile->open(file, std::ios::binary | std::ios::in);
   infile->read((char *)&num_levels_in, sizeof(num_levels_in));
   infile->close();
@@ -203,7 +203,7 @@ Trie<T>* Trie<T>::from_binary(const std::string path){
     std::vector<std::ifstream*> myv;
     for(size_t i = 0; i < NUM_THREADS; i++){
       infile = new std::ifstream();
-      file = path+std::string("_data_l")+std::to_string(l)+std::string("_t")+std::to_string(i)+std::string(".bin");
+      file = path+std::string("data_l")+std::to_string(l)+std::string("_t")+std::to_string(i)+std::string(".bin");
       infile->open(file, std::ios::binary | std::ios::in);
       myv.push_back(infile);
     }

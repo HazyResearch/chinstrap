@@ -121,7 +121,7 @@ struct Encoding{
 
   void to_binary(const std::string path){
       std::ofstream *writefile = new std::ofstream();
-      std::string file = path+std::string("_encoding.bin");
+      std::string file = path+std::string("encoding.bin");
       writefile->open(file, std::ios::binary | std::ios::out);
       writefile->write((char *)&num_distinct, sizeof(num_distinct));
       //could be a par for
@@ -132,7 +132,7 @@ struct Encoding{
   }
   static Encoding<T>* from_binary(const std::string path){
       std::ifstream *infile = new std::ifstream();
-      std::string file = path+std::string("_encoding.bin");
+      std::string file = path+std::string("encoding.bin");
       infile->open(file, std::ios::binary | std::ios::in);
 
       Encoding<T>* new_encoding = new Encoding();

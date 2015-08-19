@@ -2,10 +2,10 @@ package DunceCap
 
 import scala.collection.mutable
 
-class Relation(val name:String, val attrs: List[String], val types:List[String], val encoding:List[String]){
+class Relation(val name:String, val types:List[String], val encodings:List[String]){
   override def equals(that: Any): Boolean =
     that match {
-      case that: Relation => that.attrs.equals(attrs) && that.name.equals(name)
+      case that: Relation => that.encodings.equals(encodings) && that.types.equals(types) && that.name.equals(name)
       case _ => false
     }
 }

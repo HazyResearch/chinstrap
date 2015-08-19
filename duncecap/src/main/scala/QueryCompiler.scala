@@ -27,6 +27,7 @@ object Repl {
       val codeStringBuilder = new CodeStringBuilder
       DCParser.run(line,codeStringBuilder)
     
+      Utils.compileAndRun(codeStringBuilder,"repl_program")
       Environment.clearASTNodes()
     }
   }
@@ -51,7 +52,8 @@ object QueryCompiler extends App {
 
   if(args.length == 2){ //reading a query from a file
     val codeStringBuilder = new CodeStringBuilder
-    DCParser.run(QueryFileReader.readFile(args(1)),codeStringBuilder) 
+    DCParser.run(QueryFileReader.readFile(args(1)),codeStringBuilder)
+    Utils.compileAndRun(codeStringBuilder,args(1).split('.').toList.head)
   } else {
     Repl.run
   }
