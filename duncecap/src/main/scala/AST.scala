@@ -83,22 +83,20 @@ case class ASTPrintStatement(rel:QueryRelation) extends ASTStatement {
 //(5) list of exressions for aggregations
 case class ASTQueryStatement(lhs:QueryRelation,aggs:List[Aggregate],join:List[SelectionRelation],aggregateExpressions:List[AggregateExpression]) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
-    println("Running Query")
-    //perform syntax checking
-    //TODO
+    //perform syntax checking (TODO)
 
     //run GHD decomp
     println(lhs.name + " " + lhs.attrs)
     join.foreach(qr =>
-      println(qr.name + " a: " +  qr.attrs)
+      println(qr.name + " " +  qr.attrs)
     )
     val relations = join.map(qr => new QueryRelation(qr.name,qr.attrs.map{_._1}))
     val selections = join.flatMap(qr => qr.attrs.filter(atup => atup._2 != "").map(atup => (atup._1,new SelectionCondition(atup._2,atup._3)) ) ).toMap
-    println(relations)
-    println(selections)
     val myghd = GHDSolver.getGHD(relations) //get minimum GHD's
 
     //find attr ordering
+    val attributeOrdering = GHDSolver.getAttributeOrdering(myghd,lhs.attrs)
+    println("GLOBAL ATTR ORDER: " + attributeOrdering)
     //load binaries you need
     //run algorithm
   }

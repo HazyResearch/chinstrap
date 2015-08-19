@@ -8,6 +8,65 @@ object GHDSolver {
     return rels.foldLeft(Set[String]())(
       (accum: Set[String], rel : QueryRelation) => accum | rel.attrs.toSet[String])
   }
+  
+  private def get_attribute_ordering(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode],resultAttrs:List[String]): List[String] = {
+    //Runs a BFS, adds attributes in that order with the special condition that those attributes
+    //that also exist in the children are added first, we also sort by the frequency of the attribute
+    var depth = 0
+    var frontier = f_in
+    var next_frontier = mutable.Set[GHDNode]()
+    var attr = scala.collection.mutable.ListBuffer.empty[String]
+
+    while(frontier.size != 0){
+      next_frontier.clear
+      val level_attr = scala.collection.mutable.ListBuffer.empty[String]
+      frontier.foreach{ cur:GHDNode =>
+        //first add attributes with elements in common with children, then add others        
+        val children_attrs = cur.children.flatMap{ c => c.rels.flatMap{r => r.attrs}.toList}
+        //sort by frequency
+        val children_attrs_sorted = children_attrs.distinct.sortBy(children_attrs count _.==).reverse
+        val cur_attrs = cur.rels.flatMap{r => r.attrs}
+
+        //find shared attributes and sort by frequency
+        val shared_attrs = cur_attrs.intersect(children_attrs_sorted).sortBy(e => children_attrs_sorted.indexOf(e))
+        //shared attributes added first. Should be added in order of how many times
+        //appears in the child.
+        shared_attrs.foreach{ a =>
+          if(!attr.contains(a)){
+            attr += a
+          }
+        }
+        //collect others
+        cur_attrs.foreach{ a =>
+          if(!attr.contains(a) && !level_attr.contains(a)){
+            level_attr += a
+          }
+        }
+
+        cur.children.foreach{(child:GHDNode) =>
+          if(!seen.contains(child)){
+            seen += child
+            next_frontier += child
+          }
+        }
+      }
+
+      val cur_attrs_sorted = level_attr.sortBy(e => if(resultAttrs.contains(e)) resultAttrs.indexOf(e) else resultAttrs.size+1)
+      cur_attrs_sorted.foreach{ a =>
+        if(!attr.contains(a)){
+          attr += a
+        }
+      }
+
+      var tmp = frontier
+      frontier = next_frontier
+      next_frontier = tmp
+      
+      depth += 1
+    }
+    return attr.toList
+  }
+
   private def breadth_first(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): (Int,Int) = {
     var depth = 0
     var frontier = f_in
@@ -49,7 +108,7 @@ object GHDSolver {
     return myghd
   }
   def getAttributeOrdering(myghd:GHDNode, resultAttrs:List[String]) : List[String] ={
-    return resultAttrs
+    return get_attribute_ordering(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd),resultAttrs)
   }
 
   private def getConnectedComponents(rels: mutable.Set[QueryRelation], comps: List[List[QueryRelation]], ignoreAttrs: Set[String]): List[List[QueryRelation]] = {
