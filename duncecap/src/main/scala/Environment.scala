@@ -45,4 +45,8 @@ object Environment {
   def emitASTNodes(s:CodeStringBuilder): Unit = {
     CodeGen.emitCode(s, astNodes.toList.sortBy(astN => astN.order))
   }
+
+  def clearASTNodes(): Unit = {
+    astNodes.clear()
+  }
 }
