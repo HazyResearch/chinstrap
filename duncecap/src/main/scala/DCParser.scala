@@ -27,8 +27,8 @@ object DCParser extends RegexParsers {
 
   //for the lhs expression
   def lhsStatement = relationIdentifier | scalarIdentifier
-  def relationIdentifier: Parser[BasicRelation] = identifierName ~ (("(" ~> attrList) <~ ")") ^^ {case id~attrs => new BasicRelation(id, attrs)}
-  def scalarIdentifier: Parser[BasicRelation] = identifierName ~ (("(" ~> emptyStatement) <~ ")") ^^ {case a~l => new BasicRelation(a,l)}
+  def relationIdentifier: Parser[QueryRelation] = identifierName ~ (("(" ~> attrList) <~ ")") ^^ {case id~attrs => new QueryRelation(id, attrs)}
+  def scalarIdentifier: Parser[QueryRelation] = identifierName ~ (("(" ~> emptyStatement) <~ ")") ^^ {case a~l => new QueryRelation(a,l)}
   def attrList : Parser[List[String]] = notLastAttr | lastAttr
   def notLastAttr = identifierName ~ ("," ~> attrList) ^^ {case a~rest => a +: rest}
   def lastAttr = identifierName ^^ {case a => List(a)}
@@ -40,15 +40,15 @@ object DCParser extends RegexParsers {
   def singleAggregateStatement = identifierName ~ (("(" ~> aggOp) <~ ")") ^^ {case identifierName~aggOp => List(new Aggregate(identifierName, aggOp))}
 
   //for the join query
-  def joinStatement:Parser[List[QueryRelation]] = multipleJoinIdentifiers | singleJoinIdentifier 
+  def joinStatement:Parser[List[SelectionRelation]] = multipleJoinIdentifiers | singleJoinIdentifier 
   def multipleJoinIdentifiers = (singleJoinIdentifier <~ ",") ~ joinStatement ^^ {case t~rest => t ++: rest}
-  def singleJoinIdentifier = identifierName ~ (("(" ~> joinAttrList) <~ ")") ^^ {case id~attrs => List( new QueryRelation(id, attrs) )}
+  def singleJoinIdentifier = identifierName ~ (("(" ~> joinAttrList) <~ ")") ^^ {case id~attrs => List( new SelectionRelation(id, attrs) )}
   def joinAttrList : Parser[List[(String,String,String)]] = notLastJoinAttr | lastJoinAttr
   def notLastJoinAttr = selectionStatement ~ ("," ~> joinAttrList) ^^ {case a~rest => a +: rest}
   def lastJoinAttr = selectionStatement ^^ {case a => List(a)} 
   def selectionStatement : Parser[(String,String,String)] =  selection | emptySelection
   def selection: Parser[(String,String,String)] = (identifierName ~ selectionOp ~ identifierName) ^^ {case a~b~c => (a,b,c) }
-  def emptySelection: Parser[(String,String,String)] = identifierName ^^ {case a => ("","","")}
+  def emptySelection: Parser[(String,String,String)] = identifierName ^^ {case a => (a,"","")}
 
   //for the aggregate expression (just going to emit the raw text in C++ code for now)
   def aggregateExpressionStatement: Parser[List[AggregateExpression]] = (";" ~> recursiveAggregateExpression) | emptyStatement

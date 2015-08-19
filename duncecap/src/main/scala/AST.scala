@@ -55,14 +55,21 @@ case class ASTWriteBinaries() extends ASTNode {
   }
 }
 
-class Aggregate(attr:String,agg:String)
-class BasicRelation(name:String,attrs:List[String])
-class QueryRelation(name:String,attrs:List[(String,String,String)])
-class AggregateExpression(attr:String,expression:String)
+class Aggregate(val attr:String,val agg:String)
+class SelectionRelation(val name:String,val attrs:List[(String,String,String)])
+class AggregateExpression(val attr:String,val expression:String)
+class SelectionCondition(val condition:String,val value:String)
+class QueryRelation(val name:String,val attrs:List[String]) {
+  override def equals(that: Any): Boolean =
+    that match {
+      case that: Relation => that.attrs.equals(attrs) && that.name.equals(name)
+      case _ => false
+    }
+}
 
 abstract trait ASTStatement extends ASTNode {}
 
-case class ASTPrintStatement(rel:BasicRelation) extends ASTStatement {
+case class ASTPrintStatement(rel:QueryRelation) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     println("Print relation")
   }
@@ -74,11 +81,23 @@ case class ASTPrintStatement(rel:BasicRelation) extends ASTStatement {
 //(3) list of relations joined
 //(4) list of attrs with selections
 //(5) list of exressions for aggregations
-case class ASTQueryStatement(lhs:BasicRelation,aggs:List[Aggregate],join:List[QueryRelation],aggregateExpressions:List[AggregateExpression]) extends ASTStatement {
+case class ASTQueryStatement(lhs:QueryRelation,aggs:List[Aggregate],join:List[SelectionRelation],aggregateExpressions:List[AggregateExpression]) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     println("Running Query")
     //perform syntax checking
+    //TODO
+
     //run GHD decomp
+    println(lhs.name + " " + lhs.attrs)
+    join.foreach(qr =>
+      println(qr.name + " a: " +  qr.attrs)
+    )
+    val relations = join.map(qr => new QueryRelation(qr.name,qr.attrs.map{_._1}))
+    val selections = join.flatMap(qr => qr.attrs.filter(atup => atup._2 != "").map(atup => (atup._1,new SelectionCondition(atup._2,atup._3)) ) ).toMap
+    println(relations)
+    println(selections)
+    val myghd = GHDSolver.getGHD(relations) //get minimum GHD's
+
     //find attr ordering
     //load binaries you need
     //run algorithm

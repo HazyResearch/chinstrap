@@ -4,9 +4,9 @@ import scala.collection.mutable
 import java.io.{FileWriter, BufferedWriter, File}
 
 object GHDSolver {
-  def getAttrSet(rels: List[Relation]): Set[String] = {
+  def getAttrSet(rels: List[QueryRelation]): Set[String] = {
     return rels.foldLeft(Set[String]())(
-      (accum: Set[String], rel : Relation) => accum | rel.attrs.toSet[String])
+      (accum: Set[String], rel : QueryRelation) => accum | rel.attrs.toSet[String])
   }
   private def breadth_first(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode]): (Int,Int) = {
     var depth = 0
@@ -31,39 +31,40 @@ object GHDSolver {
     }
     return (depth,seen.size)
   }
-  def getGHD(distinctRelations:List[Relation]) : GHDNode = {
-    val decompositions = getMinFHWDecompositions(distinctRelations) 
+  def getGHD(distinctRelations:List[QueryRelation]) : GHDNode = {
     //compute fractional scores
-    val ordered_decomp = decompositions.sortBy{ root:GHDNode =>
-      val tup = breadth_first(mutable.LinkedHashSet[GHDNode](root),mutable.LinkedHashSet[GHDNode](root))
-      root.depth = tup._1
-      root.depth
-    }
+    val myghd = if(Environment.yanna){
+        val decompositions = getMinFHWDecompositions(distinctRelations) 
+        decompositions.sortBy{ root:GHDNode =>
+        val tup = breadth_first(mutable.LinkedHashSet[GHDNode](root),mutable.LinkedHashSet[GHDNode](root))
+        root.depth = tup._1
+        root.depth
+      }.head
+    } else getDecompositions(distinctRelations).last
 
-    //pull out lowest depth FHWS 
-    val myghd = if(Environment.yanna) ordered_decomp.head else getDecompositions(distinctRelations).last
     myghd.num_bags = breadth_first(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd))._2
     assert(myghd.num_bags != 0)
     val fhws = myghd.fractionalScoreTree()
+    print(myghd, "query_plan_" + fhws + ".json")
     return myghd
   }
   def getAttributeOrdering(myghd:GHDNode, resultAttrs:List[String]) : List[String] ={
     return resultAttrs
   }
 
-  private def getConnectedComponents(rels: mutable.Set[Relation], comps: List[List[Relation]], ignoreAttrs: Set[String]): List[List[Relation]] = {
+  private def getConnectedComponents(rels: mutable.Set[QueryRelation], comps: List[List[QueryRelation]], ignoreAttrs: Set[String]): List[List[QueryRelation]] = {
     if (rels.isEmpty) return comps
     val component = getOneConnectedComponent(rels, ignoreAttrs)
     return getConnectedComponents(rels, component::comps, ignoreAttrs)
   }
 
-  private def getOneConnectedComponent(rels: mutable.Set[Relation], ignoreAttrs: Set[String]): List[Relation] = {
+  private def getOneConnectedComponent(rels: mutable.Set[QueryRelation], ignoreAttrs: Set[String]): List[QueryRelation] = {
     val curr = rels.head
     rels -= curr
-    return DFS(mutable.LinkedHashSet[Relation](curr), curr, rels, ignoreAttrs)
+    return DFS(mutable.LinkedHashSet[QueryRelation](curr), curr, rels, ignoreAttrs)
   }
 
-  private def DFS(seen: mutable.Set[Relation], curr: Relation, rels: mutable.Set[Relation], ignoreAttrs: Set[String]): List[Relation] = {
+  private def DFS(seen: mutable.Set[QueryRelation], curr: QueryRelation, rels: mutable.Set[QueryRelation], ignoreAttrs: Set[String]): List[QueryRelation] = {
     for (rel <- rels) {
       // if these two hyperedges are connected
       if (!((curr.attrs.toSet[String] & rel.attrs.toSet[String]) &~ ignoreAttrs).isEmpty) {
@@ -76,10 +77,10 @@ object GHDSolver {
   }
 
   // Visible for testing
-  def getPartitions(leftoverBags: List[Relation], // this cannot contain chosen
-                    chosen: List[Relation],
+  def getPartitions(leftoverBags: List[QueryRelation], // this cannot contain chosen
+                    chosen: List[QueryRelation],
                     parentAttrs: Set[String],
-                    tryBagAttrSet: Set[String]): Option[List[List[Relation]]] = {
+                    tryBagAttrSet: Set[String]): Option[List[List[QueryRelation]]] = {
     // first we need to check that we will still be able to satisfy
     // the concordance condition in the rest of the subtree
     for (bag <- leftoverBags.toList) {
@@ -90,8 +91,8 @@ object GHDSolver {
 
     // if the concordance condition is satisfied, figure out what components you just
     // partitioned your graph into, and do ghd on each of those disconnected components
-    val relations = mutable.LinkedHashSet[Relation]() ++ leftoverBags
-    return Some(getConnectedComponents(relations, List[List[Relation]](), getAttrSet(chosen).toSet[String]))
+    val relations = mutable.LinkedHashSet[QueryRelation]() ++ leftoverBags
+    return Some(getConnectedComponents(relations, List[List[QueryRelation]](), getAttrSet(chosen).toSet[String]))
   }
 
   /**
@@ -99,9 +100,9 @@ object GHDSolver {
    * @param parentAttrs
    * @return Each list in the returned list could be the children of the parent that we got parentAttrs from
    */
-  private def getListsOfPossibleSubtrees(partitions: List[List[Relation]], parentAttrs: Set[String]): List[List[GHDNode]] = {
+  private def getListsOfPossibleSubtrees(partitions: List[List[QueryRelation]], parentAttrs: Set[String]): List[List[GHDNode]] = {
     assert(!partitions.isEmpty)
-    val subtreesPerPartition: List[List[GHDNode]] = partitions.map((l: List[Relation]) => getDecompositions(l, parentAttrs))
+    val subtreesPerPartition: List[List[GHDNode]] = partitions.map((l: List[QueryRelation]) => getDecompositions(l, parentAttrs))
 
     val foldFunc: (List[List[GHDNode]], List[GHDNode]) => List[List[GHDNode]]
     = (accum: List[List[GHDNode]], subtreesForOnePartition: List[GHDNode]) => {
@@ -115,11 +116,11 @@ object GHDSolver {
     return subtreesPerPartition.foldLeft(List[List[GHDNode]](List[GHDNode]()))(foldFunc)
   }
 
-  private def getDecompositions(rels: List[Relation], parentAttrs: Set[String]): List[GHDNode] =  {
+  private def getDecompositions(rels: List[QueryRelation], parentAttrs: Set[String]): List[GHDNode] =  {
     val treesFound = mutable.ListBuffer[GHDNode]()
     for (tryNumRelationsTogether <- (1 to rels.size).toList) {
       for (bag <- rels.combinations(tryNumRelationsTogether).toList) {
-        val leftoverBags = rels.toSet[Relation] &~ bag.toSet[Relation]
+        val leftoverBags = rels.toSet[QueryRelation] &~ bag.toSet[QueryRelation]
         if (leftoverBags.toList.isEmpty) {
           val newNode = new GHDNode(bag)
           treesFound.append(newNode)
@@ -141,11 +142,11 @@ object GHDSolver {
     return treesFound.toList
   }
 
-  def getDecompositions(rels: List[Relation]): List[GHDNode] = {
+  def getDecompositions(rels: List[QueryRelation]): List[GHDNode] = {
     return getDecompositions(rels, Set[String]())
   }
 
-  def getMinFHWDecompositions(rels: List[Relation]): List[GHDNode] = {
+  def getMinFHWDecompositions(rels: List[QueryRelation]): List[GHDNode] = {
     val decomps = getDecompositions(rels)
     val fhwsAndDecomps = decomps.map((root : GHDNode) => (root.fractionalScoreTree(), root))
     val minScore = fhwsAndDecomps.unzip._1.min
