@@ -36,31 +36,32 @@ struct SortColumns{
 * head and number of levels.  Methods are to build a trie from an encoded
 * table.
 */
-template<class T>
+template<class T, class R>
 struct Trie{
   size_t num_levels;
-  TrieBlock<T,size_t>* head;
+  R annotation = (R)0;
+  TrieBlock<T,R>* head;
 
-  Trie<T>(TrieBlock<T,size_t>* head_in, size_t num_levels_in){
+  Trie<T,R>(TrieBlock<T,R>* head_in, size_t num_levels_in){
     num_levels = num_levels_in;
     head = head_in;
   };
 
   template<typename F>
-  static Trie<T>* build(std::vector<std::vector<uint32_t>>* attr_in, F f);
+  static Trie<T,R>* build(std::vector<std::vector<uint32_t>>* attr_in, F f);
 
   template<typename F>
   void foreach(const F body);
   
   template<typename F>
-  void recursive_foreach(TrieBlock<T,size_t> *current, const size_t level, const size_t num_levels,std::vector<uint32_t>* tuple, const F body);
+  void recursive_foreach(TrieBlock<T,R> *current, const size_t level, const size_t num_levels,std::vector<uint32_t>* tuple, const F body);
   void to_binary(const std::string path);
-  static Trie<T>* from_binary(std::string path);
+  static Trie<T,R>* from_binary(std::string path);
 };
 
-template<class T> template <typename F>
-void Trie<T>::recursive_foreach(
-  TrieBlock<T,size_t> *current, 
+template<class T, class R> template <typename F>
+void Trie<T,R>::recursive_foreach(
+  TrieBlock<T,R> *current, 
   const size_t level, 
   const size_t num_levels,
   std::vector<uint32_t>* tuple,
@@ -84,10 +85,10 @@ void Trie<T>::recursive_foreach(
   tuple->pop_back(); //delete the last element
 }
 
-template<class T>
+template<class T, class R>
 void recursive_visit(
   const size_t tid,
-  TrieBlock<T,size_t> *current, 
+  TrieBlock<T,R> *current, 
   const size_t level, 
   const size_t num_levels,
   const uint32_t prev_index,
@@ -103,18 +104,18 @@ void recursive_visit(
   });
 }
 
-template<class T>
+template<class T, class R>
 void recursive_build_binary(
   const size_t tid,
-  TrieBlock<T,size_t> *prev, 
+  TrieBlock<T,R> *prev, 
   const size_t level, 
   const size_t num_levels,
   std::vector<std::vector<std::ifstream*>>* infiles,
   allocator::memory<uint8_t> *allocator_in){
 
-  auto tup = TrieBlock<T,size_t>::from_binary(infiles->at(level).at(tid),allocator_in,tid);
+  auto tup = TrieBlock<T,R>::from_binary(infiles->at(level).at(tid),allocator_in,tid);
 
-  TrieBlock<T,size_t>* current = std::get<0>(tup);
+  TrieBlock<T,R>* current = std::get<0>(tup);
   const uint32_t index = std::get<1>(tup);
   const uint32_t data = std::get<2>(tup);
   prev->set_block(index,data,current);
@@ -124,15 +125,15 @@ void recursive_build_binary(
 
   current->init_pointers(tid,allocator_in);
   for(size_t i = 0; i < current->set.cardinality; i++){
-    recursive_build_binary<T>(tid,current,level+1,num_levels,infiles,allocator_in);
+    recursive_build_binary<T,R>(tid,current,level+1,num_levels,infiles,allocator_in);
   }
 }
 
 /*
 * Write the trie to a binary file 
 */
-template<class T> template<typename F>
-void Trie<T>::foreach(const F body){
+template<class T, class R> template<typename F>
+void Trie<T,R>::foreach(const F body){
   const Set<T> A = head->set;
   std::vector<uint32_t>* tuple = new std::vector<uint32_t>();
   A.foreach_index([&](uint32_t a_i, uint32_t a_d){
@@ -146,8 +147,8 @@ void Trie<T>::foreach(const F body){
 /*
 * Write the trie to a binary file 
 */
-template<class T>
-void Trie<T>::to_binary(const std::string path){
+template<class T, class R>
+void Trie<T,R>::to_binary(const std::string path){
   //write the number of levels out first
   std::ofstream *writefile = new std::ofstream();
   std::string file = path+std::string("levels.bin");
@@ -175,7 +176,7 @@ void Trie<T>::to_binary(const std::string path){
   const Set<T> A = head->set;
   A.static_par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d){
     if(head->get_block(a_i,a_d) != NULL){
-      recursive_visit<T>(tid,head->get_block(a_i,a_d),1,num_levels,a_i,a_d,&writefiles);
+      recursive_visit<T,R>(tid,head->get_block(a_i,a_d),1,num_levels,a_i,a_d,&writefiles);
     }
   });
 
@@ -187,8 +188,8 @@ void Trie<T>::to_binary(const std::string path){
   }
 }
 
-template<class T>
-Trie<T>* Trie<T>::from_binary(const std::string path){
+template<class T, class R>
+Trie<T,R>* Trie<T,R>::from_binary(const std::string path){
   size_t num_levels_in;
   //first read the number of levels
   std::ifstream *infile = new std::ifstream();
@@ -211,14 +212,14 @@ Trie<T>* Trie<T>::from_binary(const std::string path){
   }
 
   allocator::memory<uint8_t> *allocator_in = new allocator::memory<uint8_t>(10000);
-  auto tup = TrieBlock<T,size_t>::from_binary(infiles.at(0).at(0),allocator_in,0);
-  TrieBlock<T,size_t>* head = std::get<0>(tup);  
+  auto tup = TrieBlock<T,R>::from_binary(infiles.at(0).at(0),allocator_in,0);
+  TrieBlock<T,R>* head = std::get<0>(tup);  
   head->init_pointers(0,allocator_in);
   const Set<T> A = head->set;
   //use the same parallel call so we read in properly
   A.static_par_foreach_index([&](size_t tid, uint32_t a_d, uint32_t a_i){
     (void) a_d; (void) a_i;
-    recursive_build_binary<T>(tid,head,1,num_levels_in,&infiles,allocator_in);
+    recursive_build_binary<T,R>(tid,head,1,num_levels_in,&infiles,allocator_in);
   });
 
   //close the files
@@ -228,7 +229,7 @@ Trie<T>* Trie<T>::from_binary(const std::string path){
     }
   }
 
-  return new Trie<T>(head,num_levels_in);
+  return new Trie<T,R>(head,num_levels_in);
 }
 /*
 * Given a range of values figure out the distinct values to go in the set.
@@ -285,7 +286,7 @@ uint32_t* perform_selection(uint32_t *iterator, size_t num_rows, F f){
 /*
 * Produce a TrieBlock
 */
-template<class B, class T>
+template<class B, class T, class R>
 B* build_block(const size_t tid, allocator::memory<uint8_t> *data_allocator, 
   const size_t max_set_size, const size_t set_size, uint32_t *set_data_buffer){
 
@@ -301,7 +302,7 @@ B* build_block(const size_t tid, allocator::memory<uint8_t> *data_allocator,
 /*
 * Recursively build the trie. Terminates when we hit the number of levels.
 */
-template<class B,class T>
+template<class B,class T, class R>
 void recursive_build(const size_t index, const size_t start, const size_t end, const uint32_t data, B* prev_block, 
   const size_t level, const size_t num_levels, const size_t tid, 
   std::vector<std::vector<uint32_t>> *attr_in,
@@ -313,7 +314,7 @@ void recursive_build(const size_t index, const size_t start, const size_t end, c
   uint32_t *sb = set_data_buffer->at(level).get_memory(tid);
   encode_tail(start,end,sb,&attr_in->at(level),indicies);
 
-  B *tail = build_block<B,T>(tid,data_allocator,num_rows,(end-start),sb);
+  B *tail = build_block<B,T,R>(tid,data_allocator,num_rows,(end-start),sb);
   prev_block->set_block(index,data,tail);
 
   if(level < (num_levels-1)){
@@ -324,13 +325,13 @@ void recursive_build(const size_t index, const size_t start, const size_t end, c
       const size_t next_start = ranges_buffer->at(level).get_memory(tid)[i];
       const size_t next_end = ranges_buffer->at(level).get_memory(tid)[i+1];
       const uint32_t next_data = set_data_buffer->at(level).get_memory(tid)[i];        
-      recursive_build<B,T>(i,next_start,next_end,next_data,tail,level+1,num_levels,tid,attr_in,data_allocator,num_rows,ranges_buffer,set_data_buffer,indicies);
+      recursive_build<B,T,R>(i,next_start,next_end,next_data,tail,level+1,num_levels,tid,attr_in,data_allocator,num_rows,ranges_buffer,set_data_buffer,indicies);
     }
   }
 }
 
-template<class T> template <typename F>
-inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, F f){
+template<class T, class R> template <typename F>
+inline Trie<T,R>* Trie<T,R>::build(std::vector<std::vector<uint32_t>> *attr_in, F f){
   const size_t num_levels_in = attr_in->size();
   const size_t num_rows = attr_in->at(0).size();
 
@@ -343,7 +344,7 @@ inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, F f)
   tbb::parallel_sort(indicies,iterator,SortColumns(attr_in));
 
   //Where all real data goes
-  const size_t alloc_size = (8*num_rows*num_levels_in*sizeof(uint64_t)*sizeof(TrieBlock<T,size_t>))/NUM_THREADS;
+  const size_t alloc_size = (8*num_rows*num_levels_in*sizeof(uint64_t)*sizeof(TrieBlock<T,R>))/NUM_THREADS;
   allocator::memory<uint8_t> data_allocator(alloc_size);
   //always just need two buffers(that swap)
   std::vector<allocator::memory<size_t>> *ranges_buffer = new std::vector<allocator::memory<size_t>>();
@@ -369,7 +370,7 @@ inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, F f)
   const size_t head_range = std::get<1>(tup);
 
   //Build the head set.
-  TrieBlock<T,size_t>* new_head = build_block<TrieBlock<T,size_t>,T>(0,&data_allocator,num_rows,head_size,set_data_buffer->at(0).get_memory(0));
+  TrieBlock<T,R>* new_head = build_block<TrieBlock<T,R>,T,R>(0,&data_allocator,num_rows,head_size,set_data_buffer->at(0).get_memory(0));
   new_head->init_pointers(0,&data_allocator);
 
   par::for_range(0,head_range,100,[&](size_t tid, size_t i){
@@ -384,7 +385,7 @@ inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, F f)
     const size_t end = ranges_buffer->at(0).get_memory(0)[i+1];
     const uint32_t data = set_data_buffer->at(0).get_memory(0)[i];    
 
-    recursive_build<TrieBlock<T,size_t>,T>(i,start,end,data,new_head,cur_level,num_levels_in,tid,attr_in,
+    recursive_build<TrieBlock<T,R>,T,R>(i,start,end,data,new_head,cur_level,num_levels_in,tid,attr_in,
       &data_allocator,num_rows,ranges_buffer,set_data_buffer,indicies);
   });
   
@@ -397,6 +398,6 @@ inline Trie<T>* Trie<T>::build(std::vector<std::vector<uint32_t>> *attr_in, F f)
   //should be a 1-1 between pointers in block and next ranges
   //also a 1-1 between blocks and numbers of next ranges
 
-  return new Trie(new_head,num_levels_in);
+  return new Trie<T,R>(new_head,num_levels_in);
 }
 #endif

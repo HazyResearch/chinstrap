@@ -8,7 +8,22 @@ object GHDSolver {
     return rels.foldLeft(Set[String]())(
       (accum: Set[String], rel : QueryRelation) => accum | rel.attrs.toSet[String])
   }
-  
+
+  private def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, fn:GHDNode => Unit ): Unit = {
+    val root = if(seen.size == 1) true else false
+    for (child <- curr.children) {
+      if (!seen.contains(child)) {
+        seen += child
+        bottom_up(seen, child, fn)
+      }
+    }
+    fn(curr)
+  }
+
+  def bottomUp(curr: GHDNode, fn:GHDNode => Unit ): Unit = {
+    bottom_up(mutable.LinkedHashSet[GHDNode](curr), curr, fn)
+  }
+
   private def get_attribute_ordering(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode],resultAttrs:List[String]): List[String] = {
     //Runs a BFS, adds attributes in that order with the special condition that those attributes
     //that also exist in the children are added first, we also sort by the frequency of the attribute
@@ -229,11 +244,3 @@ object GHDSolver {
     bw.close()
   }
 }
-
-
-
-
-
-
-
-

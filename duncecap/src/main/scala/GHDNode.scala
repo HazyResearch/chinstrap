@@ -8,6 +8,10 @@ import argonaut.Json
 import org.apache.commons.math3.optim.linear._
 import org.apache.commons.math3.optim.nonlinear.scalar.GoalType
 
+class Accessor(val trieName:String, val level:Int)
+class CodeGenNPRRAttr(val attr:String, val agg:Option[String], val accessors:List[Accessor], val selection:Option[SelectionCondition])
+class CodeGenGHD(val lhs:QueryRelation, val attrs:List[CodeGenNPRRAttr])
+
 class GHDNode(val rels: List[QueryRelation]) {
   val attrSet = rels.foldLeft(TreeSet[String]())(
     (accum: TreeSet[String], rel : QueryRelation) => accum | TreeSet[String](rel.attrs : _*))
@@ -16,10 +20,10 @@ class GHDNode(val rels: List[QueryRelation]) {
   var bagFractionalWidth: Double = 0
   var attributeReordering : Option[Map[String, Int]] = None
   final val ATTRIBUTE_NUMBERING_START = 0
-  var name:String = ""
-  var attribute_ordering:List[String] = List ()
   var num_bags:Int = 0
   var depth:Int = 0
+
+  var codeGen:CodeGenGHD = null
 
   override def equals(o: Any) = o match {
     case that: GHDNode => that.rels.equals(rels) && that.children.equals(children)

@@ -19,15 +19,19 @@ object QueryFileReader {
 }
 object Repl {
   def run : Unit = {
+    Environment.quiet = true
     while(true){
       print(">")
       val line = readLine()
       if(line == "exit" || line == "quit")
         System.exit(0)
       val codeStringBuilder = new CodeStringBuilder
-      DCParser.run(line,codeStringBuilder)
-    
-      Utils.compileAndRun(codeStringBuilder,"repl_program")
+      try{
+        DCParser.run(line,codeStringBuilder)
+        Utils.compileAndRun(codeStringBuilder,"repl_program")
+      } catch {
+        case e:Throwable => println("Exception: " + e)
+      }
       Environment.clearASTNodes()
     }
   }

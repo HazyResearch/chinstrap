@@ -55,9 +55,7 @@ case class ASTWriteBinaries() extends ASTNode {
   }
 }
 
-class Aggregate(val attr:String,val agg:String)
 class SelectionRelation(val name:String,val attrs:List[(String,String,String)])
-class AggregateExpression(val attr:String,val expression:String)
 class SelectionCondition(val condition:String,val value:String)
 class QueryRelation(val name:String,val attrs:List[String]) {
   override def equals(that: Any): Boolean =
@@ -71,7 +69,7 @@ abstract trait ASTStatement extends ASTNode {}
 
 case class ASTPrintStatement(rel:QueryRelation) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
-    println("Print relation")
+    CodeGen.emitPrintRelation(s,rel)
   }
 }
 
@@ -81,7 +79,7 @@ case class ASTPrintStatement(rel:QueryRelation) extends ASTStatement {
 //(3) list of relations joined
 //(4) list of attrs with selections
 //(5) list of exressions for aggregations
-case class ASTQueryStatement(lhs:QueryRelation,aggs:List[Aggregate],join:List[SelectionRelation],aggregateExpressions:List[AggregateExpression]) extends ASTStatement {
+case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],join:List[SelectionRelation],aggregateExpressions:Map[String,String]) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     //perform syntax checking (TODO)
 
@@ -120,5 +118,20 @@ case class ASTQueryStatement(lhs:QueryRelation,aggs:List[Aggregate],join:List[Se
     CodeGen.emitLoadBinaryRelation(s,reorderedRelations.map(_._2.name).distinct)
 
     //run algorithm
+    GHDSolver.bottomUp(myghd, ((ghd:GHDNode) => {
+      val attrOrder = ghd.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
+      val lhsAttrs = lhs.attrs.filter(attrOrder.contains(_)).sortBy(attrOrder.indexOf(_))
+      val name = myghd.getName(attrOrder)
+      val bagLHS = new QueryRelation("Trie_bag_" + name,lhsAttrs)
+      
+      val codeGenAttrs = attrOrder.map(a => {
+        //create aggregate
+        val aggregate = if(aggregates.contains(a)) Some(aggregates(a)) else None
+        val selection = if(selections.contains(a)) Some(selections(a)) else None
+        val accessors = reorderedRelations.filter(rr => rr._2.attrs.contains(a)).map(rr => (rr._2.name,rr._2.attrs.indexOf(a)) ).toList.distinct
+        new CodeGenNPRRAttr(a, aggregate, accessors.map(a => new Accessor(a._1,a._2)),selection)
+      })
+      CodeGen.emitNPRR(s,name,new CodeGenGHD(bagLHS,codeGenAttrs))
+    }))
   }
 }

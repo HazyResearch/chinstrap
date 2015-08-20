@@ -6,14 +6,10 @@ import scala.util.parsing.combinator.RegexParsers
 
 object DCParser extends RegexParsers {
   def run(line:String,s:CodeStringBuilder) : Unit = {
-    try{
-      this.parseAll(this.statements, line) match {
-        case DCParser.Success(ast, _) => {
-          Environment.emitASTNodes(s)
-        }
+    this.parseAll(this.statements, line) match {
+      case DCParser.Success(ast, _) => {
+        Environment.emitASTNodes(s)
       }
-    } catch {
-      case e:Throwable => println("Exception: " + e)
     }
   }
 
@@ -24,6 +20,7 @@ object DCParser extends RegexParsers {
   def selectionOp:Parser[String] = """=""".r
   def typename:Parser[String] = """long|string|float""".r
   def emptyStatement = "".r ^^ {case r => List()}
+  def emptyStatementMap:Parser[Map[String,String]] = "".r ^^ {case r => Map[String,String]()}
 
   //for the lhs expression
   def lhsStatement = relationIdentifier | scalarIdentifier
@@ -34,10 +31,10 @@ object DCParser extends RegexParsers {
   def lastAttr = identifierName ^^ {case a => List(a)}
 
   //for the aggregate statement
-  def aggregateStatement : Parser[List[Aggregate]] = (recursiveAggregate <~ ";") | emptyStatement
-  def recursiveAggregate : Parser[List[Aggregate]] = multipleAggregateStatement | singleAggregateStatement
+  def aggregateStatement : Parser[Map[String,String]] = (recursiveAggregate <~ ";") | emptyStatementMap
+  def recursiveAggregate : Parser[Map[String,String]] = multipleAggregateStatement | singleAggregateStatement
   def multipleAggregateStatement = (singleAggregateStatement <~ ",")  ~ recursiveAggregate ^^ {case t~rest => t ++: rest}
-  def singleAggregateStatement = identifierName ~ (("(" ~> aggOp) <~ ")") ^^ {case identifierName~aggOp => List(new Aggregate(identifierName, aggOp))}
+  def singleAggregateStatement = identifierName ~ (("(" ~> aggOp) <~ ")") ^^ {case identifierName~aggOp => Map( (identifierName -> aggOp) )}
 
   //for the join query
   def joinStatement:Parser[List[SelectionRelation]] = multipleJoinIdentifiers | singleJoinIdentifier 
@@ -51,10 +48,10 @@ object DCParser extends RegexParsers {
   def emptySelection: Parser[(String,String,String)] = identifierName ^^ {case a => (a,"","")}
 
   //for the aggregate expression (just going to emit the raw text in C++ code for now)
-  def aggregateExpressionStatement: Parser[List[AggregateExpression]] = (";" ~> recursiveAggregateExpression) | emptyStatement
-  def recursiveAggregateExpression : Parser[List[AggregateExpression]] = multipleAggregateExpressionStatement | singleAggregateExpressionStatement
+  def aggregateExpressionStatement: Parser[Map[String,String]] = (";" ~> recursiveAggregateExpression) | emptyStatementMap
+  def recursiveAggregateExpression : Parser[Map[String,String]] = multipleAggregateExpressionStatement | singleAggregateExpressionStatement
   def multipleAggregateExpressionStatement = (singleAggregateExpressionStatement <~ ",")  ~ recursiveAggregateExpression ^^ {case t~rest => t ++: rest}
-  def singleAggregateExpressionStatement:Parser[List[AggregateExpression]] = (identifierName ~ ("=" ~> aggregateExpression) ) ^^ {case a~b => List( new AggregateExpression(a,b) )}
+  def singleAggregateExpressionStatement:Parser[Map[String,String]] = (identifierName ~ ("=" ~> aggregateExpression) ) ^^ {case a~b => Map( (a,b) )}
   def aggregateExpression:Parser[String] = ("[" ~> expression <~ "]")
 
   def queryStatement = (lhsStatement ~ (":=" ~> aggregateStatement) ~ joinStatement ~ (aggregateExpressionStatement <~ ".") ) ^^ {case a~b~c~d => Environment.addASTNode(new ASTQueryStatement(a,b,c,d))}
