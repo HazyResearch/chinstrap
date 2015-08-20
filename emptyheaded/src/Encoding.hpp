@@ -123,6 +123,7 @@ struct Encoding{
   static Encoding<T>* from_binary(const std::string path);
 };
 
+//Writing strings to a binary file is slightly tricky thus we have to use template specialization.
 template<>
 Encoding<std::string>* Encoding<std::string>::from_binary(const std::string path){
     std::ifstream *infile = new std::ifstream();
