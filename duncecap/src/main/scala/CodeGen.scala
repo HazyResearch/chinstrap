@@ -226,7 +226,16 @@ object CodeGen {
       new(output_buffer->get_next(${tid}, sizeof(TrieBlock<${Environment.layout},${annotationType}>))) 
       TrieBlock<${Environment.layout},${annotationType}>(${cga.attr});""")
     s.println(s"""TrieBlock_${cga.attr}->init_pointers(${tid},output_buffer);""")
+  }
 
+  def emitSetTrieBlock(s:CodeStringBuilder,cga:CodeGenNPRRAttr,lhs:String): Unit = {
+    s.println("//emitSetTrieBlock")
+    cga.prev match {
+      case Some(a) =>
+        s.println(s"""TrieBlock_${a}->set_block(${a}_i,${a}_d,TrieBlock_${cga.attr});""")
+      case None =>
+        s.println(s"""${lhs}->head = TrieBlock_${cga.attr};""")
+    }
   }
 
   def emitSetComputations(s:CodeStringBuilder,cga:CodeGenNPRRAttr,seenAccessors:Set[String],tid:String): Unit = {
@@ -247,7 +256,7 @@ object CodeGen {
 
   def emitNPRR(s: CodeStringBuilder,name: String,cg:CodeGenGHD): Unit = {
     s.println("""////////////////////emitNPRR////////////////////""")
-    s.println(s"""Trie<${Environment.layout},${annotationType}>* ${cg.lhs.name} = NULL;""")
+    s.println(s"""Trie<${Environment.layout},${annotationType}>* ${cg.lhs.name} = new (output_buffer->get_next(0, sizeof(Trie<${Environment.layout}, ${annotationType}>))) Trie<${Environment.layout}, ${annotationType}>(${cg.lhs.attrs.length});""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//")
@@ -260,14 +269,15 @@ object CodeGen {
       //TODO: Refactor all of these into the CGA class there is no reason they can't be computed ahead of time.
       val tid = if(cga.first) "0" else "tid"
       emitSetComputations(s,cga,seenAccessors,tid)
-      if(cga.materialize && !cga.last) emitNewTrieBlock(s,cga,tid)
+      if(cga.materialize) emitNewTrieBlock(s,cga,tid)
       if(!cga.last) emitForEach(s,cga.attr,cga.first,cga.last)
       seenAccessors ++= cga.accessors.map(_.getName())
       //val attr:String, val agg:Option[String], val accessors:List[Accessor], val selection:Option[SelectionCondition]
     })
     //close out an emit materializations if necessary
-    cg.attrs.foreach(cga =>{
-      if(!cga.last) s.println("});")
+    cg.attrs.reverse.foreach(cga =>{
+      if(cga.materialize) emitSetTrieBlock(s,cga,cg.lhs.name)
+      if(!cga.first) s.println("});")
     })
 
     if(!Environment.quiet) s.println(s"""debug::stop_clock("Bag ${name}",start_time);""")

@@ -56,6 +56,10 @@ namespace ops{
     }
   };
   struct unpack_aggregate:no_check{
+    static inline uint32_t range(uint32_t *C, size_t cardinality){
+      (void) C; (void) cardinality;
+      return 0;
+    }
     static inline uint32_t* advanceC(uint32_t *C, size_t amount){
       (void) C; (void) amount;
       return NULL;
@@ -75,6 +79,9 @@ namespace ops{
     }
   };
   struct unpack_materialize:no_check{
+    static inline uint32_t range(uint32_t *C, size_t cardinality){
+      return C[cardinality];
+    }
     static inline uint32_t* advanceC(uint32_t *C, size_t amount){
       return C+amount;
     }
@@ -151,6 +158,9 @@ namespace ops{
     }
   };
   struct unpack_uinteger_materialize:check{
+    static inline uint32_t range(uint32_t *C, size_t cardinality){
+      return C[cardinality];
+    }
     static inline uint32_t* advanceC(uint32_t *C, size_t amount){
       return C+amount;
     }
@@ -199,6 +209,10 @@ namespace ops{
     }
   };
   struct unpack_uinteger_aggregate:check{
+    static inline uint32_t range(uint32_t *C, size_t cardinality){
+      (void) C; (void) cardinality;
+      return 0;
+    }
     static inline uint32_t* advanceC(uint32_t *C, size_t amount){
       (void) C; (void) amount;
       return NULL;
@@ -328,6 +342,7 @@ namespace ops{
           }
       }
       C_in->cardinality = count;
+      C_in->range = N::range((uint32_t*)C_in->data,C_in->cardinality);
       C_in->number_of_bytes = C_in->cardinality*sizeof(uint32_t);
       return C_in;
   }
@@ -493,6 +508,7 @@ namespace ops{
     size_t tail = scalar<N>(freq, lenFreq, rare, lenRare, matchOut,f,rare-startRare,freq-startFreq);
 
     C_in->cardinality = count + tail;
+    C_in->range = N::range((uint32_t*)C_in->data,C_in->cardinality);
     C_in->number_of_bytes = (count+tail)*sizeof(uint32_t);
     C_in->type= type::UINTEGER;
 
@@ -730,6 +746,7 @@ namespace ops{
   FINISH_SCALAR: 
     const size_t final_count = count + scalar<N>(rare, stopRare + rarespace - rare, freq,stopFreq + freqspace - freq, out, f, rare-startRare, freq-startFreq);
     C_in->cardinality = final_count;
+    C_in->range = N::range((uint32_t*)C_in->data,C_in->cardinality);
     C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
     C_in->type= type::UINTEGER;
     return C_in;
@@ -990,6 +1007,7 @@ namespace ops{
   FINISH_SCALAR: 
     const size_t final_count = count + scalar<N>(rare, stopRare + rarespace - rare, freq,stopFreq + freqspace - freq, out, f, rare-startRare, freq-startFreq);
     C_in->cardinality = final_count;
+    C_in->range = N::range((uint32_t*)C_in->data,C_in->cardinality);
     C_in->number_of_bytes = (final_count)*sizeof(uint32_t);
     C_in->type= type::UINTEGER;
     return C_in;
@@ -1093,6 +1111,7 @@ namespace ops{
     count += scalar<N>(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,C,f,i_a,i_b);
 
     C_in->cardinality = count;
+    C_in->range = N::range((uint32_t*)C_in->data,C_in->cardinality);
     C_in->number_of_bytes = count*sizeof(uint32_t);
     C_in->type= type::UINTEGER;
 
@@ -1180,6 +1199,7 @@ namespace ops{
     count += scalar<N>(&A[i_a],s_a-i_a,&B[i_b],s_b-i_b,C,f,i_a,i_b);
     
     C_in->cardinality = count;
+    C_in->range = N::range((uint32_t*)C_in->data,C_in->cardinality);
     C_in->number_of_bytes = count*sizeof(uint32_t);
     C_in->type= type::UINTEGER;
 

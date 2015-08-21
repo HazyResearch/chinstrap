@@ -42,6 +42,10 @@ struct Trie{
   R annotation = (R)0;
   TrieBlock<T,R>* head;
 
+  Trie<T,R>(size_t num_levels_in){
+    num_levels = num_levels_in;
+  };
+
   Trie<T,R>(TrieBlock<T,R>* head_in, size_t num_levels_in){
     num_levels = num_levels_in;
     head = head_in;
