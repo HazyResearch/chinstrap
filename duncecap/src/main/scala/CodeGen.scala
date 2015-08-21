@@ -220,9 +220,17 @@ object CodeGen {
     }
   }
 
-  def emitSetComputations(s:CodeStringBuilder,cga:CodeGenNPRRAttr,seenAccessors:Set[String]): Unit = {
+  def emitNewTrieBlock(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String): Unit = {
+    s.println("//emitNewTrieBlock")
+    s.println(s"""TrieBlock<${Environment.layout},${annotationType}>* TrieBlock_${cga.attr} = 
+      new(output_buffer->get_next(${tid}, sizeof(TrieBlock<${Environment.layout},${annotationType}>))) 
+      TrieBlock<${Environment.layout},${annotationType}>(${cga.attr});""")
+    s.println(s"""TrieBlock_${cga.attr}->init_pointers(${tid},output_buffer);""")
+
+  }
+
+  def emitSetComputations(s:CodeStringBuilder,cga:CodeGenNPRRAttr,seenAccessors:Set[String],tid:String): Unit = {
     s.println("//emitSetComputations")
-    val tid = if(cga.first) "0" else "tid"
     cga.accessors.foreach(accessor => {emitTrieBlock(s,cga.attr,accessor,seenAccessors)})
     emitMaxSetAlloc(s,cga.attr,cga.accessors)
     emitNewSet(s,cga.attr,cga.accessors,tid)
@@ -250,7 +258,9 @@ object CodeGen {
     //should probably be recursive
     cg.attrs.foreach(cga => {
       //TODO: Refactor all of these into the CGA class there is no reason they can't be computed ahead of time.
-      emitSetComputations(s,cga,seenAccessors)
+      val tid = if(cga.first) "0" else "tid"
+      emitSetComputations(s,cga,seenAccessors,tid)
+      if(cga.materialize && !cga.last) emitNewTrieBlock(s,cga,tid)
       if(!cga.last) emitForEach(s,cga.attr,cga.first,cga.last)
       seenAccessors ++= cga.accessors.map(_.getName())
       //val attr:String, val agg:Option[String], val accessors:List[Accessor], val selection:Option[SelectionCondition]

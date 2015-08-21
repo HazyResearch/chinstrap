@@ -16,12 +16,16 @@ struct TrieBlock{
     is_sparse = init->is_sparse;
     values = init->values;
   }
-
+  TrieBlock(Set<T> setIn){
+    set = setIn;
+    values = NULL;
+  }
   TrieBlock(){
     values = NULL;
   }
   TrieBlock(bool sparse){
     is_sparse = sparse;
+    values = NULL;
   }
 
   /*
