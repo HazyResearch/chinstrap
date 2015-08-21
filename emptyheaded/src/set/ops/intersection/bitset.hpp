@@ -619,6 +619,7 @@ namespace ops{
   inline Set<range_bitset>* run_intersection(Set<range_bitset> *C_in, const Set<range_bitset> *A_in, const Set<range_bitset> *B_in, F f){
     long count = 0l;
     C_in->number_of_bytes = 0;
+    C_in->range = 0;
 
     if(A_in->number_of_bytes > 0 && B_in->number_of_bytes > 0){
       const uint64_t *a_index = (uint64_t*) A_in->data;
@@ -649,6 +650,7 @@ namespace ops{
       count = intersect_range_block<N>(C,index_write,A+a_start_index,B+b_start_index,total_size*64,start_index,f,A32_index,B32_index);
 
       C_in->number_of_bytes = total_size*(sizeof(uint64_t)+sizeof(uint32_t))+sizeof(uint64_t);
+      C_in->range = total_size*64; //num words = total size, 64 values per word
     }
 
     C_in->cardinality = count;

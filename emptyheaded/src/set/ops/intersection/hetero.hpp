@@ -52,6 +52,7 @@ namespace ops{
     }
 
     C_in->cardinality = count;
+    C_in->range = N::range((uint32_t*)C_in->data,C_in->cardinality);
     C_in->number_of_bytes = count*sizeof(uint32_t);
     C_in->type= type::UINTEGER;
 
