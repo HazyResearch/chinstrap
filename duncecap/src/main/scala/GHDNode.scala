@@ -8,8 +8,37 @@ import argonaut.Json
 import org.apache.commons.math3.optim.linear._
 import org.apache.commons.math3.optim.nonlinear.scalar.GoalType
 
-class Accessor(val trieName:String, val level:Int)
-class CodeGenNPRRAttr(val attr:String, val agg:Option[String], val accessors:List[Accessor], val selection:Option[SelectionCondition])
+class Accessor(val trieName:String, val level:Int, val attrs:List[String]){
+  def getName() : String = {
+    if(level == 0)
+      "TrieBlock_" + trieName + "_" + level
+    else {
+      val name = "TrieBlock_" + trieName + "_" + level + "_" + attrs(level)
+      return name
+    }
+  }
+  def getPrevName() : String = {
+    if(level-1 == 0)
+      "TrieBlock_" + trieName + "_0"
+    else{
+      val name = "TrieBlock_" + trieName + "_" + (level-1) + "_" + attrs(level-1)
+      return name
+    }
+  }
+  def getPrevAttr() : String = {
+    return attrs(level-1)
+  }
+}
+
+class CodeGenNPRRAttr(val attr:String, 
+  val agg:Option[String], 
+  val accessors:List[Accessor], 
+  val selection:Option[SelectionCondition], 
+  val materialize:Boolean, 
+  val first:Boolean, 
+  val last:Boolean, 
+  val prev:Option[String])
+
 class CodeGenGHD(val lhs:QueryRelation, val attrs:List[CodeGenNPRRAttr])
 
 class GHDNode(val rels: List[QueryRelation]) {

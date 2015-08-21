@@ -83,6 +83,9 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
   override def code(s: CodeStringBuilder): Unit = {
     //perform syntax checking (TODO)
 
+    //first emit allocators
+    CodeGen.emitAllocators(s)
+
     //run GHD decomp
     println(lhs.name + " " + lhs.attrs)
     join.foreach(qr =>
@@ -126,10 +129,17 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       
       val codeGenAttrs = attrOrder.map(a => {
         //create aggregate
+        val materialize = lhsAttrs.contains(a)
+        val first = a == attrOrder.head 
+        val last = a == attrOrder.last
+        val prev = if(!first) Some(attrOrder(attrOrder.indexOf(a)-1)) else None
         val aggregate = if(aggregates.contains(a)) Some(aggregates(a)) else None
         val selection = if(selections.contains(a)) Some(selections(a)) else None
-        val accessors = reorderedRelations.filter(rr => rr._2.attrs.contains(a)).map(rr => (rr._2.name,rr._2.attrs.indexOf(a)) ).toList.distinct
-        new CodeGenNPRRAttr(a, aggregate, accessors.map(a => new Accessor(a._1,a._2)),selection)
+        val accessors = reorderedRelations.
+          filter(rr => rr._2.attrs.contains(a)).
+          map(rr => new Accessor(rr._2.name,rr._2.attrs.indexOf(a),rr._2.attrs) ).
+          groupBy(a => a.getName()).map(_._2.head).toList
+        new CodeGenNPRRAttr(a,aggregate,accessors,selection,materialize,first,last,prev)
       })
       CodeGen.emitNPRR(s,name,new CodeGenGHD(bagLHS,codeGenAttrs))
     }))

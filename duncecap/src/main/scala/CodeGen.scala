@@ -147,6 +147,12 @@ object CodeGen {
     s.print("\n")
   }
 
+  def emitAllocators(s:CodeStringBuilder) : Unit = {
+    s.println("""////////////////////emitAllocators////////////////////""")
+    s.println(s"""allocator::memory<uint8_t> *output_buffer = new allocator::memory<uint8_t>(10000);""")
+    s.println(s"""allocator::memory<uint8_t> *tmp_buffer = new allocator::memory<uint8_t>(10000);""")
+  }
+
   def emitPrintRelation(s: CodeStringBuilder,rel:QueryRelation): Unit = {
     s.println("""////////////////////emitWriteBinaryEncoding////////////////////""")
     s.println("{")
@@ -166,15 +172,94 @@ object CodeGen {
     s.println("} \n")
   }
 
+  def emitTrieBlock(s:CodeStringBuilder,attr:String,accessor:Accessor,seenAccessors:Set[String]): Unit = {
+    if(!seenAccessors.contains(accessor.getName())){
+      s.print(s"""const TrieBlock<${Environment.layout},${annotationType}>* ${accessor.getName()} = """)
+      val getBlock = if(accessor.level == 0) 
+          s"""Trie_${accessor.trieName}->head;""" 
+        else 
+          s"""${accessor.getPrevName()}->get_block(${accessor.getPrevAttr()}_d);"""
+      s.println(getBlock)
+    }
+  }
+
+  def emitMaxSetAlloc(s:CodeStringBuilder,attr:String,accessors:List[Accessor]) : Unit = {
+    s.print(s"""const size_t alloc_size_${attr} = """)
+    accessors.tail.foreach(ac => { 
+      s.print(s"""std::max(${ac.getName()}->set.number_of_bytes,""" ) 
+    })
+    s.print(s"""${accessors.head.getName()}->set.number_of_bytes""")
+    accessors.tail.foreach(ac => s.print(")"))
+    s.print(";")
+  }
+
+  def emitIntersection(s:CodeStringBuilder,resultSet:String,op1:String,op2:String) : Unit = {
+    s.println(s"""${resultSet} = *ops::set_intersect(&${resultSet},
+      (const Set<${Environment.layout}> *)&${op1}->set,
+      (const Set<${Environment.layout}> *)&${op2}->set);""")
+  }
+
+  def emitNewSet(s:CodeStringBuilder,attr:String,accessors:List[Accessor],tid:String): Unit = {
+    if(accessors.length == 1){
+      s.println(s"""Set<${Environment.layout}> ${attr} = ${accessors.head.getName()}->set;""")
+    } else if(accessors.length == 2){
+      s.println(s"""Set<${Environment.layout}> ${attr}(output_buffer->get_next(${tid},alloc_size_${attr}));""")
+      emitIntersection(s,attr,accessors.head.getName(),accessors.last.getName())
+    } else{
+      s.println(s"""Set<${Environment.layout}> ${attr}(output_buffer->get_next(${tid},alloc_size_${attr}));""")
+      s.println(s"""Set<${Environment.layout}> ${attr}_tmp(tmp_buffer->get_next(${tid},alloc_size_${attr})); //initialize the memory""")
+      var tmp = (accessors.length % 2) == 1
+      var name = if(tmp) s"""${attr}_tmp""" else s"""${attr}"""
+      emitIntersection(s,name,accessors(0).getName(),accessors(1).getName())
+      (2 until accessors.length).foreach(i => {
+        tmp = !tmp
+        name = if(tmp) s"""${attr}_tmp""" else s"""${attr}"""
+        val opName = if(!tmp) s"""${attr}_tmp""" else s"""${attr}"""
+        emitIntersection(s,name,opName,accessors(i).getName())
+      })
+    }
+  }
+
+  def emitSetComputations(s:CodeStringBuilder,cga:CodeGenNPRRAttr,seenAccessors:Set[String]): Unit = {
+    s.println("//emitSetComputations")
+    val tid = if(cga.first) "0" else "tid"
+    cga.accessors.foreach(accessor => {emitTrieBlock(s,cga.attr,accessor,seenAccessors)})
+    emitMaxSetAlloc(s,cga.attr,cga.accessors)
+    emitNewSet(s,cga.attr,cga.accessors,tid)
+  }
+
+  def emitForEach(s:CodeStringBuilder,attr:String,first:Boolean,last:Boolean) : Unit = {
+    s.println("""//emitForEach""")
+    if(first){
+      s.println(s"""${attr}.par_foreach_index([&](size_t tid, uint32_t ${attr}_i, uint32_t ${attr}_d){""")
+    } else{
+      s.println(s"""${attr}.foreach_index([&](uint32_t ${attr}_i, uint32_t ${attr}_d) {""")
+    }
+  }
+
   def emitNPRR(s: CodeStringBuilder,name: String,cg:CodeGenGHD): Unit = {
     s.println("""////////////////////emitNPRR////////////////////""")
     s.println(s"""Trie<${Environment.layout},${annotationType}>* ${cg.lhs.name} = NULL;""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//")
+    val firstAttr = cg.attrs.head.attr
+    val lastAttr = cg.attrs.last.attr
+    var seenAccessors = Set[String]()
+    
+    //should probably be recursive
     cg.attrs.foreach(cga => {
-
+      //TODO: Refactor all of these into the CGA class there is no reason they can't be computed ahead of time.
+      emitSetComputations(s,cga,seenAccessors)
+      if(!cga.last) emitForEach(s,cga.attr,cga.first,cga.last)
+      seenAccessors ++= cga.accessors.map(_.getName())
+      //val attr:String, val agg:Option[String], val accessors:List[Accessor], val selection:Option[SelectionCondition]
     })
+    //close out an emit materializations if necessary
+    cg.attrs.foreach(cga =>{
+      if(!cga.last) s.println("});")
+    })
+
     if(!Environment.quiet) s.println(s"""debug::stop_clock("Bag ${name}",start_time);""")
     s.println("} \n")
   }
