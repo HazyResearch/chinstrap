@@ -1,6 +1,7 @@
 package DunceCap
 
 import scala.collection.mutable
+import sys.process._
 
 abstract trait ASTNode {
   def code(s: CodeStringBuilder)
@@ -44,7 +45,7 @@ case class ASTWriteBinaries() extends ASTNode {
       val (name,rmap) = tuple
       rmap.foreach(tup2 => {
         val (rname,rel) = tup2
-          CodeGen.emitWriteBinaryTrie(s,rel)
+          CodeGen.emitWriteBinaryTrie(s,rel.name)
       })
     })
     //write encodings
@@ -99,10 +100,19 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     val attributeOrdering = GHDSolver.getAttributeOrdering(myghd,lhs.attrs)
     println("GLOBAL ATTR ORDER: " + attributeOrdering)
     
+    //map each attribute to an encoding and type
+    val attrToEncodingMap = relations.flatMap(qr => {
+      val rName = qr.name + "_" + (0 until qr.attrs.length).mkString("_")
+      (0 until qr.attrs.length).map(i => {
+        (qr.attrs(i) -> (Environment.relations(qr.name)(rName).encodings(i),Environment.relations(qr.name)(rName).types(i)))
+      }).toList.distinct
+    }).toMap
+    println("ATTR TO ENCODING: " + attrToEncodingMap)
+
     //Figure out the relations and encodings you need for the query
     val reorderedRelations = relations.map(qr => {
       val reorderedAttrs = qr.attrs.sortBy(attributeOrdering.indexOf(_))
-      val rName = qr.name + "_" + reorderedAttrs.map(qr.attrs.indexOf(_)).mkString("")
+      val rName = qr.name + "_" + reorderedAttrs.map(qr.attrs.indexOf(_)).mkString("_")
       assert(Environment.relations.contains(qr.name))
       assert(Environment.relations(qr.name).contains(rName))
       ((qr.name,new QueryRelation(rName,reorderedAttrs)))
@@ -120,12 +130,17 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     CodeGen.emitLoadBinaryEncoding(s,encodings)
     CodeGen.emitLoadBinaryRelation(s,reorderedRelations.map(_._2.name).distinct)
 
+    //if the number of bags is 1 or the attributes in the root match those in the result
+    val topDownUnecessary = myghd .num_bags == 1 ||  
+      (lhs.attrs.intersect(myghd.attrSet.toList).length == lhs.attrs.length)
+    println("topDownUnecessary: " + topDownUnecessary)
+
     //run algorithm
     GHDSolver.bottomUp(myghd, ((ghd:GHDNode) => {
       val attrOrder = ghd.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
       val lhsAttrs = lhs.attrs.filter(attrOrder.contains(_)).sortBy(attrOrder.indexOf(_))
       val name = myghd.getName(attrOrder)
-      val bagLHS = new QueryRelation("Trie_bag_" + name,lhsAttrs)
+      val bagLHS = new QueryRelation("bag_" + name,lhsAttrs)
       
       val codeGenAttrs = attrOrder.map(a => {
         //create aggregate
@@ -143,5 +158,26 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       })
       CodeGen.emitNPRR(s,name,new CodeGenGHD(bagLHS,codeGenAttrs))
     }))
+    
+    val lhsOrder = (0 until lhs.attrs.length).sortBy(i => attributeOrdering.indexOf(lhs.attrs(i))).toList
+    val lhsEncodings = lhsOrder.map(i => attrToEncodingMap(lhs.attrs(i))._1).toList
+    val lhsTypes = lhsOrder.map(i => attrToEncodingMap(lhs.attrs(i))._2).toList
+    val lhsName = lhs.name+"_"+lhsOrder.mkString("_")
+    if(!topDownUnecessary){
+      s.println("//top down code")
+    } else{
+      //emit the actual trie name you want
+      val attrOrder = myghd.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
+      val name = myghd.getName(attrOrder)
+      CodeGen.emitRewriteOutputTrie(s,lhsName,"bag_" + name)
+    }
+
+    //below here should probably be refactored. this saves the environment and writes the trie to disk
+    Environment.addRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings))
+    Utils.writeEnvironmentToJSON()
+
+    s"""mkdir -p ${Environment.dbPath}/relations/${lhsName} """ !
+    
+    CodeGen.emitWriteBinaryTrie(s,lhsName)
   }
 }

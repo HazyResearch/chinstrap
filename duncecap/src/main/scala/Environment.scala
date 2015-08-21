@@ -20,7 +20,7 @@ object Environment {
   var yanna = true // delete this crapt
   var pipeline = false
 
-  var quiet = false
+  var quiet = true
 
   val astNodes = mutable.MutableList[ASTNode]()
   val relations = mutable.Map[String,mutable.Map[String, Relation]]()

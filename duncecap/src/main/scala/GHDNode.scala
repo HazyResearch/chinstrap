@@ -13,7 +13,7 @@ class Accessor(val trieName:String, val level:Int, val attrs:List[String]){
     if(level == 0)
       "TrieBlock_" + trieName + "_" + level
     else {
-      val name = "TrieBlock_" + trieName + "_" + level + "_" + (0 to level).map(i => attrs(i)).mkString("")
+      val name = "TrieBlock_" + trieName + "_" + level + "_" + (0 to level).map(i => attrs(i)).mkString("_")
       return name
     }
   }
@@ -21,7 +21,7 @@ class Accessor(val trieName:String, val level:Int, val attrs:List[String]){
     if(level-1 == 0)
       "TrieBlock_" + trieName + "_0"
     else{
-      val name = "TrieBlock_" + trieName + "_" + (level-1) + "_" + (0 to (level-1)).map(i => attrs(i)).mkString("")
+      val name = "TrieBlock_" + trieName + "_" + (level-1) + "_" + (0 to (level-1)).map(i => attrs(i)).mkString("_")
       return name
     }
   }

@@ -5,6 +5,8 @@ import sys.process._
 import scala.io._
 import java.nio.file.{Paths, Files}
 import java.io.{FileWriter, File, BufferedWriter}
+import argonaut.Argonaut._
+import argonaut.Json
 
 class CodeStringBuilder {
   val buffer = new StringBuilder
@@ -21,9 +23,8 @@ class CodeStringBuilder {
 }
 
 object Utils{
-  def loadEnvironmentFromJSON(config:Map[String,Any], create_db:Boolean):Unit = {
+  def loadEnvironmentFromJSON(config:Map[String,Any], create_db:Boolean, db_folder:String):Unit = {
     //Pull top level vars from JSON file
-    val db_folder = config("database").asInstanceOf[String]
     Environment.layout = config("layout").asInstanceOf[String]
     Environment.algorithm = config("algorithm").asInstanceOf[String]
     Environment.numNUMA = config("numNUMA").asInstanceOf[Double].toInt
@@ -38,7 +39,7 @@ object Utils{
     val relations = config("relations").asInstanceOf[List[Map[String,Any]]]
     relations.foreach(r => {
       val name = r("name").asInstanceOf[String]
-      val source = r("source").asInstanceOf[String]
+      val source = if(create_db) r("source").asInstanceOf[String] else ""
       val attributes = r("attributes").asInstanceOf[List[Map[String,String]]]
 
       attributes.foreach(a => { 
@@ -54,11 +55,15 @@ object Utils{
         Environment.addASTNode(ASTLoadRelation(source,master_relation))
       }
 
-      val ordering = r("ordering").asInstanceOf[List[String]]
       val attributePositions = (0 until attributes.size).toList
-      val orderings = if(ordering.length == 1 && ordering(0) == "all") attributePositions.permutations.toList else List(ordering)
+      val orderings = try { 
+        r("orderings").asInstanceOf[List[List[Double]]].map(e => e.map(_.toInt))
+      } catch{
+        case _:Throwable => attributePositions.permutations.toList
+      }
+
       orderings.foreach(o_attrs => {    
-        val o_aname = o_attrs.mkString("")
+        val o_aname = o_attrs.mkString("_")
         val o_name = s"""${name}_${o_aname}""" 
         val o_types = o_attrs.map(a => attribute_types(attributePositions.indexOf(a)) )
         val o_encod = o_attrs.map(a => attribute_encodings(attributePositions.indexOf(a)) )
@@ -70,6 +75,44 @@ object Utils{
         }
       })
     })
+  }
+
+  def writeEnvironmentToJSON():Unit = {
+    val file = new File(Environment.dbPath+"/config.json")
+    val bw = new BufferedWriter(new FileWriter(file))
+    
+    //PREPARE THE RELATIONS TO SPILL TO JSON
+    val rJson = Environment.relations.map(tup =>{
+      val (name,r) = tup
+      val orderings = r.map( tup2 => {
+        val (oname,or) = tup2
+        jArray(oname.split("_").tail.map(c => {
+          jNumber(c.toInt)
+        }).toList)
+      }).toList
+      Json("name" -> jString(name),
+          "orderings" -> jArray(orderings),
+          "attributes" -> jArray(
+            (0 until r.head._2.types.length).map(i => {
+              Json("type" -> jString(r.head._2.types(i)),
+                  "encoding" -> jString(r.head._2.encodings(i))
+              )
+            }).toList
+          )
+      )
+    }).toList
+
+    //top level json struct
+    val json = 
+        Json("numThreads" -> jNumber(Environment.numThreads),
+          "numNUMA" -> jNumber(Environment.numNUMA),
+          "algorithm" -> jString(Environment.algorithm),
+          "layout" -> jString(Environment.layout),
+          "relations" ->  jArray(rJson)
+        )
+
+    bw.append(json.spaces2)
+    bw.close()
   }
 
   def compileAndRun(codeStringBuilder:CodeStringBuilder,filename:String):Unit = {
@@ -86,6 +129,7 @@ object Utils{
     bw.close()
     s"""clang-format -style=llvm -i ${file}""" !
 
+    if(Environment.quiet) print("Compiling C++ code....")
     val silent = if(Environment.quiet) "--silent" else "SILENT=false"
     sys.process.Process(Seq("rm", "-rf",s"""bin/${filename}"""), new File("emptyheaded")).!
     val result = sys.process.Process(Seq("make",silent,s"""NUM_THREADS=${Environment.numThreads}""", s"""bin/${filename}"""), new File("emptyheaded")).!
@@ -94,6 +138,7 @@ object Utils{
       println("FAILURE: Compilation errors.")
       System.exit(1)
     }
+    if(Environment.quiet) println("FINISHED")
 
     s"""emptyheaded/bin/${filename}""" !
   }

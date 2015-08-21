@@ -108,13 +108,13 @@ object CodeGen {
     s.println("} \n")
   }
 
-  def emitWriteBinaryTrie(s: CodeStringBuilder,rel:Relation): Unit = {
+  def emitWriteBinaryTrie(s: CodeStringBuilder,relName:String): Unit = {
     s.println("""////////////////////emitWriteBinaryTrie////////////////////""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//buildTrie")
-    s.println(s"""Trie_${rel.name}->to_binary("${Environment.dbPath}/relations/${rel.name}/");""")
-    if(!Environment.quiet) s.println(s"""debug::stop_clock("WRITING BINARY TRIE ${rel.name}",start_time);""")
+    s.println(s"""Trie_${relName}->to_binary("${Environment.dbPath}/relations/${relName}/");""")
+    if(!Environment.quiet) s.println(s"""debug::stop_clock("WRITING BINARY TRIE ${relName}",start_time);""")
     s.println("} \n")
   }
 
@@ -157,7 +157,7 @@ object CodeGen {
     s.println("""////////////////////emitWriteBinaryEncoding////////////////////""")
     s.println("{")
     //load from binary first
-    val qr = rel.name + "_" + (0 until rel.attrs.size).toList.mkString("")
+    val qr = rel.name + "_" + (0 until rel.attrs.size).toList.mkString("_")
     s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${qr} = Trie<${Environment.layout},${annotationType}>::from_binary("${Environment.dbPath}/relations/${qr}/");""")
     val loadEncodings = (0 until rel.attrs.size).map(i => { Environment.relations(rel.name)(qr).encodings(i)}).toList.distinct
     emitLoadBinaryEncoding(s,loadEncodings)
@@ -234,7 +234,7 @@ object CodeGen {
       case Some(a) =>
         s.println(s"""TrieBlock_${a}->set_block(${a}_i,${a}_d,TrieBlock_${cga.attr});""")
       case None =>
-        s.println(s"""${lhs}->head = TrieBlock_${cga.attr};""")
+        s.println(s"""Trie_${lhs}->head = TrieBlock_${cga.attr};""")
     }
   }
 
@@ -254,9 +254,13 @@ object CodeGen {
     }
   }
 
+  def emitRewriteOutputTrie(s:CodeStringBuilder,outName:String,prevName:String) : Unit = {
+    s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${outName} = Trie_${prevName};""")
+  }
+
   def emitNPRR(s: CodeStringBuilder,name: String,cg:CodeGenGHD): Unit = {
     s.println("""////////////////////emitNPRR////////////////////""")
-    s.println(s"""Trie<${Environment.layout},${annotationType}>* ${cg.lhs.name} = new (output_buffer->get_next(0, sizeof(Trie<${Environment.layout}, ${annotationType}>))) Trie<${Environment.layout}, ${annotationType}>(${cg.lhs.attrs.length});""")
+    s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${cg.lhs.name} = new (output_buffer->get_next(0, sizeof(Trie<${Environment.layout}, ${annotationType}>))) Trie<${Environment.layout}, ${annotationType}>(${cg.lhs.attrs.length});""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//")

@@ -22,17 +22,19 @@ object DBLoader extends App {
     case Some(map: Map[String, Any]) => map
     case _ => Map()
   }
-  
+  val db_folder = config("database").asInstanceOf[String]
+
   //load JSON file (creates directory structure for DB as well)
   Environment.addASTNode(ASTCreateDB())
   Environment.addASTNode(ASTBuildEncodings())
   Environment.addASTNode(ASTWriteBinaries())
-  Utils.loadEnvironmentFromJSON(config,true)
+  Utils.loadEnvironmentFromJSON(config,true,db_folder)
 
   //emit code
   val codeStringBuilder = new CodeStringBuilder
   Environment.emitASTNodes(codeStringBuilder) //builds the relations & encodings
 
+  Utils.writeEnvironmentToJSON()
   //compile and run C++ code
   Utils.compileAndRun(codeStringBuilder,"load_" + Environment.dbPath.split("/").toList.last)
 }
