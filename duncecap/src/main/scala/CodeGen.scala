@@ -202,29 +202,24 @@ object CodeGen {
   def emitAnnotationComputation(s:CodeStringBuilder,
     cga:CodeGenNPRRAttr,
     tid:String,
-    firstAgg:Boolean,
     expression:String,
-    scalarResult:Boolean): Boolean = {
+    scalarResult:Boolean,
+    aggregates:List[String]): Unit = {
     cga.agg match {
       case Some(aggregate) => {
         println("AGGREGATE: " + aggregate)
-        if(firstAgg){
-          if(!scalarResult) s.println(s"""${annotationType} annotation = (${annotationType})0;""")
-          s.println(s"""${annotationType} annotation_tmp = ${expression};""")
-        } else if(cga.last){ //always the last attribute?
+        if(cga.last){ //always the last attribute?
           aggregate match {
             case "SUM" =>
-              if(!scalarResult) s.println(s"""annotation += (annotation_tmp * (${expression}*${cga.attr}.cardinality));""")
-              else s.println(s"""annotation.update(${tid},(annotation_tmp * (${expression}*${cga.attr}.cardinality)));""")
+              s.println(s"""${annotationType} annotation_${cga.attr} = (annotation_tmp * (${expression}*${cga.attr}.cardinality));""")
             case _ =>
-
           }
         }else {
-          s.println(s"""annotation_tmp *= ${expression};""")
-            
+          if(scalarResult && aggregates.indexOf(cga.attr) == 0) emitAggregateReducer(s,cga)
+          else if(aggregates.indexOf(cga.attr) == 0) s.println(s"""${annotationType} annotation = (${annotationType})0;""")    
+          else s.println(s"""${annotationType} annotation_${cga.attr} = (${annotationType})0;""")            
         }
-        false
-      } case None => true 
+      } case None => 
     }
   }
 
@@ -318,6 +313,19 @@ object CodeGen {
     s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${outName} = Trie_${prevName};""")
   }
 
+  def emitAnnotationTemporary(s:CodeStringBuilder, cga:CodeGenNPRRAttr, aggregates:List[String], expression:String) : Unit = {
+    cga.agg match {
+      case Some(a) => 
+        println("HEREHERHER")
+        if(aggregates.indexOf(cga.attr) == 0){
+          s.println(s"""${annotationType} annotation_tmp = ${expression};""")
+        } else if(aggregates.indexOf(cga.attr) != (aggregates.length-1)){
+          s.println(s"""annotation_tmp *= ${expression};""")
+        }
+      case None =>
+    }
+  }
+
   def emitNPRR(s: CodeStringBuilder,name: String,cg:CodeGenGHD): Unit = {
     s.println("""////////////////////emitNPRR////////////////////""")
     s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${cg.lhs.name} = new (output_buffer->get_next(0, sizeof(Trie<${Environment.layout}, ${annotationType}>))) Trie<${Environment.layout}, ${annotationType}>(${cg.lhs.attrs.length});""")
@@ -328,24 +336,31 @@ object CodeGen {
     val lastAttr = cg.attrs.last.attr
     var seenAccessors = Set[String]()
     
-    if(cg.scalarResult) emitAggregateReducer(s,cg.attrs.head)
-
     //should probably be recursive
-    var firstAgg = true
     cg.attrs.foreach(cga => {
       //TODO: Refactor all of these into the CGA class there is no reason they can't be computed ahead of time.
       val tid = if(cga.first) "0" else "tid"
       emitSetComputations(s,cga,seenAccessors,tid)
       if(cga.materialize) emitNewTrieBlock(s,cga,tid)
+      emitAnnotationComputation(s,cga,tid,cg.expression,cg.scalarResult,cg.aggregates)
       if(!cga.last) emitForEach(s,cga,cg.expression)
-      firstAgg = emitAnnotationComputation(s,cga,tid,firstAgg,cg.expression,cg.scalarResult)
+      emitAnnotationTemporary(s,cga,cg.aggregates,cg.expression)
       seenAccessors ++= cga.accessors.map(_.getName())
     })
     //close out an emit materializations if necessary
     cg.attrs.reverse.foreach(cga =>{
       val tid = if(cga.first) "0" else "tid"
       cga.agg match {
-        case Some(a) => s.println(s"""output_buffer->roll_back(${tid},${cga.attr}.number_of_bytes);""")
+        case Some(a) => {
+          println("AGGS: " + cg.aggregates)
+          s.println(s"""output_buffer->roll_back(${tid},${cga.attr}.number_of_bytes);""")
+          val index = cg.aggregates.indexOf(cga.attr)
+          if(index == 1 && cg.scalarResult){
+            s.println(s"""annotation.update(${tid},annotation_${cga.attr});""")
+          } else if(index != 0){
+            s.println(s"""annotation_${cg.aggregates(index-1)} += annotation_${cga.attr};""")
+          }
+        }
         case None => if(cga.materialize) emitSetTrieBlock(s,cga,cg.lhs.name)
       }
       if(!cga.first) s.println("});")

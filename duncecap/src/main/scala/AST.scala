@@ -141,6 +141,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     val scalarResult = lhsOrder.length == 0
 
     val aggregateExpression = if(aggregateExpressions.isEmpty) "" else aggregateExpressions.head._2
+    val aggregateOrder = aggregates.toList.map(_._1).sortBy(attributeOrdering.indexOf(_))
 
     //run algorithm
     GHDSolver.bottomUp(myghd, ((ghd:GHDNode) => {
@@ -163,7 +164,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
           groupBy(a => a.getName()).map(_._2.head).toList
         new CodeGenNPRRAttr(a,aggregate,accessors,selection,materialize,first,last,prev)
       })
-      CodeGen.emitNPRR(s,name,new CodeGenGHD(bagLHS,codeGenAttrs,aggregateExpression,scalarResult))
+      CodeGen.emitNPRR(s,name,new CodeGenGHD(bagLHS,codeGenAttrs,aggregateExpression,scalarResult,aggregateOrder))
     }))
     
     val lhsEncodings = lhsOrder.map(i => attrToEncodingMap(lhs.attrs(i))._1).toList
