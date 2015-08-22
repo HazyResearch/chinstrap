@@ -138,10 +138,8 @@ object Utils{
       println("FAILURE: Compilation errors.")
       System.exit(1)
     }
-    if(Environment.quiet) println("FINISHED")
+    if(Environment.quiet) println("FINISHED. Running C++ code....")
 
-    if(Environment.quiet) print("Running C++ code....")
     s"""emptyheaded/bin/${filename}""" !
-
   }
 }

@@ -199,7 +199,7 @@ object CodeGen {
       (const Set<${Environment.layout}> *)&${op2}->set);""")
   }
 
-  def emitAnnotationComputation(s:CodeStringBuilder,
+  def emitAnnotationInitialization(s:CodeStringBuilder,
     cga:CodeGenNPRRAttr,
     tid:String,
     expression:String,
@@ -207,13 +207,8 @@ object CodeGen {
     aggregates:List[String]): Unit = {
     cga.agg match {
       case Some(aggregate) => {
-        println("AGGREGATE: " + aggregate)
         if(cga.last){ //always the last attribute?
-          aggregate match {
-            case "SUM" =>
-              s.println(s"""${annotationType} annotation_${cga.attr} = (annotation_tmp * (${expression}*${cga.attr}.cardinality));""")
-            case _ =>
-          }
+          s.println(s"""${annotationType} annotation_${cga.attr} = (annotation_tmp * (${expression}*${cga.attr}.cardinality));""")
         }else {
           if(scalarResult && aggregates.indexOf(cga.attr) == 0) emitAggregateReducer(s,cga)
           else if(aggregates.indexOf(cga.attr) == 0) s.println(s"""${annotationType} annotation = (${annotationType})0;""")    
@@ -278,11 +273,11 @@ object CodeGen {
   }
 
   def emitAggregateReducer(s:CodeStringBuilder,cga:CodeGenNPRRAttr):Unit = {
+    s.println("//emitAggregateReducer")
     cga.agg match {
-      case Some("SUM") => {
+      case Some("SUM") => 
         s.println(s"""par::reducer<${annotationType}> annotation(0,[](size_t a, size_t b){ return a + b; });""")
-      }
-      case None =>
+      case _ =>
     }
   }
 
@@ -309,28 +304,55 @@ object CodeGen {
     }
   }
 
-  def emitRewriteOutputTrie(s:CodeStringBuilder,outName:String,prevName:String) : Unit = {
+  def emitRewriteOutputTrie(s:CodeStringBuilder,outName:String,prevName:String,scalarResult:Boolean) : Unit = {
+    s.println("//emitRewriteOutputTrie")
     s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${outName} = Trie_${prevName};""")
+    if(scalarResult){
+      s.println(s"""std::cout << "Query Result: " << Trie_${outName}->annotation << std::endl;""")
+    } 
   }
 
   def emitAnnotationTemporary(s:CodeStringBuilder, cga:CodeGenNPRRAttr, aggregates:List[String], expression:String) : Unit = {
     cga.agg match {
-      case Some(a) => 
-        println("HEREHERHER")
+      case Some(a) => {
+        s.println("//emitAnnotationTemporary")
         if(aggregates.indexOf(cga.attr) == 0){
           s.println(s"""${annotationType} annotation_tmp = ${expression};""")
         } else if(aggregates.indexOf(cga.attr) != (aggregates.length-1)){
           s.println(s"""annotation_tmp *= ${expression};""")
         }
+      }
       case None =>
+    }
+  }
+
+  def emitAnnotationComputation(s:CodeStringBuilder,cg:CodeGenGHD,cga:CodeGenNPRRAttr,agg:String,tid:String):Unit = {
+    s.println("//emitAnnotationComputation")
+    s.println(s"""output_buffer->roll_back(${tid},${cga.attr}.number_of_bytes);""")
+    val index = cg.aggregates.indexOf(cga.attr)
+    if(index == 1 && cg.scalarResult){
+      s.println(s"""annotation.update(${tid},annotation_${cga.attr});""")
+    } else if(index != 0){
+      agg match {
+        case "SUM" => s.println(s"""annotation_${cg.aggregates(index-1)} += annotation_${cga.attr};""")
+        case _ => s.println(s"""//${agg} not implemented""")
+      }
+    } else {
+      if(cg.scalarResult)
+        s.println(s"""Trie_${cg.lhs.name}->annotation = annotation.evaluate(0);""")
+      else 
+        s.println(s"""//something for the trie block?""")
     }
   }
 
   def emitNPRR(s: CodeStringBuilder,name: String,cg:CodeGenGHD): Unit = {
     s.println("""////////////////////emitNPRR////////////////////""")
-    s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${cg.lhs.name} = new (output_buffer->get_next(0, sizeof(Trie<${Environment.layout}, ${annotationType}>))) Trie<${Environment.layout}, ${annotationType}>(${cg.lhs.attrs.length});""")
+    s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${cg.lhs.name} = 
+      new (output_buffer->get_next(0, sizeof(Trie<${Environment.layout}, ${annotationType}>))) 
+      Trie<${Environment.layout}, ${annotationType}>(${cg.lhs.attrs.length});""")
     s.println("{")
-    if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
+    //if(!Environment.quiet) 
+    s.println("""auto start_time = debug::start_clock();""")
     s.println("//")
     val firstAttr = cg.attrs.head.attr
     val lastAttr = cg.attrs.last.attr
@@ -342,7 +364,7 @@ object CodeGen {
       val tid = if(cga.first) "0" else "tid"
       emitSetComputations(s,cga,seenAccessors,tid)
       if(cga.materialize) emitNewTrieBlock(s,cga,tid)
-      emitAnnotationComputation(s,cga,tid,cg.expression,cg.scalarResult,cg.aggregates)
+      emitAnnotationInitialization(s,cga,tid,cg.expression,cg.scalarResult,cg.aggregates)
       if(!cga.last) emitForEach(s,cga,cg.expression)
       emitAnnotationTemporary(s,cga,cg.aggregates,cg.expression)
       seenAccessors ++= cga.accessors.map(_.getName())
@@ -351,26 +373,14 @@ object CodeGen {
     cg.attrs.reverse.foreach(cga =>{
       val tid = if(cga.first) "0" else "tid"
       cga.agg match {
-        case Some(a) => {
-          println("AGGS: " + cg.aggregates)
-          s.println(s"""output_buffer->roll_back(${tid},${cga.attr}.number_of_bytes);""")
-          val index = cg.aggregates.indexOf(cga.attr)
-          if(index == 1 && cg.scalarResult){
-            s.println(s"""annotation.update(${tid},annotation_${cga.attr});""")
-          } else if(index != 0){
-            s.println(s"""annotation_${cg.aggregates(index-1)} += annotation_${cga.attr};""")
-          }
-        }
+        case Some(a) => emitAnnotationComputation(s,cg,cga,a,tid)
         case None => if(cga.materialize) emitSetTrieBlock(s,cga,cg.lhs.name)
       }
       if(!cga.first) s.println("});")
     })
 
-    if(cg.scalarResult){
-      s.println(s"""std::cout << annotation.evaluate(0) << std::endl;""")
-    }
-
-    if(!Environment.quiet) s.println(s"""debug::stop_clock("Bag ${name}",start_time);""")
+    //if(!Environment.quiet) 
+    s.println(s"""debug::stop_clock("Bag ${name}",start_time);""")
     s.println("} \n")
   }
 

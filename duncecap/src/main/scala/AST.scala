@@ -177,7 +177,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       //emit the actual trie name you want
       val attrOrder = myghd.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
       val name = myghd.getName(attrOrder)
-      CodeGen.emitRewriteOutputTrie(s,lhsName,"bag_" + name)
+      CodeGen.emitRewriteOutputTrie(s,lhsName,"bag_" + name,scalarResult)
     }
 
     if(!scalarResult){
