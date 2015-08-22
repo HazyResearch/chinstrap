@@ -215,7 +215,7 @@ Trie<T,R>* Trie<T,R>::from_binary(const std::string path){
     infiles.push_back(myv);
   }
 
-  allocator::memory<uint8_t> *allocator_in = new allocator::memory<uint8_t>(10000);
+  allocator::memory<uint8_t> *allocator_in = new allocator::memory<uint8_t>(10000); //TODO Fix this.
   auto tup = TrieBlock<T,R>::from_binary(infiles.at(0).at(0),allocator_in,0);
   TrieBlock<T,R>* head = std::get<0>(tup);  
   head->init_pointers(0,allocator_in);

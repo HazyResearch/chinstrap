@@ -140,6 +140,8 @@ object Utils{
     }
     if(Environment.quiet) println("FINISHED")
 
+    if(Environment.quiet) print("Running C++ code....")
     s"""emptyheaded/bin/${filename}""" !
+
   }
 }

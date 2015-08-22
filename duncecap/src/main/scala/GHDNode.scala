@@ -39,7 +39,7 @@ class CodeGenNPRRAttr(val attr:String,
   val last:Boolean, 
   val prev:Option[String])
 
-class CodeGenGHD(val lhs:QueryRelation, val attrs:List[CodeGenNPRRAttr])
+class CodeGenGHD(val lhs:QueryRelation, val attrs:List[CodeGenNPRRAttr], val expression:String, val scalarResult:Boolean)
 
 class GHDNode(val rels: List[QueryRelation]) {
   val attrSet = rels.foldLeft(TreeSet[String]())(

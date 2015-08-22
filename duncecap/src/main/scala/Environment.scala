@@ -34,7 +34,7 @@ object Environment {
     if(!relations.contains(name)){
       relations += (name -> mutable.Map(r.name -> r) )
     } else {
-      assert(!relations(name).contains(r.name))
+      //assert(!relations(name).contains(r.name))
       relations(name) += (r.name -> r)
     }
   }

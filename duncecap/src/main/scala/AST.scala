@@ -99,6 +99,8 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     //find attr ordering
     val attributeOrdering = GHDSolver.getAttributeOrdering(myghd,lhs.attrs)
     println("GLOBAL ATTR ORDER: " + attributeOrdering)
+
+    println("AGGREGATES: " + aggregates)
     
     //map each attribute to an encoding and type
     val attrToEncodingMap = relations.flatMap(qr => {
@@ -135,6 +137,11 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       (lhs.attrs.intersect(myghd.attrSet.toList).length == lhs.attrs.length)
     println("topDownUnecessary: " + topDownUnecessary)
 
+    val lhsOrder = (0 until lhs.attrs.length).filter(i => attributeOrdering.contains(lhs.attrs(i))).sortBy(i => attributeOrdering.indexOf(lhs.attrs(i))).toList
+    val scalarResult = lhsOrder.length == 0
+
+    val aggregateExpression = if(aggregateExpressions.isEmpty) "" else aggregateExpressions.head._2
+
     //run algorithm
     GHDSolver.bottomUp(myghd, ((ghd:GHDNode) => {
       val attrOrder = ghd.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
@@ -156,12 +163,12 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
           groupBy(a => a.getName()).map(_._2.head).toList
         new CodeGenNPRRAttr(a,aggregate,accessors,selection,materialize,first,last,prev)
       })
-      CodeGen.emitNPRR(s,name,new CodeGenGHD(bagLHS,codeGenAttrs))
+      CodeGen.emitNPRR(s,name,new CodeGenGHD(bagLHS,codeGenAttrs,aggregateExpression,scalarResult))
     }))
     
-    val lhsOrder = (0 until lhs.attrs.length).sortBy(i => attributeOrdering.indexOf(lhs.attrs(i))).toList
     val lhsEncodings = lhsOrder.map(i => attrToEncodingMap(lhs.attrs(i))._1).toList
     val lhsTypes = lhsOrder.map(i => attrToEncodingMap(lhs.attrs(i))._2).toList
+    val annotations = (lhs.attrs.filter(!attributeOrdering.contains(_)).mkString("_"))
     val lhsName = lhs.name+"_"+lhsOrder.mkString("_")
     if(!topDownUnecessary){
       s.println("//top down code")
@@ -172,12 +179,14 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       CodeGen.emitRewriteOutputTrie(s,lhsName,"bag_" + name)
     }
 
-    //below here should probably be refactored. this saves the environment and writes the trie to disk
-    Environment.addRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings))
-    Utils.writeEnvironmentToJSON()
+    if(!scalarResult){
+      //below here should probably be refactored. this saves the environment and writes the trie to disk
+      Environment.addRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings))
+      Utils.writeEnvironmentToJSON()
 
-    s"""mkdir -p ${Environment.dbPath}/relations/${lhsName} """ !
-    
-    CodeGen.emitWriteBinaryTrie(s,lhsName)
+      s"""mkdir -p ${Environment.dbPath}/relations/${lhsName} """ !
+      
+      CodeGen.emitWriteBinaryTrie(s,lhsName)
+    }
   }
 }

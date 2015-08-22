@@ -150,7 +150,7 @@ object CodeGen {
   def emitAllocators(s:CodeStringBuilder) : Unit = {
     s.println("""////////////////////emitAllocators////////////////////""")
     s.println(s"""allocator::memory<uint8_t> *output_buffer = new allocator::memory<uint8_t>(10000);""")
-    s.println(s"""allocator::memory<uint8_t> *tmp_buffer = new allocator::memory<uint8_t>(10000);""")
+    s.println(s"""allocator::memory<uint8_t> *tmp_buffer = new allocator::memory<uint8_t>(10000); (void) tmp_buffer;""")
   }
 
   def emitPrintRelation(s: CodeStringBuilder,rel:QueryRelation): Unit = {
@@ -199,7 +199,38 @@ object CodeGen {
       (const Set<${Environment.layout}> *)&${op2}->set);""")
   }
 
-  def emitNewSet(s:CodeStringBuilder,attr:String,accessors:List[Accessor],tid:String): Unit = {
+  def emitAnnotationComputation(s:CodeStringBuilder,
+    cga:CodeGenNPRRAttr,
+    tid:String,
+    firstAgg:Boolean,
+    expression:String,
+    scalarResult:Boolean): Boolean = {
+    cga.agg match {
+      case Some(aggregate) => {
+        println("AGGREGATE: " + aggregate)
+        if(firstAgg){
+          if(!scalarResult) s.println(s"""${annotationType} annotation = (${annotationType})0;""")
+          s.println(s"""${annotationType} annotation_tmp = ${expression};""")
+        } else if(cga.last){ //always the last attribute?
+          aggregate match {
+            case "SUM" =>
+              if(!scalarResult) s.println(s"""annotation += (annotation_tmp * (${expression}*${cga.attr}.cardinality));""")
+              else s.println(s"""annotation.update(${tid},(annotation_tmp * (${expression}*${cga.attr}.cardinality)));""")
+            case _ =>
+
+          }
+        }else {
+          s.println(s"""annotation_tmp *= ${expression};""")
+            
+        }
+        false
+      } case None => true 
+    }
+  }
+
+  def emitNewSet(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String): Unit = {
+    val attr = cga.attr
+    val accessors = cga.accessors
     if(accessors.length == 1){
       s.println(s"""Set<${Environment.layout}> ${attr} = ${accessors.head.getName()}->set;""")
     } else if(accessors.length == 2){
@@ -217,7 +248,12 @@ object CodeGen {
         val opName = if(!tmp) s"""${attr}_tmp""" else s"""${attr}"""
         emitIntersection(s,name,opName,accessors(i).getName())
       })
+      s.println(s"""tmp_buffer->roll_back(${tid},alloc_size_${attr});""")
     }
+  }
+
+  def emitRollBack(s:CodeStringBuilder,attr:String,tid:String):Unit = {
+    s.println(s"""output_buffer->roll_back(${tid},alloc_size_${attr}-${attr}.number_of_bytes);""")
   }
 
   def emitNewTrieBlock(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String): Unit = {
@@ -242,15 +278,39 @@ object CodeGen {
     s.println("//emitSetComputations")
     cga.accessors.foreach(accessor => {emitTrieBlock(s,cga.attr,accessor,seenAccessors)})
     emitMaxSetAlloc(s,cga.attr,cga.accessors)
-    emitNewSet(s,cga.attr,cga.accessors,tid)
+    emitNewSet(s,cga,tid)
+    emitRollBack(s,cga.attr,tid)
   }
 
-  def emitForEach(s:CodeStringBuilder,attr:String,first:Boolean,last:Boolean) : Unit = {
+  def emitAggregateReducer(s:CodeStringBuilder,cga:CodeGenNPRRAttr):Unit = {
+    cga.agg match {
+      case Some("SUM") => {
+        s.println(s"""par::reducer<${annotationType}> annotation(0,[](size_t a, size_t b){ return a + b; });""")
+      }
+      case None =>
+    }
+  }
+
+  def emitForEach(s:CodeStringBuilder,cga:CodeGenNPRRAttr,expression:String) : Unit = {
+    val attr = cga.attr
+    val first = cga.first
+    val last = cga.last
     s.println("""//emitForEach""")
-    if(first){
-      s.println(s"""${attr}.par_foreach_index([&](size_t tid, uint32_t ${attr}_i, uint32_t ${attr}_d){""")
-    } else{
-      s.println(s"""${attr}.foreach_index([&](uint32_t ${attr}_i, uint32_t ${attr}_d) {""")
+    cga.agg match {
+      case Some(agg) =>{  //this should only be for constant expressions really otherwise we need a foreach_index
+        if(first){
+          s.println(s"""${attr}.par_foreach([&](size_t tid, uint32_t ${attr}_d){""")
+        } else{
+          s.println(s"""${attr}.foreach([&](uint32_t ${attr}_d) {""")
+        }
+      }
+      case None => {
+        if(first){
+          s.println(s"""${attr}.par_foreach_index([&](size_t tid, uint32_t ${attr}_i, uint32_t ${attr}_d){""")
+        } else{
+          s.println(s"""${attr}.foreach_index([&](uint32_t ${attr}_i, uint32_t ${attr}_d) {""")
+        }
+      }
     }
   }
 
@@ -268,21 +328,32 @@ object CodeGen {
     val lastAttr = cg.attrs.last.attr
     var seenAccessors = Set[String]()
     
+    if(cg.scalarResult) emitAggregateReducer(s,cg.attrs.head)
+
     //should probably be recursive
+    var firstAgg = true
     cg.attrs.foreach(cga => {
       //TODO: Refactor all of these into the CGA class there is no reason they can't be computed ahead of time.
       val tid = if(cga.first) "0" else "tid"
       emitSetComputations(s,cga,seenAccessors,tid)
       if(cga.materialize) emitNewTrieBlock(s,cga,tid)
-      if(!cga.last) emitForEach(s,cga.attr,cga.first,cga.last)
+      if(!cga.last) emitForEach(s,cga,cg.expression)
+      firstAgg = emitAnnotationComputation(s,cga,tid,firstAgg,cg.expression,cg.scalarResult)
       seenAccessors ++= cga.accessors.map(_.getName())
-      //val attr:String, val agg:Option[String], val accessors:List[Accessor], val selection:Option[SelectionCondition]
     })
     //close out an emit materializations if necessary
     cg.attrs.reverse.foreach(cga =>{
-      if(cga.materialize) emitSetTrieBlock(s,cga,cg.lhs.name)
+      val tid = if(cga.first) "0" else "tid"
+      cga.agg match {
+        case Some(a) => s.println(s"""output_buffer->roll_back(${tid},${cga.attr}.number_of_bytes);""")
+        case None => if(cga.materialize) emitSetTrieBlock(s,cga,cg.lhs.name)
+      }
       if(!cga.first) s.println("});")
     })
+
+    if(cg.scalarResult){
+      s.println(s"""std::cout << annotation.evaluate(0) << std::endl;""")
+    }
 
     if(!Environment.quiet) s.println(s"""debug::stop_clock("Bag ${name}",start_time);""")
     s.println("} \n")
