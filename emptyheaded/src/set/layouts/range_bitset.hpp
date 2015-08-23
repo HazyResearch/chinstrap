@@ -16,6 +16,7 @@ class range_bitset{
     static size_t word_index(const uint32_t bit_index);
     static bool is_set(const uint32_t index, const uint64_t *in_array, const uint64_t start_index);
     static void set(const uint32_t index, uint64_t *in_array, const uint64_t start_index);
+    static size_t get_number_of_bytes(const size_t length, const size_t range);
 
     static long find(uint32_t key, const uint8_t *data_in, const size_t number_of_bytes, const type::layout t);
     static std::tuple<size_t,bool> find(uint32_t start_index, uint32_t key, const uint8_t *data_in, const size_t number_of_bytes, const type::layout t);
@@ -91,6 +92,15 @@ inline void range_bitset::set(const uint32_t index, uint64_t * const in_array, c
 inline type::layout range_bitset::get_type(){
   return type::RANGE_BITSET;
 }
+
+//Called before build to get proper alloc size
+inline size_t range_bitset::get_number_of_bytes(const size_t length, const size_t range){
+  (void) length;
+  //overestimate by 1 word because the range could cross a word boundary ie range 10 of [60,70]
+  //is 2 words
+  return ( (word_index(range)+2) * (sizeof(uint64_t)+sizeof(uint32_t)) ) + sizeof(uint64_t); 
+}
+
 //Copies data from input array of ints to our set data r_in
 inline std::tuple<size_t,type::layout> range_bitset::build(uint8_t *R, const uint32_t *A, const size_t s_a){
   if(s_a > 0){

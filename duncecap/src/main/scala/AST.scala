@@ -29,10 +29,17 @@ case class ASTBuildEncodings() extends ASTNode {
   }
 }
 
-case class ASTBuildTrie(sourcePath:String,rel:Relation,name:String) extends ASTNode {
+case class ASTEncodeRelation(rel:Relation) extends ASTNode {
   override val order = 4
   override def code(s: CodeStringBuilder): Unit = {
-    CodeGen.emitEncodeRelation(s,rel,name)
+    CodeGen.emitEncodeRelation(s,rel)
+  }
+}
+
+case class ASTBuildTrie(rel:Relation,name:String,attrs:List[Int],masterName:String) extends ASTNode {
+  override val order = 5
+  override def code(s: CodeStringBuilder): Unit = {
+    CodeGen.emitReorderEncodedRelation(s,rel,name,attrs,masterName)
     CodeGen.emitBuildTrie(s,rel)
   }
 }

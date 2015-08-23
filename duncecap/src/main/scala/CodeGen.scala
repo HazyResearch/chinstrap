@@ -84,7 +84,21 @@ object CodeGen {
     s.println("} \n")
   }
 
-  def emitEncodeRelation(s: CodeStringBuilder,rel:Relation,name:String): Unit = {
+  def emitReorderEncodedRelation(s: CodeStringBuilder,rel:Relation,name:String,order:List[Int],masterName:String): Unit = {
+    s.println("""////////////////////emitReorderEncodedRelation////////////////////""")
+    s.println(s"""std::vector<std::vector<uint32_t>>* Encoded_${rel.name} = new std::vector<std::vector<uint32_t>>();""")
+    s.println("{")
+    if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
+    s.println("//encodeRelation")
+    for (i <- 0 until order.length){
+      s.println(s"""Encoded_${rel.name}->push_back(Encoded_${masterName}->at(${order(i)}));""")
+    }
+    if(!Environment.quiet) s.println(s"""debug::stop_clock("REORDERING ENCODING ${rel.name}",start_time);""")
+    s.println("} \n")
+  }
+
+  def emitEncodeRelation(s: CodeStringBuilder,rel:Relation): Unit = {
+    val name = rel.name
     s.println("""////////////////////emitEncodeRelation////////////////////""")
     s.println(s"""std::vector<std::vector<uint32_t>>* Encoded_${rel.name} = new std::vector<std::vector<uint32_t>>();""")
     s.println("{")
@@ -374,6 +388,11 @@ object CodeGen {
     val lastAttr = cg.attrs.last.attr
     var seenAccessors = Set[String]()
     
+    //emit the selection values first if they exist
+    cg.attrs.foreach(cga => {
+      println(cga.selection)
+    })
+
     //should probably be recursive
     cg.attrs.foreach(cga => {
       //TODO: Refactor all of these into the CGA class there is no reason they can't be computed ahead of time.

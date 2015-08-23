@@ -56,7 +56,7 @@ namespace allocator{
 
   template<class T>
   struct memory{
-    size_t max_alloc = ((uint64_t)4*1073741824)/(sizeof(T)); //4GB
+    size_t max_alloc = ((uint64_t)12*1073741824)/(sizeof(T)); //4GB
     const size_t multplier = 2;
     std::vector<size_t> num_elems;
     std::vector<size_t> indicies;

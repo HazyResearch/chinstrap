@@ -292,14 +292,19 @@ uint32_t* perform_selection(uint32_t *iterator, size_t num_rows, F f){
 */
 template<class B, class T, class R>
 B* build_block(const size_t tid, allocator::memory<uint8_t> *data_allocator, 
-  const size_t max_set_size, const size_t set_size, uint32_t *set_data_buffer){
+  const size_t set_size, uint32_t *set_data_buffer){
 
   B *block = (B*)data_allocator->get_next(tid,sizeof(B),BYTES_PER_CACHELINE);
-  const size_t set_alloc_size =  set_size*4*4;
+  const size_t set_range = (set_size > 1) ? (set_data_buffer[set_size-1]-set_data_buffer[0]) : 0;
+  const size_t set_alloc_size =  T::get_number_of_bytes(set_size,set_range);
   uint8_t* set_data_in = data_allocator->get_next(tid,set_alloc_size,BYTES_PER_REG);
   block->set = Set<T>::from_array(set_data_in,set_data_buffer,set_size);
     
-  assert(set_alloc_size > block->set.number_of_bytes);
+  if(set_alloc_size < block->set.number_of_bytes){
+    std::cout << (uint32_t)T::get_type(set_data_buffer,set_size) << std::endl;
+    std::cout << set_size << " " << set_range << " alloc: " << set_alloc_size << " " << block->set.number_of_bytes << std::endl;
+  }
+  assert(set_alloc_size >= block->set.number_of_bytes);
   data_allocator->roll_back(tid,set_alloc_size-block->set.number_of_bytes);
   return block;
 }
@@ -310,7 +315,7 @@ template<class B,class T, class R>
 void recursive_build(const size_t index, const size_t start, const size_t end, const uint32_t data, B* prev_block, 
   const size_t level, const size_t num_levels, const size_t tid, 
   std::vector<std::vector<uint32_t>> *attr_in,
-  allocator::memory<uint8_t> *data_allocator, const size_t num_rows, 
+  allocator::memory<uint8_t> *data_allocator, 
   std::vector<allocator::memory<size_t>> *ranges_buffer, 
   std::vector<allocator::memory<uint32_t>> *set_data_buffer, 
   uint32_t *indicies){
@@ -318,7 +323,7 @@ void recursive_build(const size_t index, const size_t start, const size_t end, c
   uint32_t *sb = set_data_buffer->at(level).get_memory(tid);
   encode_tail(start,end,sb,&attr_in->at(level),indicies);
 
-  B *tail = build_block<B,T,R>(tid,data_allocator,num_rows,(end-start),sb);
+  B *tail = build_block<B,T,R>(tid,data_allocator,(end-start),sb);
   prev_block->set_block(index,data,tail);
 
   if(level < (num_levels-1)){
@@ -329,7 +334,7 @@ void recursive_build(const size_t index, const size_t start, const size_t end, c
       const size_t next_start = ranges_buffer->at(level).get_memory(tid)[i];
       const size_t next_end = ranges_buffer->at(level).get_memory(tid)[i+1];
       const uint32_t next_data = set_data_buffer->at(level).get_memory(tid)[i];        
-      recursive_build<B,T,R>(i,next_start,next_end,next_data,tail,level+1,num_levels,tid,attr_in,data_allocator,num_rows,ranges_buffer,set_data_buffer,indicies);
+      recursive_build<B,T,R>(i,next_start,next_end,next_data,tail,level+1,num_levels,tid,attr_in,data_allocator,ranges_buffer,set_data_buffer,indicies);
     }
   }
 }
@@ -374,7 +379,7 @@ inline Trie<T,R>* Trie<T,R>::build(std::vector<std::vector<uint32_t>> *attr_in, 
   const size_t head_range = std::get<1>(tup);
 
   //Build the head set.
-  TrieBlock<T,R>* new_head = build_block<TrieBlock<T,R>,T,R>(0,&data_allocator,num_rows,head_size,set_data_buffer->at(0).get_memory(0));
+  TrieBlock<T,R>* new_head = build_block<TrieBlock<T,R>,T,R>(0,&data_allocator,head_size,set_data_buffer->at(0).get_memory(0));
   new_head->init_pointers(0,&data_allocator);
 
   par::for_range(0,head_range,100,[&](size_t tid, size_t i){
@@ -390,7 +395,7 @@ inline Trie<T,R>* Trie<T,R>::build(std::vector<std::vector<uint32_t>> *attr_in, 
     const uint32_t data = set_data_buffer->at(0).get_memory(0)[i];    
 
     recursive_build<TrieBlock<T,R>,T,R>(i,start,end,data,new_head,cur_level,num_levels_in,tid,attr_in,
-      &data_allocator,num_rows,ranges_buffer,set_data_buffer,indicies);
+      &data_allocator,ranges_buffer,set_data_buffer,indicies);
   });
   
   for(size_t i = 0; i < num_levels_in; i++){

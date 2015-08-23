@@ -16,6 +16,7 @@ class hybrid{
     static type::layout get_type();
     static type::layout get_type(const uint32_t *data, const size_t length);
     static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
+    static size_t get_number_of_bytes(const size_t length, const size_t range);
 
     static long find(uint32_t key, const uint8_t *data_in, const size_t number_of_bytes, const type::layout t);
     static std::tuple<size_t,bool> find(uint32_t start_index, uint32_t key, const uint8_t *data_in, const size_t number_of_bytes, const type::layout t);
@@ -73,27 +74,21 @@ inline type::layout hybrid::get_type(){
 }
 
 inline type::layout hybrid::get_type(const uint32_t *data, const size_t length){
-  if(length > 1) {
-    uint32_t range = data[length - 1] - data[0];
-    if(range > 0){
-     // double c = compressibility(data, length);
-      /* else */
+  const size_t set_range = (length > 1) ? (data[length-1]-data[0]) : 0;
+  if(common::is_sparse(length,set_range)){
+    return type::UINTEGER;
+  } else {
+    return type::RANGE_BITSET;
+  }
+  return type::UINTEGER;
+}
 
-      double density = (double) length / range;
-      if(density > ((double)common::bitset_req) && length > common::bitset_length) {
-        return type::RANGE_BITSET;
-      }
-      /*
-      else if( length > common::block_bitset_req ) {
-        return type::BLOCK_BITSET;
-      } */
-      else {
-        return type::UINTEGER;
-      }
-    }
-    return type::UINTEGER;
-  } else{
-    return type::UINTEGER;
+//Called before build to get proper alloc size
+inline size_t hybrid::get_number_of_bytes(const size_t length, const size_t range){
+  if(common::is_sparse(length,range)){
+    return uinteger::get_number_of_bytes(length,range);
+  } else {
+    return range_bitset::get_number_of_bytes(length,range);
   }
 }
 

@@ -50,16 +50,17 @@ object Utils{
       val attribute_types = attributes.map(a => a("type"))
       val attribute_encodings = attributes.map(a => a("encoding"))
 
-      if(create_db){
-        val master_relation = new Relation(name,attribute_types,attribute_encodings)
-        Environment.addASTNode(ASTLoadRelation(source,master_relation))
-      }
-
       val attributePositions = (0 until attributes.size).toList
       val orderings = try { 
         r("orderings").asInstanceOf[List[List[Double]]].map(e => e.map(_.toInt))
       } catch{
         case _:Throwable => attributePositions.permutations.toList
+      }
+
+      if(create_db){
+        val master_relation = new Relation(name,attribute_types,attribute_encodings)
+        Environment.addASTNode(ASTLoadRelation(source,master_relation))
+        Environment.addASTNode(ASTEncodeRelation(master_relation))
       }
 
       orderings.foreach(o_attrs => {    
@@ -70,7 +71,7 @@ object Utils{
         val relationIn = new Relation(o_name,o_types,o_encod)
         Environment.addRelation(name,relationIn)
         if(create_db){
-          Environment.addASTNode(ASTBuildTrie(source,relationIn,name))
+          Environment.addASTNode(ASTBuildTrie(relationIn,name,o_attrs,name))
           s"""mkdir ${db_folder}/relations/${o_name}""" !
         }
       })

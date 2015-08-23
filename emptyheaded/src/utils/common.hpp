@@ -51,12 +51,16 @@ static size_t NUM_THREADS = NUM_THREADS_IN;
 #endif
 
 namespace common{
-  static size_t bitset_length = 0;
-#ifndef OPTIMIZER_OVERHEAD
-  static double bitset_req = (1.0/256.0);
-#else
-  static double bitset_req = 2.0;
-#endif
+  static size_t bitset_length = 5;
+  static double bitset_req = 256.0;
+
+  inline bool is_sparse(size_t length, size_t range) {
+    if(length > bitset_length){
+      const bool sparse = (((double)range/length) > (bitset_req));
+      return sparse;
+    }
+    return true;
+  }
 }
 
 struct aggregate{};

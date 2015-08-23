@@ -13,6 +13,7 @@ class uinteger{
   public:
     static type::layout get_type();
     static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
+    static size_t get_number_of_bytes(const size_t length, const size_t range);
 
     static long find(uint32_t key, const uint8_t *data_in, const size_t number_of_bytes, const type::layout t);
     static std::tuple<size_t,bool> find(uint32_t start_index, uint32_t key, const uint8_t *data_in, const size_t number_of_bytes, const type::layout t);
@@ -76,6 +77,12 @@ inline std::tuple<size_t,type::layout> uinteger::build(uint8_t *r_in, const uint
   uint32_t *r = (uint32_t*) r_in;
   std::copy(data,data+length,r);
   return std::make_pair(length*sizeof(uint32_t),type::UINTEGER);
+}
+
+//Called before build to get proper alloc size
+inline size_t uinteger::get_number_of_bytes(const size_t length, const size_t range){
+  (void) range;
+  return (length * sizeof(uint32_t)) ;
 }
 
 //Iterates over set applying a lambda.
