@@ -112,7 +112,6 @@ object CodeGen {
     s.println("""////////////////////emitWriteBinaryTrie////////////////////""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
-    s.println("//buildTrie")
     s.println(s"""Trie_${relName}->to_binary("${Environment.dbPath}/relations/${relName}/");""")
     if(!Environment.quiet) s.println(s"""debug::stop_clock("WRITING BINARY TRIE ${relName}",start_time);""")
     s.println("} \n")
@@ -122,7 +121,6 @@ object CodeGen {
     s.println("""////////////////////emitWriteBinaryEncoding////////////////////""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
-    s.println("//buildTrie")
     s.println(s"""Encoding_${enc.name}->to_binary("${Environment.dbPath}/encodings/${enc.name}/");""")
     if(!Environment.quiet) s.println(s"""debug::stop_clock("WRITING ENCODING ${enc.name}",start_time);""")
     s.println("} \n")
@@ -184,13 +182,15 @@ object CodeGen {
   }
 
   def emitMaxSetAlloc(s:CodeStringBuilder,attr:String,accessors:List[Accessor]) : Unit = {
-    s.print(s"""const size_t alloc_size_${attr} = """)
-    accessors.tail.foreach(ac => { 
-      s.print(s"""std::max(${ac.getName()}->set.number_of_bytes,""" ) 
-    })
-    s.print(s"""${accessors.head.getName()}->set.number_of_bytes""")
-    accessors.tail.foreach(ac => s.print(")"))
-    s.print(";")
+    if(accessors.length > 1){
+      s.print(s"""const size_t alloc_size_${attr} = """)
+      accessors.tail.foreach(ac => { 
+        s.print(s"""std::max(${ac.getName()}->set.number_of_bytes,""" ) 
+      })
+      s.print(s"""${accessors.head.getName()}->set.number_of_bytes""")
+      accessors.tail.foreach(ac => s.print(")"))
+      s.print(";")
+    }
   }
 
   def emitIntersection(s:CodeStringBuilder,resultSet:String,op1:String,op2:String) : Unit = {
@@ -242,16 +242,28 @@ object CodeGen {
     }
   }
 
-  def emitRollBack(s:CodeStringBuilder,attr:String,tid:String):Unit = {
-    s.println(s"""output_buffer->roll_back(${tid},alloc_size_${attr}-${attr}.number_of_bytes);""")
+  def emitRollBack(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String):Unit = {
+    val attr = cga.attr
+    val accessors = cga.accessors
+    if(accessors.length != 1)
+      s.println(s"""output_buffer->roll_back(${tid},alloc_size_${attr}-${attr}.number_of_bytes);""")
   }
 
-  def emitNewTrieBlock(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String): Unit = {
+  def emitNewTrieBlock(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String,annotatedAttr:Option[String]): Unit = {
     s.println("//emitNewTrieBlock")
     s.println(s"""TrieBlock<${Environment.layout},${annotationType}>* TrieBlock_${cga.attr} = 
       new(output_buffer->get_next(${tid}, sizeof(TrieBlock<${Environment.layout},${annotationType}>))) 
       TrieBlock<${Environment.layout},${annotationType}>(${cga.attr});""")
-    s.println(s"""TrieBlock_${cga.attr}->init_pointers(${tid},output_buffer);""")
+    annotatedAttr match {
+      case Some(a) => {
+        if(a == cga.attr)
+          s.println(s"""TrieBlock_${cga.attr}->init_pointers_and_data(${tid},output_buffer);""")
+        else 
+          s.println(s"""TrieBlock_${cga.attr}->init_pointers(${tid},output_buffer);""")
+      }
+      case None =>
+        s.println(s"""TrieBlock_${cga.attr}->init_pointers(${tid},output_buffer);""")
+    }
   }
 
   def emitSetTrieBlock(s:CodeStringBuilder,cga:CodeGenNPRRAttr,lhs:String): Unit = {
@@ -269,7 +281,7 @@ object CodeGen {
     cga.accessors.foreach(accessor => {emitTrieBlock(s,cga.attr,accessor,seenAccessors)})
     emitMaxSetAlloc(s,cga.attr,cga.accessors)
     emitNewSet(s,cga,tid)
-    emitRollBack(s,cga.attr,tid)
+    emitRollBack(s,cga,tid)
   }
 
   def emitAggregateReducer(s:CodeStringBuilder,cga:CodeGenNPRRAttr):Unit = {
@@ -315,7 +327,6 @@ object CodeGen {
   def emitAnnotationTemporary(s:CodeStringBuilder, cga:CodeGenNPRRAttr, aggregates:List[String], expression:String) : Unit = {
     cga.agg match {
       case Some(a) => {
-        s.println("//emitAnnotationTemporary")
         if(aggregates.indexOf(cga.attr) == 0){
           s.println(s"""${annotationType} annotation_tmp = ${expression};""")
         } else if(aggregates.indexOf(cga.attr) != (aggregates.length-1)){
@@ -333,15 +344,20 @@ object CodeGen {
     if(index == 1 && cg.scalarResult){
       s.println(s"""annotation.update(${tid},annotation_${cga.attr});""")
     } else if(index != 0){
+      val name = if(index == 1) "annotation" else s"""annotation_${cg.aggregates(index-1)}"""
       agg match {
-        case "SUM" => s.println(s"""annotation_${cg.aggregates(index-1)} += annotation_${cga.attr};""")
+        case "SUM" => {
+          s.println(s"""${name} += annotation_${cga.attr};""")
+        }
         case _ => s.println(s"""//${agg} not implemented""")
       }
     } else {
-      if(cg.scalarResult)
-        s.println(s"""Trie_${cg.lhs.name}->annotation = annotation.evaluate(0);""")
-      else 
-        s.println(s"""//something for the trie block?""")
+      cga.prev match {
+        case Some(a) =>
+          s.println(s"""TrieBlock_${a}->set_data(${a}_i,${a}_d,annotation);""")
+        case None => //scalar result
+          s.println(s"""Trie_${cg.lhs.name}->annotation = annotation.evaluate(0);""")
+      }
     }
   }
 
@@ -363,7 +379,7 @@ object CodeGen {
       //TODO: Refactor all of these into the CGA class there is no reason they can't be computed ahead of time.
       val tid = if(cga.first) "0" else "tid"
       emitSetComputations(s,cga,seenAccessors,tid)
-      if(cga.materialize) emitNewTrieBlock(s,cga,tid)
+      if(cga.materialize) emitNewTrieBlock(s,cga,tid,cg.annotatedAttr)
       emitAnnotationInitialization(s,cga,tid,cg.expression,cg.scalarResult,cg.aggregates)
       if(!cga.last) emitForEach(s,cga,cg.expression)
       emitAnnotationTemporary(s,cga,cg.aggregates,cg.expression)

@@ -56,7 +56,7 @@ namespace allocator{
 
   template<class T>
   struct memory{
-    size_t max_alloc = ((uint64_t)12*1073741824)/(sizeof(T)); //12GB
+    size_t max_alloc = ((uint64_t)4*1073741824)/(sizeof(T)); //4GB
     const size_t multplier = 2;
     std::vector<size_t> num_elems;
     std::vector<size_t> indicies;
@@ -99,7 +99,7 @@ namespace allocator{
           num = max_alloc;
         }
         //std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems.at(tid) << std::endl;
-        assert(num <+ num_elems.at(tid));
+        assert(num <= num_elems.at(tid));
         elements.at(tid).push_back(elem<T>(num_elems.at(tid)));
         indicies.at(tid)++;
         val = elements.at(tid).at(indicies.at(tid)).get_next(num);

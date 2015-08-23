@@ -295,7 +295,7 @@ B* build_block(const size_t tid, allocator::memory<uint8_t> *data_allocator,
   const size_t max_set_size, const size_t set_size, uint32_t *set_data_buffer){
 
   B *block = (B*)data_allocator->get_next(tid,sizeof(B),BYTES_PER_CACHELINE);
-  const size_t set_alloc_size =  max_set_size*12;
+  const size_t set_alloc_size =  set_size*4*4;
   uint8_t* set_data_in = data_allocator->get_next(tid,set_alloc_size,BYTES_PER_REG);
   block->set = Set<T>::from_array(set_data_in,set_data_buffer,set_size);
     
