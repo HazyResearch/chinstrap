@@ -42,6 +42,10 @@ object Utils{
       val source = if(create_db) r("source").asInstanceOf[String] else ""
       val attributes = r("attributes").asInstanceOf[List[Map[String,String]]]
 
+      if(create_db){
+        s"""mkdir -p ${db_folder}/relations/${name}""" !
+      }
+
       attributes.foreach(a => { 
         Environment.addEncoding(new Encoding(a("encoding"),a("type")))
         if(create_db)
@@ -61,6 +65,7 @@ object Utils{
         val master_relation = new Relation(name,attribute_types,attribute_encodings)
         Environment.addASTNode(ASTLoadRelation(source,master_relation))
         Environment.addASTNode(ASTEncodeRelation(master_relation))
+        Environment.addASTNode(ASTLoadEncodedRelation(master_relation))
       }
 
       orderings.foreach(o_attrs => {    
@@ -72,7 +77,7 @@ object Utils{
         Environment.addRelation(name,relationIn)
         if(create_db){
           Environment.addASTNode(ASTBuildTrie(relationIn,name,o_attrs,name))
-          s"""mkdir ${db_folder}/relations/${o_name}""" !
+          s"""mkdir -p ${db_folder}/relations/${name}/${o_name}""" !
         }
       })
     })

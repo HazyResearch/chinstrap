@@ -29,36 +29,49 @@ case class ASTBuildEncodings() extends ASTNode {
   }
 }
 
-case class ASTEncodeRelation(rel:Relation) extends ASTNode {
+case class ASTWriteBinaryEncodings() extends ASTNode {
   override val order = 4
+  override def code(s: CodeStringBuilder): Unit = {
+    //write encodings
+    Environment.encodings.foreach(tuple => {
+      val (name,encoding) = tuple
+      CodeGen.emitWriteBinaryEncoding(s,encoding)
+    })
+  }
+}
+
+case class ASTEncodeRelation(rel:Relation) extends ASTNode {
+  override val order = 5
   override def code(s: CodeStringBuilder): Unit = {
     CodeGen.emitEncodeRelation(s,rel)
   }
 }
 
+case class ASTLoadEncodedRelation(rel:Relation) extends ASTNode {
+  override val order = 200
+  override def code(s: CodeStringBuilder): Unit = {
+    CodeGen.emitLoadEncodedRelation(s,rel)
+  }
+}
+
 case class ASTBuildTrie(rel:Relation,name:String,attrs:List[Int],masterName:String) extends ASTNode {
-  override val order = 5
+  override val order = 201
   override def code(s: CodeStringBuilder): Unit = {
     CodeGen.emitReorderEncodedRelation(s,rel,name,attrs,masterName)
     CodeGen.emitBuildTrie(s,rel)
   }
 }
 
-case class ASTWriteBinaries() extends ASTNode {
-  override val order = 100
+case class ASTWriteBinaryTries() extends ASTNode {
+  override val order = 202
   override def code(s: CodeStringBuilder): Unit = {
     //write tries
     Environment.relations.foreach( tuple => {
       val (name,rmap) = tuple
       rmap.foreach(tup2 => {
         val (rname,rel) = tup2
-          CodeGen.emitWriteBinaryTrie(s,rel.name)
+          CodeGen.emitWriteBinaryTrie(s,name,rel.name)
       })
-    })
-    //write encodings
-    Environment.encodings.foreach(tuple => {
-      val (name,encoding) = tuple
-      CodeGen.emitWriteBinaryEncoding(s,encoding)
     })
   }
 }
@@ -136,8 +149,8 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
 
 
     //load binaries you need
-    CodeGen.emitLoadBinaryEncoding(s,encodings)
-    CodeGen.emitLoadBinaryRelation(s,reorderedRelations.map(_._2.name).distinct)
+    CodeGen.emitLoadBinaryEncodings(s,encodings)
+    CodeGen.emitLoadBinaryRelations(s,reorderedRelations.map(r => (r._1,r._2.name) ).distinct)
 
     //if the number of bags is 1 or the attributes in the root match those in the result
     val topDownUnecessary = myghd .num_bags == 1 ||  
@@ -164,8 +177,11 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       val bagLHS = new QueryRelation("bag_" + name,lhsAttrs)
 
       //figure out if there are selections below the last materialized attribute
-      val lhsLastIndex = attrOrder.indexOf(lhsAttrs.last)
-      var selectionAfterLast = selections.map(op => {attrOrder.indexOf(op._1) > lhsLastIndex}).reduce((a,b) => a || b)
+      val lhsLastIndex = if(lhsAttrs.length != 0) attrOrder.indexOf(lhsAttrs.last) else attrOrder.length
+      var selectionAfterLast = if(selections.size != 0) 
+        selections.map(op => {attrOrder.indexOf(op._1) > lhsLastIndex}).reduce((a,b) => a || b)
+        else 
+          false
 
       val codeGenAttrs = attrOrder.map(a => {
         //create aggregate
@@ -205,9 +221,9 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       Environment.addRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings))
       Utils.writeEnvironmentToJSON()
 
-      s"""mkdir -p ${Environment.dbPath}/relations/${lhsName} """ !
+      s"""mkdir -p ${Environment.dbPath}/relations/${lhs.name} ${Environment.dbPath}/relations/${lhs.name}/${lhsName}""" !
       
-      CodeGen.emitWriteBinaryTrie(s,lhsName)
+      CodeGen.emitWriteBinaryTrie(s,lhs.name,lhsName)
     }
   }
 }

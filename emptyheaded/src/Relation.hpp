@@ -96,4 +96,65 @@ struct Relation : RelationImpl <range <sizeof...(T)>, T...>
   size_t num_rows = 0;
 };
 
+struct EncodedRelation {
+  std::vector<std::vector<uint32_t>> data;
+  EncodedRelation(){}
+  EncodedRelation(std::vector<std::vector<uint32_t>> data_in){
+    data = data_in;
+  }
+
+  std::vector<uint32_t>* column(size_t i){
+    return &data.at(i);
+  }
+
+  void add_column(std::vector<uint32_t> *column_in){
+    data.push_back(*column_in);
+  }
+
+  void to_binary(std::string path){
+    std::ofstream *writefile = new std::ofstream();
+    std::string file = path+std::string("encoded.bin");
+    writefile->open(file, std::ios::binary | std::ios::out);
+    size_t num_columns = data.size();
+    writefile->write((char *)&num_columns, sizeof(num_columns));
+    for(size_t i = 0; i < data.size(); i++){
+      size_t num_rows = data.at(i).size();
+      writefile->write((char *)&num_rows, sizeof(num_rows));
+      for(size_t j = 0; j < data.at(i).size(); j++){
+        writefile->write((char *)&data.at(i).at(j), sizeof(data.at(i).at(j)));
+      }
+    }
+    writefile->close();
+  }
+  
+  static EncodedRelation* from_binary(std::string path){
+    std::ifstream *infile = new std::ifstream();
+    std::string file = path+std::string("encoded.bin");
+    infile->open(file, std::ios::binary | std::ios::in);
+
+    std::vector<std::vector<uint32_t>> data_in;
+
+    size_t num_columns;
+    infile->read((char *)&num_columns, sizeof(num_columns));
+    data_in.resize(num_columns);
+
+    for(size_t i = 0; i < num_columns; i++){
+      size_t num_rows;
+      infile->read((char *)&num_rows, sizeof(num_rows));
+      std::vector<uint32_t>* new_column = new std::vector<uint32_t>();
+      new_column->resize(num_rows);
+      for(size_t j = 0; j < num_rows; j++){
+        uint32_t value;
+        infile->read((char *)&value, sizeof(value));
+        new_column->at(j) = value;
+      }
+      data_in.at(i) = *new_column;
+    }
+    infile->close();
+    
+    return new EncodedRelation(data_in);
+  }
+
+};
+
 #endif

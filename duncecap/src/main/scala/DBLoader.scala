@@ -27,14 +27,23 @@ object DBLoader extends App {
   //load JSON file (creates directory structure for DB as well)
   Environment.addASTNode(ASTCreateDB())
   Environment.addASTNode(ASTBuildEncodings())
-  Environment.addASTNode(ASTWriteBinaries())
+  Environment.addASTNode(ASTWriteBinaryEncodings())
+
+  Environment.addASTNode(ASTWriteBinaryTries())
   Utils.loadEnvironmentFromJSON(config,true,db_folder)
 
   //emit code
-  val codeStringBuilder = new CodeStringBuilder
-  Environment.emitASTNodes(codeStringBuilder) //builds the relations & encodings
-
   Utils.writeEnvironmentToJSON()
+
   //compile and run C++ code
-  Utils.compileAndRun(codeStringBuilder,"load_" + Environment.dbPath.split("/").toList.last)
+  val codeStringBuilder1 = new CodeStringBuilder
+  val work1 = Environment.astNodes.toList.sortBy(astN => astN.order).filter(astN => astN.order < 200)
+  CodeGen.emitCode(codeStringBuilder1,work1)
+  Utils.compileAndRun(codeStringBuilder1,"load_" + Environment.dbPath.split("/").toList.last + "_1")
+
+  val codeStringBuilder2 = new CodeStringBuilder
+  val work2 = Environment.astNodes.toList.sortBy(astN => astN.order).filter(astN => astN.order >= 200)
+  CodeGen.emitCode(codeStringBuilder2,work2)
+  Utils.compileAndRun(codeStringBuilder2,"load_" + Environment.dbPath.split("/").toList.last + "_2")
+
 }

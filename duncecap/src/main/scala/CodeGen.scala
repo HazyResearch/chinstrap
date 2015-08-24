@@ -86,12 +86,12 @@ object CodeGen {
 
   def emitReorderEncodedRelation(s: CodeStringBuilder,rel:Relation,name:String,order:List[Int],masterName:String): Unit = {
     s.println("""////////////////////emitReorderEncodedRelation////////////////////""")
-    s.println(s"""std::vector<std::vector<uint32_t>>* Encoded_${rel.name} = new std::vector<std::vector<uint32_t>>();""")
+    s.println(s"""EncodedRelation* Encoded_${rel.name} = new EncodedRelation();""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//encodeRelation")
     for (i <- 0 until order.length){
-      s.println(s"""Encoded_${rel.name}->push_back(Encoded_${masterName}->at(${order(i)}));""")
+      s.println(s"""Encoded_${rel.name}->add_column(Encoded_${masterName}->column(${order(i)}));""")
     }
     if(!Environment.quiet) s.println(s"""debug::stop_clock("REORDERING ENCODING ${rel.name}",start_time);""")
     s.println("} \n")
@@ -100,13 +100,14 @@ object CodeGen {
   def emitEncodeRelation(s: CodeStringBuilder,rel:Relation): Unit = {
     val name = rel.name
     s.println("""////////////////////emitEncodeRelation////////////////////""")
-    s.println(s"""std::vector<std::vector<uint32_t>>* Encoded_${rel.name} = new std::vector<std::vector<uint32_t>>();""")
+    s.println(s"""EncodedRelation* Encoded_${rel.name} = new EncodedRelation();""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//encodeRelation")
     for (i <- 0 until rel.types.length){
-      s.println(s"""Encoded_${rel.name}->push_back(*Encoding_${rel.encodings(i)}->encode_column(&${name}->get<${i}>()));""")
+      s.println(s"""Encoded_${rel.name}->add_column(Encoding_${rel.encodings(i)}->encode_column(&${name}->get<${i}>()));""")
     }
+    s.println(s"""Encoded_${rel.name}->to_binary("${Environment.dbPath}/relations/${rel.name}/");""")
     if(!Environment.quiet) s.println(s"""debug::stop_clock("ENCODING ${rel.name}",start_time);""")
     s.println("} \n")
   }
@@ -117,16 +118,26 @@ object CodeGen {
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//buildTrie")
-    s.println(s"""Trie_${rel.name} = Trie<${Environment.layout},${annotationType}>::build(Encoded_${rel.name},[&](size_t index){ (void) index; return true;});""")
+    s.println(s"""Trie_${rel.name} = Trie<${Environment.layout},${annotationType}>::build(&Encoded_${rel.name}->data,[&](size_t index){ (void) index; return true;});""")
     if(!Environment.quiet) s.println(s"""debug::stop_clock("BUILDING TRIE ${rel.name}",start_time);""")
     s.println("} \n")
   }
 
-  def emitWriteBinaryTrie(s: CodeStringBuilder,relName:String): Unit = {
+  def emitLoadEncodedRelation(s: CodeStringBuilder,rel:Relation): Unit = {
+    s.println("""////////////////////emitLoadEncodedRelation////////////////////""")
+    s.println(s"""EncodedRelation* Encoded_${rel.name} = NULL;""")
+    s.println("{")
+    if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
+    s.println(s"""Encoded_${rel.name} = EncodedRelation::from_binary("${Environment.dbPath}/relations/${rel.name}/");""")
+    if(!Environment.quiet) s.println(s"""debug::stop_clock("LOADING ENCODED RELATION ${rel.name}",start_time);""")
+    s.println("} \n")
+  }
+
+  def emitWriteBinaryTrie(s: CodeStringBuilder,rel:String,relName:String): Unit = {
     s.println("""////////////////////emitWriteBinaryTrie////////////////////""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
-    s.println(s"""Trie_${relName}->to_binary("${Environment.dbPath}/relations/${relName}/");""")
+    s.println(s"""Trie_${relName}->to_binary("${Environment.dbPath}/relations/${rel}/${relName}/");""")
     if(!Environment.quiet) s.println(s"""debug::stop_clock("WRITING BINARY TRIE ${relName}",start_time);""")
     s.println("} \n")
   }
@@ -139,7 +150,8 @@ object CodeGen {
     if(!Environment.quiet) s.println(s"""debug::stop_clock("WRITING ENCODING ${enc.name}",start_time);""")
     s.println("} \n")
   }
-  def emitLoadBinaryEncoding(s: CodeStringBuilder,encodings:List[String]): Unit = {
+ 
+  def emitLoadBinaryEncodings(s: CodeStringBuilder,encodings:List[String]): Unit = {
     s.println("""////////////////////emitLoadBinaryEncoding////////////////////""")
     if(!Environment.quiet) s.println("""auto belt = debug::start_clock();""")
     encodings.foreach(e => {
@@ -149,11 +161,12 @@ object CodeGen {
     if(!Environment.quiet) s.println(s"""debug::stop_clock("LOADING ENCODINGS",belt);""")
     s.print("\n")
   }
-  def emitLoadBinaryRelation(s: CodeStringBuilder,relations:List[String]): Unit = {
-    s.println("""////////////////////emitLoadBinaryEncoding////////////////////""")
+ 
+  def emitLoadBinaryRelations(s: CodeStringBuilder,relations:List[(String,String)]): Unit = {
+    s.println("""////////////////////emitLoadBinaryRelation////////////////////""")
     if(!Environment.quiet) s.println("""auto btlt = debug::start_clock();""")
     relations.foreach(qr => {
-      s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${qr} = Trie<${Environment.layout},${annotationType}>::from_binary("${Environment.dbPath}/relations/${qr}/");""")
+      s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${qr._2} = Trie<${Environment.layout},${annotationType}>::from_binary("${Environment.dbPath}/relations/${qr._1}/${qr._2}/");""")
     })
     if(!Environment.quiet) s.println(s"""debug::stop_clock("LOADING RELATIONS",btlt);""")
     s.print("\n")
@@ -170,9 +183,9 @@ object CodeGen {
     s.println("{")
     //load from binary first
     val qr = rel.name + "_" + (0 until rel.attrs.size).toList.mkString("_")
-    s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${qr} = Trie<${Environment.layout},${annotationType}>::from_binary("${Environment.dbPath}/relations/${qr}/");""")
+    s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${qr} = Trie<${Environment.layout},${annotationType}>::from_binary("${Environment.dbPath}/relations/${rel.name}/${qr}/");""")
     val loadEncodings = (0 until rel.attrs.size).map(i => { Environment.relations(rel.name)(qr).encodings(i)}).toList.distinct
-    emitLoadBinaryEncoding(s,loadEncodings)
+    emitLoadBinaryEncodings(s,loadEncodings)
 
     s.println(s"""Trie_${qr}->foreach([&](std::vector<uint32_t>* tuple){""")
     (0 until rel.attrs.size).foreach(i => {
