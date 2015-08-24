@@ -141,12 +141,13 @@ struct TrieBlock{
   }
 
   void set_block(uint32_t index, uint32_t data, TrieBlock<T,R> *block){
+    TrieBlock<T,R> *value = (set.cardinality != 0) ? block : NULL;
     if(!is_sparse){
       (void) index;
-      next_level[data] = block;
+      next_level[data] = value;
     } else{
       (void) data;
-      next_level[index] = block;
+      next_level[index] = value;
     }
   }
 

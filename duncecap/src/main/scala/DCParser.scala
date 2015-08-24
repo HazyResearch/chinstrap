@@ -15,6 +15,7 @@ object DCParser extends RegexParsers {
 
   //some basic expressions
   def identifierName:Parser[String] = """[_\p{L}][_\p{L}\p{Nd}]*""".r
+  def selectionElement:Parser[String] = """"[^"]*"|\d+""".r
   def expression:Parser[String] = """[^\]]*""".r
   def aggOp:Parser[String] = """SUM""".r
   def selectionOp:Parser[String] = """=""".r
@@ -44,7 +45,7 @@ object DCParser extends RegexParsers {
   def notLastJoinAttr = selectionStatement ~ ("," ~> joinAttrList) ^^ {case a~rest => a +: rest}
   def lastJoinAttr = selectionStatement ^^ {case a => List(a)} 
   def selectionStatement : Parser[(String,String,String)] =  selection | emptySelection
-  def selection: Parser[(String,String,String)] = (identifierName ~ selectionOp ~ identifierName) ^^ {case a~b~c => (a,b,c) }
+  def selection: Parser[(String,String,String)] = (identifierName ~ selectionOp ~ selectionElement) ^^ {case a~b~c => (a,b,c) }
   def emptySelection: Parser[(String,String,String)] = identifierName ^^ {case a => (a,"","")}
 
   //for the aggregate expression (just going to emit the raw text in C++ code for now)

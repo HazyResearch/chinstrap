@@ -37,10 +37,14 @@ class CodeGenNPRRAttr(val attr:String,
   val materialize:Boolean, 
   val first:Boolean, 
   val last:Boolean, 
-  val prev:Option[String])
+  val prev:Option[String],
+  val materializeViaSelectionsBelow:Boolean,
+  val checkSelectionNotMaterialize:Boolean)
 
 class CodeGenGHD(val lhs:QueryRelation, val attrs:List[CodeGenNPRRAttr], 
-  val expression:String, val scalarResult:Boolean, val aggregates:List[String], val annotatedAttr:Option[String])
+  val expression:String, val scalarResult:Boolean, 
+  val aggregates:List[String], val annotatedAttr:Option[String],
+  val attrToEncoding:Map[String,(String,String)])
 
 class GHDNode(val rels: List[QueryRelation]) {
   val attrSet = rels.foldLeft(TreeSet[String]())(

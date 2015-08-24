@@ -125,7 +125,7 @@ inline void hybrid::foreach_until(
       range_bitset::foreach_until(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
       break;
     case type::BLOCK_BITSET:
-      block_bitset::foreach_until(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
+      block_bitset::foreach_until(f,data_in,cardinality,number_of_bytes,type::BLOCK_BITSET);
       break;
     default:
       break;
@@ -148,7 +148,7 @@ inline void hybrid::foreach(
       range_bitset::foreach(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
       break;
     case type::BLOCK_BITSET :
-      block_bitset::foreach(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
+      block_bitset::foreach(f,data_in,cardinality,number_of_bytes,type::BLOCK_BITSET);
       break;
     default:
       break;

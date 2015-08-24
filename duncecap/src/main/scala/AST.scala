@@ -162,7 +162,11 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       val lhsAttrs = lhs.attrs.filter(attrOrder.contains(_)).sortBy(attrOrder.indexOf(_))
       val name = myghd.getName(attrOrder)
       val bagLHS = new QueryRelation("bag_" + name,lhsAttrs)
-      
+
+      //figure out if there are selections below the last materialized attribute
+      val lhsLastIndex = attrOrder.indexOf(lhsAttrs.last)
+      var selectionAfterLast = selections.map(op => {attrOrder.indexOf(op._1) > lhsLastIndex}).reduce((a,b) => a || b)
+
       val codeGenAttrs = attrOrder.map(a => {
         //create aggregate
         val materialize = lhsAttrs.contains(a)
@@ -171,13 +175,16 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
         val prev = if(!first) Some(attrOrder(attrOrder.indexOf(a)-1)) else None
         val aggregate = if(aggregates.contains(a)) Some(aggregates(a)) else None
         val selection = if(selections.contains(a)) Some(selections(a)) else None
+        val materializeViaSelectionsBelow = if(selectionAfterLast && a == lhsAttrs.last) true else false
+        val checkSelectionNotMaterialize = if(selectionAfterLast && attrOrder.indexOf(a) > attrOrder.indexOf(lhsAttrs.last)) true else false
+        println(a + " MM: " + materializeViaSelectionsBelow)
         val accessors = reorderedRelations.
           filter(rr => rr._2.attrs.contains(a)).
           map(rr => new Accessor(rr._2.name,rr._2.attrs.indexOf(a),rr._2.attrs) ).
           groupBy(a => a.getName()).map(_._2.head).toList
-        new CodeGenNPRRAttr(a,aggregate,accessors,selection,materialize,first,last,prev)
+        new CodeGenNPRRAttr(a,aggregate,accessors,selection,materialize,first,last,prev,materializeViaSelectionsBelow,checkSelectionNotMaterialize)
       })
-      CodeGen.emitNPRR(s,name,new CodeGenGHD(bagLHS,codeGenAttrs,aggregateExpression,scalarResult,aggregateOrder,annotatedAttr))
+      CodeGen.emitNPRR(s,name,new CodeGenGHD(bagLHS,codeGenAttrs,aggregateExpression,scalarResult,aggregateOrder,annotatedAttr,attrToEncodingMap))
     }))
     
     val lhsEncodings = lhsOrder.map(i => attrToEncodingMap(lhs.attrs(i))._1).toList

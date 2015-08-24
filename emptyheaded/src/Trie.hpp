@@ -299,11 +299,7 @@ B* build_block(const size_t tid, allocator::memory<uint8_t> *data_allocator,
   const size_t set_alloc_size =  T::get_number_of_bytes(set_size,set_range);
   uint8_t* set_data_in = data_allocator->get_next(tid,set_alloc_size,BYTES_PER_REG);
   block->set = Set<T>::from_array(set_data_in,set_data_buffer,set_size);
-    
-  if(set_alloc_size < block->set.number_of_bytes){
-    std::cout << (uint32_t)T::get_type(set_data_buffer,set_size) << std::endl;
-    std::cout << set_size << " " << set_range << " alloc: " << set_alloc_size << " " << block->set.number_of_bytes << std::endl;
-  }
+
   assert(set_alloc_size >= block->set.number_of_bytes);
   data_allocator->roll_back(tid,set_alloc_size-block->set.number_of_bytes);
   return block;
