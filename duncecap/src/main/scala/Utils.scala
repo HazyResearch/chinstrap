@@ -37,6 +37,7 @@ object Utils{
     }
     
     val relations = config("relations").asInstanceOf[List[Map[String,Any]]]
+    var num = 200
     relations.foreach(r => {
       val name = r("name").asInstanceOf[String]
       val source = if(create_db) r("source").asInstanceOf[String] else ""
@@ -65,7 +66,7 @@ object Utils{
         val master_relation = new Relation(name,attribute_types,attribute_encodings)
         Environment.addASTNode(ASTLoadRelation(source,master_relation))
         Environment.addASTNode(ASTEncodeRelation(master_relation))
-        Environment.addASTNode(ASTLoadEncodedRelation(master_relation))
+        Environment.addASTNode(ASTLoadEncodedRelation(master_relation,num))
       }
 
       orderings.foreach(o_attrs => {    
@@ -76,10 +77,11 @@ object Utils{
         val relationIn = new Relation(o_name,o_types,o_encod)
         Environment.addRelation(name,relationIn)
         if(create_db){
-          Environment.addASTNode(ASTBuildTrie(relationIn,name,o_attrs,name))
+          Environment.addASTNode(ASTBuildTrie(relationIn,name,o_attrs,name,(num+1)))
           s"""mkdir -p ${db_folder}/relations/${name}/${o_name}""" !
         }
       })
+      num += 100
     })
   }
 

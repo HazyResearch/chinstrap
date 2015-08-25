@@ -47,15 +47,15 @@ case class ASTEncodeRelation(rel:Relation) extends ASTNode {
   }
 }
 
-case class ASTLoadEncodedRelation(rel:Relation) extends ASTNode {
-  override val order = 200
+case class ASTLoadEncodedRelation(rel:Relation,buildOrder:Int) extends ASTNode {
+  override val order = buildOrder
   override def code(s: CodeStringBuilder): Unit = {
     CodeGen.emitLoadEncodedRelation(s,rel)
   }
 }
 
-case class ASTBuildTrie(rel:Relation,name:String,attrs:List[Int],masterName:String) extends ASTNode {
-  override val order = 201
+case class ASTBuildTrie(rel:Relation,name:String,attrs:List[Int],masterName:String,buildOrder:Int) extends ASTNode {
+  override val order = buildOrder
   override def code(s: CodeStringBuilder): Unit = {
     CodeGen.emitReorderEncodedRelation(s,rel,name,attrs,masterName)
     CodeGen.emitBuildTrie(s,rel,masterName)

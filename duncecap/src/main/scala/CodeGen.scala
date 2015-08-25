@@ -280,7 +280,7 @@ object CodeGen {
     else 
       s.println(s"""size_t filter_index = 0;""")
 
-    s.println(s"""uint32_t* filtered_data = (uint32_t*)output_buffer->get_next(${tid},${cga.attr}_filtered.number_of_bytes);""")
+    s.println(s"""uint32_t* filtered_data = (uint32_t*)output_buffer->get_next(${tid},${cga.attr}_filtered.cardinality*sizeof(uint32_t));""")
   }
 
     //the materialized set condition could be nested so we want a GOTO to break out once a single cond is met
@@ -334,12 +334,11 @@ object CodeGen {
     if(accessors.length != 1){
       if(cga.materializeViaSelectionsBelow){
         s.println(s"""tmp_buffer->roll_back(${tid},alloc_size_${attr}-${attr}_filtered.number_of_bytes);""")
-        if(cga.materializeViaSelectionsBelow) emitSetupFilteredSet(s,cga,tid) //must occur after roll back
       } else{
         s.println(s"""output_buffer->roll_back(${tid},alloc_size_${attr}-${attr}.number_of_bytes);""")
       }
     }
-
+    if(cga.materializeViaSelectionsBelow) emitSetupFilteredSet(s,cga,tid) //must occur after roll back
   }
 
   def emitNewTrieBlock(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String,annotatedAttr:Option[String]): Unit = {

@@ -35,15 +35,19 @@ object DBLoader extends App {
   //emit code
   Utils.writeEnvironmentToJSON()
 
-  //compile and run C++ code
-  val codeStringBuilder1 = new CodeStringBuilder
-  val work1 = Environment.astNodes.toList.sortBy(astN => astN.order).filter(astN => astN.order < 200)
-  CodeGen.emitCode(codeStringBuilder1,work1)
-  Utils.compileAndRun(codeStringBuilder1,"load_" + Environment.dbPath.split("/").toList.last + "_1")
-
-  val codeStringBuilder2 = new CodeStringBuilder
-  val work2 = Environment.astNodes.toList.sortBy(astN => astN.order).filter(astN => astN.order >= 200)
-  CodeGen.emitCode(codeStringBuilder2,work2)
-  Utils.compileAndRun(codeStringBuilder2,"load_" + Environment.dbPath.split("/").toList.last + "_2")
-
+  //compile and run C++ code (split apart into multiple programs for each relation
+  //to alleviate memory issues)
+  var start = 200
+  var work = Environment.astNodes.toList.sortBy(astN => astN.order).filter(astN => astN.order < start)
+  var rest = Environment.astNodes.toList.sortBy(astN => astN.order).filter(astN => astN.order >= start)
+  var num = 0
+  while(work.length != 0){
+    val codeStringBuilder = new CodeStringBuilder
+    CodeGen.emitCode(codeStringBuilder,work)
+    Utils.compileAndRun(codeStringBuilder,"load_" + Environment.dbPath.split("/").toList.last + "_" + num)
+    num += 1
+    start += 100
+    work = rest.sortBy(astN => astN.order).filter(astN => astN.order < start)
+    rest = rest.sortBy(astN => astN.order).filter(astN => astN.order >= start)
+  }
 }

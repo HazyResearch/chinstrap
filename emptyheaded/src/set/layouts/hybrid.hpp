@@ -124,9 +124,6 @@ inline void hybrid::foreach_until(
     case type::RANGE_BITSET:
       range_bitset::foreach_until(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
       break;
-    case type::BLOCK_BITSET:
-      block_bitset::foreach_until(f,data_in,cardinality,number_of_bytes,type::BLOCK_BITSET);
-      break;
     default:
       break;
   }
@@ -146,9 +143,6 @@ inline void hybrid::foreach(
       break;
     case type::RANGE_BITSET :
       range_bitset::foreach(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
-      break;
-    case type::BLOCK_BITSET :
-      block_bitset::foreach(f,data_in,cardinality,number_of_bytes,type::BLOCK_BITSET);
       break;
     default:
       break;
@@ -170,9 +164,6 @@ inline void hybrid::foreach_index(
     case type::RANGE_BITSET :
       range_bitset::foreach_index(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
       break;
-    case type::BLOCK_BITSET :
-      block_bitset::foreach_index(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
-      break;
     default:
       break;
   }
@@ -192,9 +183,6 @@ inline size_t hybrid::par_foreach(
       break;
     case type::RANGE_BITSET :
       return range_bitset::par_foreach(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
-      break;
-    case type::BLOCK_BITSET :
-      return block_bitset::par_foreach(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
       break;
     default:
       return 0;
@@ -217,9 +205,6 @@ inline size_t hybrid::par_foreach_index(
     case type::RANGE_BITSET :
       return range_bitset::par_foreach_index(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
       break;
-    case type::BLOCK_BITSET :
-      return block_bitset::par_foreach_index(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
-      break;
     default:
       return 0;
       break;
@@ -240,11 +225,6 @@ inline size_t hybrid::static_par_foreach_index(
     case type::RANGE_BITSET :
       return range_bitset::static_par_foreach_index(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
       break;
-    case type::BLOCK_BITSET :
-      std::cout << "ERROR" << std::endl;
-      exit(1);
-      //return block_bitset::par_foreach_index(f,data_in,cardinality,number_of_bytes,type::RANGE_BITSET);
-      break;
     default:
       return 0;
       break;
@@ -262,9 +242,6 @@ inline long hybrid::find(uint32_t key,
     break;
   case type::RANGE_BITSET :
     return range_bitset::find(key,data_in,number_of_bytes,type::RANGE_BITSET);
-    break;
-  case type::BLOCK_BITSET :
-    return block_bitset::find(key,data_in,number_of_bytes,type::RANGE_BITSET);
     break;
   default:
     return -1;
