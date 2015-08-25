@@ -262,6 +262,8 @@ object CodeGen {
 
   def emitMaterializedSelection(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String,selection:SelectionCondition,loopSet:String) : Unit = {
     s.println(s"""//emitMaterializedSelection""")
+    val setName = if(cga.materializeViaSelectionsBelow) s"""${cga.attr}_filtered""" else cga.attr
+
     s.println(s"""size_t ${cga.attr}_s_i = 0;""")
     s.println(s"""uint32_t* ${cga.attr}_data = (uint32_t*)output_buffer->get_next(${tid},${loopSet}.number_of_bytes);""")
     s.println(s"""${loopSet}.foreach([&](uint32_t ${cga.attr}_s_d){""")
@@ -270,8 +272,8 @@ object CodeGen {
     s.println(s"""${cga.attr}_data[${cga.attr}_s_i++] = ${cga.attr}_s_d;""")
     s.println(s"""}""")
     s.println(s"""});""")
-    s.println(s"""const size_t ${cga.attr}_range = (${cga.attr}_s_i > 0) ? (${cga.attr}_data[${cga.attr}_s_i-1]-${cga.attr}_data[0]) : 0;""")
-    s.println(s"""Set<${Environment.layout}> ${cga.attr}((uint8_t*)${cga.attr}_data,${cga.attr}_s_i,${cga.attr}_range,${cga.attr}_s_i*sizeof(uint32_t),type::UINTEGER);""")
+    s.println(s"""const size_t ${cga.attr}_data_range = (${cga.attr}_s_i > 0) ? (${cga.attr}_data[${cga.attr}_s_i-1]-${cga.attr}_data[0]) : 0;""")
+    s.println(s"""Set<${Environment.layout}> ${setName}((uint8_t*)${cga.attr}_data,${cga.attr}_s_i,${cga.attr}_data_range,${cga.attr}_s_i*sizeof(uint32_t),type::UINTEGER);""")
   }
 
   def emitSetupFilteredSet(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String) : Unit = {
