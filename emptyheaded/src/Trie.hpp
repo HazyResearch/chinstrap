@@ -142,8 +142,10 @@ void Trie<T,R>::foreach(const F body){
   std::vector<uint32_t>* tuple = new std::vector<uint32_t>();
   A.foreach_index([&](uint32_t a_i, uint32_t a_d){
     tuple->push_back(a_d);
-    if(head->get_block(a_i,a_d) != NULL){
+    if(num_levels > 1 && head->get_block(a_i,a_d) != NULL){
       recursive_foreach(head->get_block(a_i,a_d),1,num_levels,tuple,body);
+    } else {
+      body(tuple);
     }
   });
 }
@@ -178,11 +180,13 @@ void Trie<T,R>::to_binary(const std::string path){
   head->to_binary(writefiles.at(0).at(0),0,0);
   //dump the set contents
   const Set<T> A = head->set;
-  A.static_par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d){
-    if(head->get_block(a_i,a_d) != NULL){
-      recursive_visit<T,R>(tid,head->get_block(a_i,a_d),1,num_levels,a_i,a_d,&writefiles);
-    }
-  });
+  if(num_levels > 1){
+    A.static_par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d){
+      if(head->get_block(a_i,a_d) != NULL){
+        recursive_visit<T,R>(tid,head->get_block(a_i,a_d),1,num_levels,a_i,a_d,&writefiles);
+      }
+    });
+  }
 
   //close the files
   for(size_t l = 0; l < num_levels; l++){
@@ -221,10 +225,12 @@ Trie<T,R>* Trie<T,R>::from_binary(const std::string path){
   head->init_pointers(0,allocator_in);
   const Set<T> A = head->set;
   //use the same parallel call so we read in properly
-  A.static_par_foreach_index([&](size_t tid, uint32_t a_d, uint32_t a_i){
-    (void) a_d; (void) a_i;
-    recursive_build_binary<T,R>(tid,head,1,num_levels_in,&infiles,allocator_in);
-  });
+  if(num_levels_in > 1){
+    A.static_par_foreach_index([&](size_t tid, uint32_t a_d, uint32_t a_i){
+      (void) a_d; (void) a_i;
+      recursive_build_binary<T,R>(tid,head,1,num_levels_in,&infiles,allocator_in);
+    });
+  }
 
   //close the files
   for(size_t l = 0; l < num_levels_in; l++){

@@ -114,6 +114,12 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     )
     val relations = join.map(qr => new QueryRelation(qr.name,qr.attrs.map{_._1}))
     val selections = join.flatMap(qr => qr.attrs.filter(atup => atup._2 != "").map(atup => (atup._1,new SelectionCondition(atup._2,atup._3)) ) ).toMap
+    println("selections: ")
+    selections.foreach(sel => {
+      println(sel._1 + " " + sel._2.condition + " " + sel._2.value)
+    })
+
+
     val myghd = GHDSolver.getGHD(relations) //get minimum GHD's
 
     //find attr ordering

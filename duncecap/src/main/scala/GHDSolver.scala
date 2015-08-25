@@ -117,9 +117,10 @@ object GHDSolver {
     } else getDecompositions(distinctRelations).last
 
     myghd.num_bags = breadth_first(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd))._2
+    println("NUM BAGS: " + myghd.num_bags)
     assert(myghd.num_bags != 0)
     val fhws = myghd.fractionalScoreTree()
-    print(myghd, "query_plan_" + fhws + ".json")
+    //print(myghd, "query_plan_" + fhws + ".json")
     return myghd
   }
   def getAttributeOrdering(myghd:GHDNode, resultAttrs:List[String]) : List[String] ={

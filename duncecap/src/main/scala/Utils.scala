@@ -96,12 +96,13 @@ object Utils{
           jNumber(c.toInt)
         }).toList)
       }).toList
+      val masterRelation = r(name + "_" + (0 until r.head._2.types.length).toList.mkString("_"))
       Json("name" -> jString(name),
           "orderings" -> jArray(orderings),
           "attributes" -> jArray(
-            (0 until r.head._2.types.length).map(i => {
-              Json("type" -> jString(r.head._2.types(i)),
-                  "encoding" -> jString(r.head._2.encodings(i))
+            (0 until masterRelation.types.length).map(i => {
+              Json("type" -> jString(masterRelation.types(i)),
+                  "encoding" -> jString(masterRelation.encodings(i))
               )
             }).toList
           )

@@ -228,8 +228,8 @@ object CodeGen {
 
   def emitIntersection(s:CodeStringBuilder,resultSet:String,op1:String,op2:String,selection:Option[SelectionCondition],attr:String) : Unit = {
     s.println(s"""${resultSet} = *ops::set_intersect(&${resultSet},
-      (const Set<${Environment.layout}> *)&${op1}->set,
-      (const Set<${Environment.layout}> *)&${op2}->set""")
+      (const Set<${Environment.layout}> *)&${op1},
+      (const Set<${Environment.layout}> *)&${op2}""")
     selection match {
       case Some(sel) => {
         s.print(s""",[&](uint32_t ${attr}_data, uint32_t _1, uint32_t _2){ return """)
@@ -275,61 +275,71 @@ object CodeGen {
   }
 
   def emitSetupFilteredSet(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String) : Unit = {
-    s.println(s"""std::atomic<size_t> filter_index(0);""")
+    if(cga.first)
+      s.println(s"""std::atomic<size_t> filter_index(0);""")
+    else 
+      s.println(s"""size_t filter_index = 0;""")
+
     s.println(s"""uint32_t* filtered_data = (uint32_t*)output_buffer->get_next(${tid},${cga.attr}_filtered.number_of_bytes);""")
   }
 
     //the materialized set condition could be nested so we want a GOTO to break out once a single cond is met
     //to do this will only work with one nested condition.
-  def emitCheckConditions(s:CodeStringBuilder,selection:SelectionCondition,attr:String,loopSet:String) : Unit = {
+  def emitCheckConditions(s:CodeStringBuilder,selection:SelectionCondition,attr:String,loopSet:String,first:Boolean) : Unit = {
     s.println(s"""${loopSet}.foreach_until([&](uint32_t ${attr}_s_d){""")
     val condition = if(selection.condition == "=") "==" else selection.condition
     s.println(s"""const bool ret_value = (${attr}_s_d ${condition} ${attr}_selection);""")
-    s.println(s"""if(ret_value) filtered_data[filter_index.fetch_add(1)] = filter_value;""")
+    val fi = if(first) "filter_index.fetch_add(1)" else "filter_index++"
+    s.println(s"""if(ret_value) filtered_data[${fi}] = filter_value;""")
     s.println(s"""return ret_value;""")
     s.println(s"""});""")
   }
 
-  def emitNewSet(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String): Unit = {
+  def emitNewSet(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String,materializeWithSelectionsBelowInParallel:Boolean): Unit = {
     val attr = cga.attr
     val accessors = cga.accessors
     val setName = if(cga.materializeViaSelectionsBelow) s"""${attr}_filtered""" else attr
     val bufferName = if(cga.materializeViaSelectionsBelow) "tmp_buffer" else "output_buffer"
+    val otherBufferName = if(cga.materializeViaSelectionsBelow) "output_buffer" else "tmp_buffer" //trick to save mem when
+    //materializations below occur
+
     if(accessors.length == 1){
       (cga.selection,cga.materialize,cga.last) match {
         case (Some(selection),true,_) => emitMaterializedSelection(s,cga,tid,selection,s"""${accessors.head.getName()}->set""")
-        case (Some(selection),false,true) => emitCheckConditions(s,selection,cga.attr,s"""${accessors.head.getName()}->set""")
-        case (None,_,_) => s.println(s"""Set<${Environment.layout}> ${setName} = ${accessors.head.getName()}->set;""")
+        case (Some(selection),false,true) => emitCheckConditions(s,selection,cga.attr,s"""${accessors.head.getName()}->set""",materializeWithSelectionsBelowInParallel)
+        case (_,_,_) => s.println(s"""Set<${Environment.layout}> ${setName} = ${accessors.head.getName()}->set;""")
       }
     } else if(accessors.length == 2){
       s.println(s"""Set<${Environment.layout}> ${setName}(${bufferName}->get_next(${tid},alloc_size_${attr}));""")
-      emitIntersection(s,setName,accessors.head.getName(),accessors.last.getName(),cga.selection,cga.attr)
+      emitIntersection(s,setName,accessors.head.getName()+"->set",accessors.last.getName()+"->set",cga.selection,cga.attr)
     } else{
       s.println(s"""Set<${Environment.layout}> ${setName}(${bufferName}->get_next(${tid},alloc_size_${attr}));""")
-      s.println(s"""Set<${Environment.layout}> ${attr}_tmp(tmp_buffer->get_next(${tid},alloc_size_${attr})); //initialize the memory""")
+      s.println(s"""Set<${Environment.layout}> ${attr}_tmp(${otherBufferName}->get_next(${tid},alloc_size_${attr})); //initialize the memory""")
       var tmp = (accessors.length % 2) == 1
       var name = if(tmp) s"""${attr}_tmp""" else setName
-      emitIntersection(s,name,accessors(0).getName(),accessors(1).getName(),cga.selection,cga.attr)
+      emitIntersection(s,name,accessors(0).getName()+"->set",accessors(1).getName()+"->set",cga.selection,cga.attr)
       (2 until accessors.length).foreach(i => {
         tmp = !tmp
         name = if(tmp) s"""${attr}_tmp""" else setName
         val opName = if(!tmp) s"""${attr}_tmp""" else setName
-        emitIntersection(s,name,opName,accessors(i).getName(),None,cga.attr)
+        emitIntersection(s,name,opName,accessors(i).getName()+"->set",None,cga.attr)
       })
-      s.println(s"""tmp_buffer->roll_back(${tid},alloc_size_${attr});""")
+      s.println(s"""${otherBufferName}->roll_back(${tid},alloc_size_${attr});""")
     }
-    if(cga.materializeViaSelectionsBelow) emitSetupFilteredSet(s,cga,tid)
   }
 
   def emitRollBack(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String):Unit = {
     val attr = cga.attr
     val accessors = cga.accessors
     if(accessors.length != 1){
-      if(cga.materializeViaSelectionsBelow)
+      if(cga.materializeViaSelectionsBelow){
         s.println(s"""tmp_buffer->roll_back(${tid},alloc_size_${attr}-${attr}_filtered.number_of_bytes);""")
-      else
+        if(cga.materializeViaSelectionsBelow) emitSetupFilteredSet(s,cga,tid) //must occur after roll back
+      } else{
         s.println(s"""output_buffer->roll_back(${tid},alloc_size_${attr}-${attr}.number_of_bytes);""")
+      }
     }
+
   }
 
   def emitNewTrieBlock(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String,annotatedAttr:Option[String]): Unit = {
@@ -359,11 +369,12 @@ object CodeGen {
     }
   }
 
-  def emitSetComputations(s:CodeStringBuilder,cga:CodeGenNPRRAttr,seenAccessors:Set[String],tid:String): Unit = {
+  def emitSetComputations(s:CodeStringBuilder,cga:CodeGenNPRRAttr,
+    seenAccessors:Set[String],tid:String,materializeWithSelectionsBelowInParallel:Boolean): Unit = {
     s.println("//emitSetComputations")
     cga.accessors.foreach(accessor => {emitTrieBlock(s,cga.attr,accessor,seenAccessors)})
     emitMaxSetAlloc(s,cga.attr,cga.accessors)
-    emitNewSet(s,cga,tid)
+    emitNewSet(s,cga,tid,materializeWithSelectionsBelowInParallel)
     emitRollBack(s,cga,tid)
   }
 
@@ -383,7 +394,7 @@ object CodeGen {
       cga.selection match {
         case Some(selection) => {
           val condition = if(selection.condition == "=") "==" else selection.condition
-          s.println("""if(${cga.attr}_d ${condition} ${cga.attr}_selection){""")
+          s.println(s"""if(${cga.attr}_d ${condition} ${cga.attr}_selection){""")
         }
         case None =>
       }
@@ -475,14 +486,18 @@ object CodeGen {
   //the materialized set condition could be nested so we want a GOTO to break out once a single cond is met
   def emitBuildNewSet(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String) : Unit = {
     s.println(s"""//emitBuildNewSet""")
-    if(cga.first)
-      s.println(s"""tbb::parallel_sort(filtered_data,filtered_data+filter_index.load());""");
-
-    s.println(s"""const size_t ${cga.attr}_range = (filter_index.load() > 0) ? (filtered_data[filter_index.load()-1]-filtered_data[0]) : 0;""")
-    s.println(s"""Set<${Environment.layout}> ${cga.attr}((uint8_t*)filtered_data,filter_index.load(),${cga.attr}_range,filter_index.load()*sizeof(uint32_t),type::UINTEGER);""")
+    val fi = if(cga.first) "filter_index.load()" else "filter_index"
+    if(cga.first){
+      s.println(s"""tbb::parallel_sort(filtered_data,filtered_data+${fi});""");
+    }
+    s.println(s"""const size_t ${cga.attr}_range = (${fi} > 0) ? (filtered_data[${fi}-1]-filtered_data[0]) : 0;""")
+    s.println(s"""Set<${Environment.layout}> ${cga.attr}((uint8_t*)filtered_data,${fi},${cga.attr}_range,${fi}*sizeof(uint32_t),type::UINTEGER);""")
     s.println(s"""TrieBlock<${Environment.layout},${annotationType}>* TrieBlock_${cga.attr} = 
       new(output_buffer->get_next(${tid}, sizeof(TrieBlock<${Environment.layout},${annotationType}>))) 
       TrieBlock<${Environment.layout},${annotationType}>(${cga.attr});""")
+
+    if(!cga.first)
+      s.println(s"""TrieBlock_${cga.attr}->init_pointers(${tid},output_buffer);""")
   }
 
   def emitNPRR(s: CodeStringBuilder,name: String,cg:CodeGenGHD): Unit = {
@@ -510,10 +525,12 @@ object CodeGen {
     })
 
     //should probably be recursive
+    var materializeWithSelectionsBelowInParallel = false
     cg.attrs.foreach(cga => {
       //TODO: Refactor all of these into the CGA class there is no reason they can't be computed ahead of time.
       val tid = if(cga.first) "0" else "tid"
-      emitSetComputations(s,cga,seenAccessors,tid)
+      materializeWithSelectionsBelowInParallel ||= (cga.first&&cga.materializeViaSelectionsBelow)
+      emitSetComputations(s,cga,seenAccessors,tid,materializeWithSelectionsBelowInParallel)
       if(cga.materialize && !cga.materializeViaSelectionsBelow) emitNewTrieBlock(s,cga,tid,cg.annotatedAttr)
       emitAnnotationInitialization(s,cga,tid,cg.expression,cg.scalarResult,cg.aggregates)
       if(!cga.last) emitForEach(s,cga,cg.expression)
@@ -527,10 +544,10 @@ object CodeGen {
         case Some(a) => emitAnnotationComputation(s,cg,cga,a,tid)
         case None => {
           if(cga.materializeViaSelectionsBelow) emitBuildNewSet(s,cga,tid)
-          else if(cga.materialize) emitSetTrieBlock(s,cga,cg.lhs.name)
+          if(cga.materialize) emitSetTrieBlock(s,cga,cg.lhs.name)
         }
       }
-      emitNoMaterializeCheckSelectionEnd(s,cga)
+      if(!cga.first) emitNoMaterializeCheckSelectionEnd(s,cg.attrs(cg.attrs.indexOf(cga)-1))
       if(!cga.first) s.println("});")
     })
 
