@@ -43,9 +43,12 @@
 #define BYTES_PER_REG 16
 #define BYTES_PER_CACHELINE 64
 
+#define NUM_NUMA 4
+#define SOCKET_THREADS 12
+#define MAX_MEMORY 768 //GB
 
 #ifndef NUM_THREADS_IN
-static size_t NUM_THREADS = 52;
+static size_t NUM_THREADS = 48;
 #else
 static size_t NUM_THREADS = NUM_THREADS_IN; 
 #endif

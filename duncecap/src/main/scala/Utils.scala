@@ -138,7 +138,7 @@ object Utils{
     if(Environment.quiet) print("Compiling C++ code....")
     val silent = if(Environment.quiet) "--silent" else "SILENT=false"
     sys.process.Process(Seq("rm", "-rf",s"""bin/${filename}"""), new File("emptyheaded")).!
-    val result = sys.process.Process(Seq("make",silent,s"""NUM_THREADS=${Environment.numThreads}""", s"""bin/${filename}"""), new File("emptyheaded")).!
+    val result = sys.process.Process(Seq("make","-j",s"""${Environment.numThreads}""",silent,s"""NUM_THREADS=${Environment.numThreads}""", s"""bin/${filename}"""), new File("emptyheaded")).!
 
     if (result != 0) {
       println("FAILURE: Compilation errors.")

@@ -91,7 +91,7 @@ object CodeGen {
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//encodeRelation")
     for (i <- 0 until order.length){
-      s.println(s"""Encoded_${rel.name}->add_column(Encoded_${masterName}->column(${order(i)}));""")
+      s.println(s"""Encoded_${rel.name}->add_column(Encoded_${masterName}->column(${order(i)}),Encoded_${masterName}->max_set_size.at(${order(i)}));""")
     }
     if(!Environment.quiet) s.println(s"""debug::stop_clock("REORDERING ENCODING ${rel.name}",start_time);""")
     s.println("} \n")
@@ -105,22 +105,37 @@ object CodeGen {
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//encodeRelation")
     for (i <- 0 until rel.types.length){
-      s.println(s"""Encoded_${rel.name}->add_column(Encoding_${rel.encodings(i)}->encode_column(&${name}->get<${i}>()));""")
+      s.println(s"""Encoded_${rel.name}->add_column(Encoding_${rel.encodings(i)}->encode_column(&${name}->get<${i}>()),Encoding_${rel.encodings(i)}->num_distinct);""")
     }
     s.println(s"""Encoded_${rel.name}->to_binary("${Environment.dbPath}/relations/${rel.name}/");""")
     if(!Environment.quiet) s.println(s"""debug::stop_clock("ENCODING ${rel.name}",start_time);""")
     s.println("} \n")
   }
+  
+  def emitWriteBinaryTrie(s: CodeStringBuilder,rel:String,relName:String): Unit = {
+    s.println("""////////////////////emitWriteBinaryTrie////////////////////""")
+    s.println("{")
+    if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
+    s.println(s"""Trie_${relName}->to_binary("${Environment.dbPath}/relations/${rel}/${relName}/");""")
+    if(!Environment.quiet) s.println(s"""debug::stop_clock("WRITING BINARY TRIE ${relName}",start_time);""")
+    s.println("} \n")
+  }
 
-  def emitBuildTrie(s: CodeStringBuilder,rel:Relation): Unit = {
+  def emitBuildTrie(s: CodeStringBuilder,rel:Relation,relName:String): Unit = {
     s.println("""////////////////////emitBuildTrie////////////////////""")
+    s.println(s"""const size_t alloc_size_${rel.name} = 8*Encoded_${rel.name}->data.size()*Encoded_${rel.name}->data.at(0).size()*sizeof(uint64_t)*sizeof(TrieBlock<${Environment.layout},${annotationType}>);""")
+    s.println(s"""allocator::memory<uint8_t>* data_allocator_${rel.name} = new allocator::memory<uint8_t>(alloc_size_${rel.name});""")
     s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${rel.name} = NULL;""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//buildTrie")
-    s.println(s"""Trie_${rel.name} = Trie<${Environment.layout},${annotationType}>::build(&Encoded_${rel.name}->data,[&](size_t index){ (void) index; return true;});""")
+    s.println(s"""Trie_${rel.name} = Trie<${Environment.layout},${annotationType}>::build(data_allocator_${rel.name},&Encoded_${rel.name}->max_set_size,&Encoded_${rel.name}->data,[&](size_t index){ (void) index; return true;});""")
     if(!Environment.quiet) s.println(s"""debug::stop_clock("BUILDING TRIE ${rel.name}",start_time);""")
     s.println("} \n")
+    emitWriteBinaryTrie(s,relName,rel.name)
+    s.println(s"""data_allocator_${rel.name}->free();""")
+    s.println(s"""delete data_allocator_${rel.name};""")
+    s.println(s"""delete Trie_${rel.name};""")
   }
 
   def emitLoadEncodedRelation(s: CodeStringBuilder,rel:Relation): Unit = {
@@ -130,15 +145,6 @@ object CodeGen {
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println(s"""Encoded_${rel.name} = EncodedRelation::from_binary("${Environment.dbPath}/relations/${rel.name}/");""")
     if(!Environment.quiet) s.println(s"""debug::stop_clock("LOADING ENCODED RELATION ${rel.name}",start_time);""")
-    s.println("} \n")
-  }
-
-  def emitWriteBinaryTrie(s: CodeStringBuilder,rel:String,relName:String): Unit = {
-    s.println("""////////////////////emitWriteBinaryTrie////////////////////""")
-    s.println("{")
-    if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
-    s.println(s"""Trie_${relName}->to_binary("${Environment.dbPath}/relations/${rel}/${relName}/");""")
-    if(!Environment.quiet) s.println(s"""debug::stop_clock("WRITING BINARY TRIE ${relName}",start_time);""")
     s.println("} \n")
   }
 

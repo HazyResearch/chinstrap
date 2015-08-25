@@ -2,6 +2,7 @@
 #define allocator_H
 
 #include "common.hpp"
+#include <numa.h>
 
 namespace allocator{
   template<class T>
@@ -10,9 +11,10 @@ namespace allocator{
     uint8_t *max_ptr;
     uint8_t *cur;
     elem(size_t num_elems){
-      ptr = (uint8_t*)malloc(num_elems*sizeof(T));
+      const size_t malloc_size = num_elems*sizeof(T);
+      ptr = (uint8_t*)malloc(malloc_size);
       if(ptr == NULL){
-        std::cout << "ERROR: Malloc failed - " << num_elems*sizeof(T) << std::endl;
+        std::cout << "ERROR: Malloc failed - " << malloc_size << std::endl;
         exit(1);
       }
       max_ptr = ptr+(num_elems*sizeof(T));
@@ -56,22 +58,29 @@ namespace allocator{
 
   template<class T>
   struct memory{
-    size_t max_alloc = ((uint64_t)12*1073741824)/(sizeof(T)); //4GB
+    size_t max_alloc = (((uint64_t)MAX_MEMORY)*1073741824l)/(sizeof(T)*NUM_THREADS); //GB
     const size_t multplier = 2;
     std::vector<size_t> num_elems;
     std::vector<size_t> indicies;
     std::vector<std::vector<elem<T>>> elements;
     memory(){}
     memory(size_t num_elems_in){
-      if(num_elems_in > (max_alloc/NUM_THREADS)){
-        num_elems_in = max_alloc/NUM_THREADS;
+      if(num_elems_in > max_alloc){
+        num_elems_in = max_alloc;
       }
       for(size_t i = 0; i < NUM_THREADS; i++){
         std::vector<elem<T>> current;
         num_elems.push_back(num_elems_in);
-        current.push_back(elem<T>(num_elems.at(i)));
+        elem<T>* new_elem = new elem<T>(num_elems.at(i));
+        current.push_back(*new_elem);
         elements.push_back(current);
         indicies.push_back(0);
+      }
+    }
+    //debug
+    void print_sizes(){
+      for(size_t i = 0; i < NUM_THREADS; i++){
+        std::cout << "t: " << i << " size: " << num_elems.at(i) << " i: " << indicies.at(i) << " mem:"  << std::endl;
       }
     }
     inline T* get_memory(size_t tid){
@@ -80,7 +89,8 @@ namespace allocator{
     inline T* get_next(size_t tid){
       T* val = elements.at(tid).at(indicies.at(tid)).get_next();
       if(val == NULL){
-        elements.at(tid).push_back(elem<T>(num_elems.at(tid)));
+        elem<T>* new_elem = new elem<T>(num_elems.at(tid));
+        elements.at(tid).push_back(elem<T>(*new_elem));
         indicies.at(tid)++;
         val = elements.at(tid).at(indicies.at(tid)).get_next();
         assert(val != NULL);
@@ -96,11 +106,13 @@ namespace allocator{
         }
         if(num_elems.at(tid) > max_alloc){
           num_elems.at(tid) = max_alloc;
+          //std::cout << "Too large of alloc: " << num << std::endl;
           num = max_alloc;
         }
         //std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems.at(tid) << std::endl;
         assert(num <= num_elems.at(tid));
-        elements.at(tid).push_back(elem<T>(num_elems.at(tid)));
+        elem<T>* new_elem = new elem<T>(num_elems.at(tid));
+        elements.at(tid).push_back(*new_elem);
         indicies.at(tid)++;
         val = elements.at(tid).at(indicies.at(tid)).get_next(num);
         assert(val != NULL);
@@ -116,6 +128,7 @@ namespace allocator{
         }
         if(num_elems.at(tid) > max_alloc){
           num_elems.at(tid) = max_alloc;
+          //std::cout << "Too large of alloc: " << num << std::endl;
           num = max_alloc;
         }
         //std::cout << "Allocating more memory: try a larger allocation size for better performance. " << num << " " << num_elems.at(tid) << std::endl;

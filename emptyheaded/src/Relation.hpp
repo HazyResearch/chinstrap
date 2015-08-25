@@ -98,17 +98,20 @@ struct Relation : RelationImpl <range <sizeof...(T)>, T...>
 
 struct EncodedRelation {
   std::vector<std::vector<uint32_t>> data;
+  std::vector<uint32_t> max_set_size;
   EncodedRelation(){}
-  EncodedRelation(std::vector<std::vector<uint32_t>> data_in){
+  EncodedRelation(std::vector<std::vector<uint32_t>> data_in, std::vector<uint32_t> num_distinct_in){
     data = data_in;
+    max_set_size = num_distinct_in;
   }
 
   std::vector<uint32_t>* column(size_t i){
     return &data.at(i);
   }
 
-  void add_column(std::vector<uint32_t> *column_in){
+  void add_column(std::vector<uint32_t> *column_in,uint32_t num_distinct){
     data.push_back(*column_in);
+    max_set_size.push_back(num_distinct);
   }
 
   void to_binary(std::string path){
@@ -118,7 +121,9 @@ struct EncodedRelation {
     size_t num_columns = data.size();
     writefile->write((char *)&num_columns, sizeof(num_columns));
     for(size_t i = 0; i < data.size(); i++){
-      size_t num_rows = data.at(i).size();
+      const uint32_t mss = max_set_size.at(i);
+      writefile->write((char *)&mss, sizeof(mss));
+      const size_t num_rows = data.at(i).size();
       writefile->write((char *)&num_rows, sizeof(num_rows));
       for(size_t j = 0; j < data.at(i).size(); j++){
         writefile->write((char *)&data.at(i).at(j), sizeof(data.at(i).at(j)));
@@ -138,7 +143,12 @@ struct EncodedRelation {
     infile->read((char *)&num_columns, sizeof(num_columns));
     data_in.resize(num_columns);
 
+    std::vector<uint32_t> max_set_size_in;
     for(size_t i = 0; i < num_columns; i++){
+      uint32_t mss;
+      infile->read((char *)&mss, sizeof(mss));
+      max_set_size_in.push_back(mss);
+
       size_t num_rows;
       infile->read((char *)&num_rows, sizeof(num_rows));
       std::vector<uint32_t>* new_column = new std::vector<uint32_t>();
@@ -152,7 +162,7 @@ struct EncodedRelation {
     }
     infile->close();
     
-    return new EncodedRelation(data_in);
+    return new EncodedRelation(data_in,max_set_size_in);
   }
 
 };

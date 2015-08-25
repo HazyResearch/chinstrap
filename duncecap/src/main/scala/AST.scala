@@ -58,7 +58,7 @@ case class ASTBuildTrie(rel:Relation,name:String,attrs:List[Int],masterName:Stri
   override val order = 201
   override def code(s: CodeStringBuilder): Unit = {
     CodeGen.emitReorderEncodedRelation(s,rel,name,attrs,masterName)
-    CodeGen.emitBuildTrie(s,rel)
+    CodeGen.emitBuildTrie(s,rel,masterName)
   }
 }
 

@@ -29,7 +29,7 @@ object DBLoader extends App {
   Environment.addASTNode(ASTBuildEncodings())
   Environment.addASTNode(ASTWriteBinaryEncodings())
 
-  Environment.addASTNode(ASTWriteBinaryTries())
+  //Environment.addASTNode(ASTWriteBinaryTries())
   Utils.loadEnvironmentFromJSON(config,true,db_folder)
 
   //emit code

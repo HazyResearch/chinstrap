@@ -59,7 +59,7 @@ TESTS_EXES=$(TESTS)
 BENCHMARKS_EXES=$(BENCHMARKS:%=$(EXEDIR)/%)
 GENERATED_EXES=$(GENERATED:%=$(EXEDIR)/%)
 
-LIBS=-ltbb -lpthread
+LIBS=-ltbb -lpthread -lnuma
 
 all: $(APPS_EXES) $(TOOLS_EXES) $(SERVER_EXES)
 
