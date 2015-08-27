@@ -9,19 +9,19 @@ object GHDSolver {
       (accum: Set[String], rel : QueryRelation) => accum | rel.attrs.toSet[String])
   }
 
-  private def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, fn:GHDNode => Unit ): Unit = {
+  private def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, parent:GHDNode, fn:((GHDNode,Boolean,GHDNode) => Unit) ): Unit = {
     val root = if(seen.size == 1) true else false
     for (child <- curr.children) {
       if (!seen.contains(child)) {
         seen += child
-        bottom_up(seen, child, fn)
+        bottom_up(seen, child, curr, fn)
       }
     }
-    fn(curr)
+    fn(curr,root,parent)
   }
 
-  def bottomUp(curr: GHDNode, fn:GHDNode => Unit ): Unit = {
-    bottom_up(mutable.LinkedHashSet[GHDNode](curr), curr, fn)
+  def bottomUp(curr: GHDNode, fn:((GHDNode,Boolean,GHDNode) => Unit) ): Unit = {
+    bottom_up(mutable.LinkedHashSet[GHDNode](curr), curr, curr, fn)
   }
 
   private def get_attribute_ordering(seen: mutable.Set[GHDNode], f_in:mutable.Set[GHDNode],resultAttrs:List[String]): List[String] = {
@@ -40,10 +40,10 @@ object GHDSolver {
         val children_attrs = cur.children.flatMap{ c => c.rels.flatMap{r => r.attrs}.toList}
         //sort by frequency
         val children_attrs_sorted = children_attrs.distinct.sortBy(children_attrs count _.==).reverse
-        val cur_attrs = cur.rels.flatMap{r => r.attrs}
+        val cur_attrs = cur.rels.flatMap{r => r.attrs}.sorted
 
         //find shared attributes and sort by frequency
-        val shared_attrs = cur_attrs.intersect(children_attrs_sorted).sortBy(e => children_attrs_sorted.indexOf(e))
+        val shared_attrs = cur_attrs.intersect(children_attrs_sorted).sortBy(e => children_attrs_sorted.indexOf(e)).sorted
         //shared attributes added first. Should be added in order of how many times
         //appears in the child.
         shared_attrs.foreach{ a =>
@@ -66,7 +66,8 @@ object GHDSolver {
         }
       }
 
-      val cur_attrs_sorted = level_attr.sortBy(e => if(resultAttrs.contains(e)) resultAttrs.indexOf(e) else resultAttrs.size+1)
+      //put those in the result first 
+      val cur_attrs_sorted = level_attr.sortBy(e => if(resultAttrs.contains(e)) resultAttrs.indexOf(e) else resultAttrs.size+1).sorted
       cur_attrs_sorted.foreach{ a =>
         if(!attr.contains(a)){
           attr += a

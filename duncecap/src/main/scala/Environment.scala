@@ -17,11 +17,12 @@ object Environment {
   var numNUMA = 4
   var layout = "hybrid"
   var algorithm = ""
-  var yanna = false // delete this crapt
+  var yanna = true // delete this crapt
   var pipeline = false
 
   var quiet = false
 
+  val debug = true
   val astNodes = mutable.MutableList[ASTNode]()
   val relations = mutable.Map[String,mutable.Map[String, Relation]]()
   val encodings = mutable.Map[String, Encoding]()

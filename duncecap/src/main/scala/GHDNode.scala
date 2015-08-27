@@ -28,7 +28,14 @@ class Accessor(val trieName:String, val level:Int, val attrs:List[String]){
   def getPrevAttr() : String = {
     return attrs(level-1)
   }
+  override def equals(that: Any): Boolean =
+    that match {
+      case that: Accessor => that.trieName.equals(trieName) && that.level.equals(level)
+      case _ => false
+    }
 }
+
+class CodeGenTopDown(val attr:String,val accessors:List[Accessor])
 
 class CodeGenNPRRAttr(val attr:String, 
   val agg:Option[String], 

@@ -290,7 +290,7 @@ object CodeGen {
   def emitCheckConditions(s:CodeStringBuilder,selection:SelectionCondition,attr:String,loopSet:String,first:Boolean) : Unit = {
     s.println(s"""${loopSet}.foreach_until([&](uint32_t ${attr}_s_d){""")
     val condition = if(selection.condition == "=") "==" else selection.condition
-    s.println(s"""const bool ret_value = (${attr}_s_d ${condition} ${attr}_selection);""")
+    s.println(s"""ret_value = (${attr}_s_d ${condition} ${attr}_selection);""")
     val fi = if(first) "filter_index.fetch_add(1)" else "filter_index++"
     s.println(s"""if(ret_value) filtered_data[${fi}] = filter_value;""")
     s.println(s"""return ret_value;""")
@@ -350,23 +350,37 @@ object CodeGen {
       TrieBlock<${Environment.layout},${annotationType}>(${cga.attr});""")
     annotatedAttr match {
       case Some(a) => {
-        if(a == cga.attr)
+        if(a == cga.attr && !cga.last){
           s.println(s"""TrieBlock_${cga.attr}->init_pointers_and_data(${tid},output_buffer);""")
-        else 
+        } else if(a == cga.attr){
+          s.println(s"""TrieBlock_${cga.attr}->value = 1; //hack fix constant value""")
+        } else if(!cga.last){
           s.println(s"""TrieBlock_${cga.attr}->init_pointers(${tid},output_buffer);""")
+        }
       }
       case None =>
-        s.println(s"""TrieBlock_${cga.attr}->init_pointers(${tid},output_buffer);""")
+        if(!cga.last)
+          s.println(s"""TrieBlock_${cga.attr}->init_pointers(${tid},output_buffer);""")
     }
   }
 
-  def emitSetTrieBlock(s:CodeStringBuilder,cga:CodeGenNPRRAttr,lhs:String): Unit = {
+  def emitSetTrieBlock(s:CodeStringBuilder,cga:CodeGenNPRRAttr,lhs:String,setData:Boolean): Unit = {
     s.println("//emitSetTrieBlock")
-    cga.prev match {
-      case Some(a) =>
-        s.println(s"""TrieBlock_${a}->set_block(${a}_i,${a}_d,TrieBlock_${cga.attr});""")
-      case None =>
-        s.println(s"""Trie_${lhs}->head = TrieBlock_${cga.attr};""")
+    if(cga.materialize){
+      cga.prev match {
+        case Some(a) =>
+          s.println(s"""TrieBlock_${a}->set_block(${a}_i,${a}_d,TrieBlock_${cga.attr});""")
+        case None =>
+          s.println(s"""Trie_${lhs}->head = TrieBlock_${cga.attr};""")
+      }
+    }
+    if(setData){
+      cga.prev match {
+        case Some(a) =>
+          s.println(s"""TrieBlock_${a}->set_data(${a}_i,${a}_d,annotation);""")
+        case None =>
+          s.println(s"""//shouldn't happen this is just a reducer;""")
+      }
     }
   }
 
@@ -407,6 +421,7 @@ object CodeGen {
       cga.selection match {
         case Some(selection) => {
           s.println("}")
+          s.println("return ret_value;")
         }
         case None =>
       }
@@ -421,13 +436,18 @@ object CodeGen {
     (cga.agg,cga.materialize,cga.materializeViaSelectionsBelow) match {
       case (Some(_),_,_) | (None,false,_) | (None,true,true) =>{  //this should only be for constant expressions really otherwise we need a foreach_index
         val setName = if(cga.materializeViaSelectionsBelow) attr + "_filtered" else attr
+        val noMaterializeCheckSelection = (cga.accessors.length == 1 && !cga.materialize && !cga.last && cga.selection.isDefined)
+        val until = if(noMaterializeCheckSelection) "_until" else ""
         if(first){
-          s.println(s"""${setName}.par_foreach([&](size_t tid, uint32_t ${attr}_d){ (void) tid;""")
+          s.println(s"""${setName}.par_foreach${until}([&](size_t tid, uint32_t ${attr}_d){ (void) tid;""")
         } else{
-          s.println(s"""${setName}.foreach([&](uint32_t ${attr}_d) {""")
+          s.println(s"""${setName}.foreach${until}([&](uint32_t ${attr}_d) {""")
         }
-        if(cga.materializeViaSelectionsBelow) s.println(s"""const uint32_t filter_value = ${attr}_d;""")
-        emitNoMaterializeCheckSelection(s,cga)
+        if(cga.materializeViaSelectionsBelow){ 
+          s.println(s"""const uint32_t filter_value = ${attr}_d;""")
+          s.println(s"""bool ret_value = false;""")
+        }
+        if(noMaterializeCheckSelection) emitNoMaterializeCheckSelection(s,cga)
       }
       case (None,true,_) => {
         if(first){
@@ -463,6 +483,7 @@ object CodeGen {
   def emitAnnotationComputation(s:CodeStringBuilder,cg:CodeGenGHD,cga:CodeGenNPRRAttr,agg:String,tid:String):Unit = {
     s.println("//emitAnnotationComputation")
     s.println(s"""output_buffer->roll_back(${tid},${cga.attr}.number_of_bytes);""")
+    println(cga.attr)
     val index = cg.aggregates.indexOf(cga.attr)
     if(index == 1 && cg.scalarResult){
       s.println(s"""annotation.update(${tid},annotation_${cga.attr});""")
@@ -501,19 +522,14 @@ object CodeGen {
       s.println(s"""TrieBlock_${cga.attr}->init_pointers(${tid},output_buffer);""")
   }
 
-  def emitNPRR(s: CodeStringBuilder,name: String,cg:CodeGenGHD): Unit = {
-    s.println("""////////////////////emitNPRR////////////////////""")
-    s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${cg.lhs.name} = 
-      new (output_buffer->get_next(0, sizeof(Trie<${Environment.layout}, ${annotationType}>))) 
-      Trie<${Environment.layout}, ${annotationType}>(${cg.lhs.attrs.length});""")
-    s.println("{")
-    //if(!Environment.quiet) 
-    s.println("""auto start_time = debug::start_clock();""")
-    s.println("//")
-    val firstAttr = cg.attrs.head.attr
-    val lastAttr = cg.attrs.last.attr
-    var seenAccessors = Set[String]()
-    
+  def emitStartQueryTimer(s:CodeStringBuilder) : Unit = {
+    s.println("""auto query_time = debug::start_clock();""")
+  }
+  def emitStopQueryTimer(s:CodeStringBuilder) : Unit = {
+    s.println("""debug::stop_clock("QUERY TIME",query_time);""")
+  }
+
+  def emitSelectionValues(s:CodeStringBuilder, cg:CodeGenGHD) : Unit = {
     //emit the selection values first if they exist
     cg.attrs.foreach(cga => {
       cga.selection match{
@@ -524,9 +540,171 @@ object CodeGen {
         case None =>
       }
     })
+  }
+
+  def emitTopDown(s: CodeStringBuilder, first:Boolean, td:List[CodeGenTopDown], name:String, cg:CodeGenGHD) : Unit = {
+    //First emit the blocks for the heads of all the relations
+    td.foreach(cg_top_down =>{
+      val attr = cg_top_down.attr
+      val accessors = cg_top_down.accessors
+      accessors.distinct.foreach(acc => {
+        if(acc.level == 0)
+          s.println(s"""TrieBlock<${Environment.layout},${annotationType}>* ${acc.getName()} = Trie_${acc.trieName}->head;""")
+      })
+    })
+
+    var prev = ""
+    td.foreach(cg_top_down =>{
+      val attr = cg_top_down.attr
+      val accessors = cg_top_down.accessors
+      val tid = if(first && cg_top_down == td.head) "0" else "tid"
+
+      if(cg.aggregates.length != 0){
+        if(attr == cg.aggregates.head){
+          if(cg.scalarResult){
+            s.println(s"""par::reducer<${annotationType}> annotation(0,[](size_t a, size_t b){ return a + b; });""")
+          } else{
+            s.println(s"""${annotationType} annotation = (${annotationType})0;""")
+          }
+        }
+      }
+
+      //emit remaining accessors
+      accessors.foreach(acc => {
+        if(acc.level != 0)
+          s.println(s"""TrieBlock<${Environment.layout},${annotationType}>* ${acc.getName()} = ${acc.getPrevName()}->get_block(${prev}_d);""")
+      })
+      
+      if(!cg.aggregates.contains(attr)){
+        //emit for loop
+        s.println(s"""TrieBlock<${Environment.layout},${annotationType}>* TrieBlock_${attr} = 
+          new(output_buffer->get_next(${tid}, sizeof(TrieBlock<${Environment.layout},${annotationType}>))) 
+          TrieBlock<${Environment.layout},${annotationType}>(${accessors.head.getName()}->set);""")
+        //last level we must start rebuilding
+        println(attr + " " + accessors.head.attrs.length + " " + accessors.head.level)
+        if(td.last != cg_top_down){
+          s.println(s"""TrieBlock_${attr}->init_pointers(${tid},output_buffer);""")
+        }
+      } else {
+       s.println(s"""TrieBlock<${Environment.layout},${annotationType}>* TrieBlock_${attr} = ${accessors.head.getName()};""")
+      }
+
+      if(!cg.aggregates.contains(attr)){
+        if(first && cg_top_down == td.head){
+          s.println(s"""TrieBlock_${attr}->set.par_foreach_index([&](size_t tid, uint32_t ${attr}_i, uint32_t ${attr}_d){""")
+        } else{
+          s.println(s"""TrieBlock_${attr}->set.foreach_index([&](uint32_t ${attr}_i, uint32_t ${attr}_d) {""")
+        }
+      } else {
+        if(first && cg_top_down == td.head){
+          s.println(s"""TrieBlock_${attr}->set.par_foreach([&](size_t tid, uint32_t ${attr}_d){""")
+        } else{
+          s.println(s"""TrieBlock_${attr}->set.foreach([&](uint32_t ${attr}_d) {""")
+        }
+        s.print(s"""const ${annotationType} annotation_${attr} = (""")
+        accessors.foreach(acc => {
+          s.println(s"""${acc.getName()}->get_data(${attr}_d)*""")
+        })
+        s.println("1);")
+      }
+      prev = attr
+    })
+
+    td.reverse.foreach(cg_top_down =>{
+      val attr = cg_top_down.attr
+      val accessors = cg_top_down.accessors
+      if(!cg.aggregates.contains(attr)){
+        if(td.last != cg_top_down){
+          s.println(s"""TrieBlock_${attr}->set_block(${attr}_i,${attr}_d,TrieBlock_${prev});""")
+        }
+      } else {
+        if(cg.annotatedAttr.isDefined){
+          s.println("//set data")
+        } else {
+          if(cg.scalarResult && td.last == cg_top_down){
+            s.println(s"""annotation.update(tid,(annotation_${attr}""")
+            val index = cg.aggregates.indexOf(attr)
+            (0 until index).foreach(i => {
+              s.println(s"""*annotation_${cg.aggregates(i)}""")
+            })
+            s.println("*1));")
+          }
+        }
+      }
+      s.println("});")
+      prev = attr
+    })
+
+    s.println(s"""Trie_${name}->head = TrieBlock_${td.head.attr};""")
+    if(cg.scalarResult){
+      s.println(s"""Trie_${name}->annotation = annotation.evaluate(0);""")
+      s.println(s"""std::cout << annotation.evaluate(0) << std::endl;""")
+    }
+  }
+
+  def emitNPRR(s: CodeStringBuilder,name: String,cg:CodeGenGHD,noWork:Option[String],td:Option[List[CodeGenTopDown]]): Unit = {
+    s.println("""////////////////////emitNPRR////////////////////""")
+
+    if(Environment.debug){
+      println("---------debug----------")
+      println("name: " + name)
+      println("no work: " + noWork)
+      println("lhs: " + cg.lhs.name + " " + cg.lhs.attrs)
+      println("expression: " + cg.expression)
+      println("aggregates: " + cg.aggregates)
+      println("annotated attribute: " + cg.annotatedAttr)
+      println("attr to encoding map: " + cg.attrToEncoding)
+      println("scalar result: " + cg.scalarResult)
+      println("code gen attr")
+      if(td.isDefined){
+        println("top down: ")
+        td.get.foreach(t =>{
+          println("attr: " + t.attr)
+          t.accessors.foreach(acc => {
+            println("\taccessors: " + acc.trieName + " " + acc.level)
+          })
+        })
+      }
+      else
+        println("top down: " + td)
+      cg.attrs.foreach(cga => {
+        println()
+        println("attr: " + cga.attr)
+        println("agg: " + cga.agg)
+        if(cga.selection.isDefined)
+          println("selection: " + cga.selection.get.condition + " " + cga.selection.get.value)
+        else 
+          println("selection: " + cga.selection)
+        println("materialize: " + cga.materialize)
+        println("first: " + cga.first)
+        println("last: " + cga.last)
+        println("prev: " + cga.prev)
+        println("materializeViaSelectionsBelow: " + cga.materializeViaSelectionsBelow)
+        println("checkSelectionNotMaterialize: " + cga.checkSelectionNotMaterialize)
+      })
+      println("---------end debug----------")
+    }
+
+
+
+    if(noWork.isDefined){
+      s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${cg.lhs.name} = Trie_${noWork.get};""")
+      return
+    }
+
+    s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${cg.lhs.name} = 
+      new (output_buffer->get_next(0, sizeof(Trie<${Environment.layout}, ${annotationType}>))) 
+      Trie<${Environment.layout}, ${annotationType}>(${cg.lhs.attrs.length});""")
+    s.println("{")
+    //if(!Environment.quiet) 
+    s.println("""auto start_time = debug::start_clock();""")
+    s.println("//")
+    
+    emitSelectionValues(s,cg)
 
     //should probably be recursive
     var materializeWithSelectionsBelowInParallel = false
+    var seenAccessors = Set[String]()
     cg.attrs.foreach(cga => {
       //TODO: Refactor all of these into the CGA class there is no reason they can't be computed ahead of time.
       val tid = if(cga.first) "0" else "tid"
@@ -538,6 +716,15 @@ object CodeGen {
       emitAnnotationTemporary(s,cga,cg.aggregates,cg.expression)
       seenAccessors ++= cga.accessors.map(_.getName())
     })
+
+    //emit top down code if you have it
+    td match {
+      case Some(top_down) =>
+        val lastBlock = if(cg.attrs.length == 0) cg.lhs.name else cg.lhs.attrs.last
+        emitTopDown(s,cg.attrs.length == 0,top_down,lastBlock,cg)
+      case None =>
+    }
+
     //close out an emit materializations if necessary
     cg.attrs.reverse.foreach(cga =>{
       val tid = if(cga.first) "0" else "tid"
@@ -545,7 +732,8 @@ object CodeGen {
         case Some(a) => emitAnnotationComputation(s,cg,cga,a,tid)
         case None => {
           if(cga.materializeViaSelectionsBelow) emitBuildNewSet(s,cga,tid)
-          if(cga.materialize) emitSetTrieBlock(s,cga,cg.lhs.name)
+          val setData = if(cga.prev.isDefined && cg.annotatedAttr.isDefined) cga.prev == cg.annotatedAttr.get else false 
+          emitSetTrieBlock(s,cga,cg.lhs.name,setData)
         }
       }
       if(!cga.first) emitNoMaterializeCheckSelectionEnd(s,cg.attrs(cg.attrs.indexOf(cga)-1))

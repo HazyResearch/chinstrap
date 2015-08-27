@@ -8,6 +8,7 @@ struct TrieBlock{
   Set<T> set;
   TrieBlock<T,R>** next_level;
   R* values;
+  R value = 0;
   bool is_sparse;
 
   TrieBlock(TrieBlock *init){
@@ -118,6 +119,9 @@ struct TrieBlock{
   }
 
   R get_data(uint32_t data){
+    if(value != 0) 
+      return value;
+    
     if(!is_sparse){
       return values[data];
     } else{
@@ -131,6 +135,9 @@ struct TrieBlock{
   }
 
   R get_data(uint32_t index, uint32_t data){
+    if(value != 0) 
+      return value;
+    
     if(!is_sparse){
       (void) index;
       return values[data];
