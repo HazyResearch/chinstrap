@@ -247,9 +247,10 @@ object CodeGen {
     expression:String,
     scalarResult:Boolean,
     aggregates:List[String]): Unit = {
+    val extraAnnotations = cga.accessors.map(acc => acc.annotation.isDefined).reduce( (a,b) => {a || b})
     cga.agg match {
       case Some(aggregate) => {
-        if(cga.last){ //always the last attribute?
+        if(cga.last && !extraAnnotations){ //always the last attribute?
           val name = if(aggregates.indexOf(cga.attr) == 0) "annotation" else s"""annotation_${cga.attr}"""
           val exp2 = if(aggregates.indexOf(cga.attr) == 0) "(" else s"""(annotation_tmp * """
           s.println(s"""${annotationType} ${name} = ${exp2} (${expression}*${cga.attr}.cardinality));""")
@@ -469,9 +470,11 @@ object CodeGen {
   def emitAnnotationTemporary(s:CodeStringBuilder, cga:CodeGenNPRRAttr, aggregates:List[String], expression:String) : Unit = {
     cga.agg match {
       case Some(a) => {
-        println("GILMORE: " + aggregates.indexOf(cga.attr) + " " + (aggregates.length-1))
         if(aggregates.indexOf(cga.attr) != (aggregates.length-1) ){
-          if(aggregates.indexOf(cga.attr) == 0){
+          val extraAnnotations = cga.accessors.filter(acc => acc.annotation.isDefined)
+          if(extraAnnotations.length != 0){
+            s.println(s"""${annotationType} annotation_tmp = ${extraAnnotations.head.getName()}->get_data(${cga.attr}_d);""")
+          } else if(aggregates.indexOf(cga.attr) == 0){
             s.println(s"""${annotationType} annotation_tmp = ${expression};""")
           } else {
             s.println(s"""annotation_tmp *= ${expression};""")
@@ -482,18 +485,25 @@ object CodeGen {
     }
   }
 
-  def emitAnnotationComputation(s:CodeStringBuilder,cg:CodeGenGHD,cga:CodeGenNPRRAttr,agg:String,tid:String):Unit = {
+  def emitAnnotationComputation(s:CodeStringBuilder,cg:CodeGenGHD,cga:CodeGenNPRRAttr,agg:String,tid:String,ea:Boolean):Unit = {
     s.println("//emitAnnotationComputation")
     //s.println(s"""output_buffer->roll_back(${tid},${cga.attr}.number_of_bytes);""")
     println(cga.attr)
-    val index = cg.aggregates.indexOf(cga.attr)
+    val index = if(ea) cg.aggregates.indexOf(cga.attr)+1 else cg.aggregates.indexOf(cga.attr)
+    val extraAnnotation = cga.accessors.filter(acc => acc.annotation.isDefined)
     if(index == 1 && cg.scalarResult){
-      s.println(s"""annotation.update(${tid},annotation_${cga.attr});""")
+      if(ea)
+        s.println(s"""annotation.update(tid,annotation_tmp);""")
+      else
+        s.println(s"""annotation.update(${tid},annotation_${cga.attr});""")
     } else if(index != 0){
       val name = if(index == 1) "annotation" else s"""annotation_${cg.aggregates(index-1)}"""
       agg match {
         case "SUM" => {
-          s.println(s"""${name} += annotation_${cga.attr};""")
+          if(extraAnnotation.length == 0)
+            s.println(s"""${name} += annotation_${cga.attr};""")
+          else 
+            s.println(s"""annotation_${cga.attr} += ${extraAnnotation.head.getName()}->get_data(${cga.attr}_d);""")
         }
         case _ => s.println(s"""//${agg} not implemented""")
       }
@@ -673,6 +683,9 @@ object CodeGen {
         println()
         println("attr: " + cga.attr)
         println("agg: " + cga.agg)
+        cga.accessors.foreach(acc => {
+          println("\taccessors: " + acc.trieName + " " + acc.level + " " + acc.attrs + " " + acc.annotation)
+        })
         if(cga.selection.isDefined)
           println("selection: " + cga.selection.get.condition + " " + cga.selection.get.value)
         else 
@@ -707,6 +720,7 @@ object CodeGen {
     //should probably be recursive
     var materializeWithSelectionsBelowInParallel = false
     var seenAccessors = Set[String]()
+    val extraAnnotations = cg.attrs.last.accessors.map(acc => acc.annotation.isDefined).reduce( (a,b) => {a || b})
     cg.attrs.foreach(cga => {
       //TODO: Refactor all of these into the CGA class there is no reason they can't be computed ahead of time.
       val tid = if(cga.first) "0" else "tid"
@@ -714,7 +728,7 @@ object CodeGen {
       emitSetComputations(s,cga,seenAccessors,tid,materializeWithSelectionsBelowInParallel)
       if(cga.materialize && !cga.materializeViaSelectionsBelow) emitNewTrieBlock(s,cga,tid,cg.annotatedAttr)
       emitAnnotationInitialization(s,cga,tid,cg.expression,cg.scalarResult,cg.aggregates)
-      if(!cga.last) emitForEach(s,cga,cg.expression)
+      if(!cga.last || extraAnnotations) emitForEach(s,cga,cg.expression)
       emitAnnotationTemporary(s,cga,cg.aggregates,cg.expression)
       seenAccessors ++= cga.accessors.map(_.getName())
     })
@@ -729,9 +743,10 @@ object CodeGen {
 
     //close out an emit materializations if necessary
     cg.attrs.reverse.foreach(cga =>{
+      val cgaExtraAnnotations = cga.accessors.map(acc => acc.annotation.isDefined).reduce( (a,b) => {a || b})
       val tid = if(cga.first) "0" else "tid"
       cga.agg match {
-        case Some(a) => emitAnnotationComputation(s,cg,cga,a,tid)
+        case Some(a) => emitAnnotationComputation(s,cg,cga,a,tid,extraAnnotations)
         case None => {
           if(cga.materializeViaSelectionsBelow) emitBuildNewSet(s,cga,tid)
           val setData = if(cga.prev.isDefined && cg.annotatedAttr.isDefined) cga.prev == cg.annotatedAttr.get else false 
@@ -739,8 +754,11 @@ object CodeGen {
         }
       }
       if(!cga.first) emitNoMaterializeCheckSelectionEnd(s,cg.attrs(cg.attrs.indexOf(cga)-1))
-      if(!cga.first) s.println("});")
+      if(!cga.first || extraAnnotations) s.println("});")
+      if(!cga.first && cgaExtraAnnotations) s.println(s"""annotation_tmp *= annotation_${cga.attr};""")
     })
+    if(extraAnnotations)
+      s.println(s"""Trie_${cg.lhs.name}->annotation = annotation.evaluate(0);""")
 
     //if(!Environment.quiet) 
     s.println(s"""debug::stop_clock("Bag ${name}",start_time);""")

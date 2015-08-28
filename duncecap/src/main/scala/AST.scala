@@ -144,8 +144,9 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     CodeGen.emitStartQueryTimer(s)
 
     //if the number of bags is 1 or the attributes in the root match those in the result
-    val topDownUnecessary = myghd .num_bags == 1 ||  
-      (lhs.attrs.intersect(myghd.attrSet.toList).length == lhs.attrs.length)
+    val topDownUnecessary = myghd.num_bags == 1 ||  
+      (lhs.attrs.intersect(myghd.attrSet.toList).length == lhs.attrs.length && aggregates.size == 0) ||
+      (lhs.attrs.intersect(myghd.attrSet.toList).length == (lhs.attrs.length-1) && aggregates.size != 0) //only works for 1 aggregate can probably make more general
     println("topDownUnecessary: " + topDownUnecessary)
 
     val lhsOrder = (0 until lhs.attrs.length).filter(i => attributeOrdering.contains(lhs.attrs(i))).sortBy(i => attributeOrdering.indexOf(lhs.attrs(i))).toList
@@ -158,12 +159,17 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     val seenNPRRBags = mutable.ListBuffer[CodeGenGHD]()
     val seenNodes = mutable.ListBuffer[(GHDNode,List[String])]()
 
+    println()
+
     GHDSolver.bottomUp(myghd, ((ghd:GHDNode,root:Boolean,parent:GHDNode) => {
       val attrOrder = ghd.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
       val lhsAttrs = lhs.attrs.filter(attrOrder.contains(_)).sortBy(attrOrder.indexOf(_))
+      println("LHS ATTRS: " + lhs.attrs)
       val childAttrs = ghd.children.flatMap(child => {child.attrSet}).toList.distinct
+      println("CHILD ATTRS: " + childAttrs)
       val parentAttrs = if(!root) parent.attrSet.toList else List()
-      val sharedAttrs = attrOrder.intersect(childAttrs.union(parentAttrs).distinct)
+      val sharedAttrs = attrOrder.intersect(parentAttrs)
+      //val sharedAttrs = attrOrder.intersect(childAttrs.union(parentAttrs).distinct)
       val materializedAttrs = lhsAttrs.union(sharedAttrs).distinct.sortBy(attributeOrdering.indexOf(_))
       seenNodes += ((ghd,parentAttrs))
 
@@ -183,11 +189,18 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
           false
 
       //any attr that comes before gets passed
+      println("NUM CHILDREN: " + ghd.children.length)
       val childrenAttrMap = ghd.children.flatMap(cn => {
         val childAttrs = cn.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
         val childName = cn.getName(childAttrs)
+        println("CHILD ATTRS: " + childAttrs)
         childAttrs.toList.intersect(attrOrder).map(a => {
-          (a,new Accessor("bag_"+childName,childAttrs.indexOf(a),childAttrs)) 
+          println(a + " " +  aggregates + " " + attrOrder)
+          val childAnnotated = if(aggregates.contains(a)){ //it is annotated
+            Some(aggregates(a))
+          } else None
+          println("CHILD ANNOTATED: " + childAnnotated)
+          (a,new Accessor("bag_"+childName,childAttrs.indexOf(a),childAttrs,childAnnotated)) 
         })
       }).groupBy(t => t._1).map(t => (t._1 -> (t._2.map(_._2).distinct)) )
 
@@ -283,7 +296,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
           val (cn,parents) = sn
           val currAttrs = cn.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
           val childName = cn.getName(currAttrs)
-          val sharedAttrs = (cn.children.flatMap(p => p.attrSet.toList)).union(parents) //appear in the output or are shared
+          val sharedAttrs = parents //appear in the output or are shared
           println("bag: " + childName)
           println("currAttrs: " + currAttrs)
           println("sharedAttrs: " + sharedAttrs)
@@ -302,15 +315,18 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
           CodeGen.emitRewriteOutputTrie(s,lhsName,"bag_" + name,scalarResult)
         } else {
           CodeGen.emitNPRR(s,name,myghdbag,noWork,None)
-
-          val aggregateTopDown = aggregates.toList.map(_._1).sortBy(attributeOrdering.indexOf(_))
-          val bagLHS = new QueryRelation(lhsName,lhs.attrs)
-          val annotatedAttrIn = 
-            if(lhsAttrs.length != 0 && aggregateTopDown.size != 0) 
-              Some(lhsAttrs.last)
-            else None
-          val dummy_bag = new CodeGenGHD(bagLHS,List[CodeGenNPRRAttr](),aggregateExpression,scalarResult,aggregateTopDown,annotatedAttrIn,attrToEncodingMap)
-          CodeGen.emitNPRR(s,lhsName,dummy_bag,None,Some(td))
+          if(!topDownUnecessary){
+            val aggregateTopDown = aggregates.toList.map(_._1).sortBy(attributeOrdering.indexOf(_))
+            val bagLHS = new QueryRelation(lhsName,lhs.attrs)
+            val annotatedAttrIn = 
+              if(lhsAttrs.length != 0 && aggregateTopDown.size != 0) 
+                Some(lhsAttrs.last)
+              else None
+            val dummy_bag = new CodeGenGHD(bagLHS,List[CodeGenNPRRAttr](),aggregateExpression,scalarResult,aggregateTopDown,annotatedAttrIn,attrToEncodingMap)
+            CodeGen.emitNPRR(s,lhsName,dummy_bag,None,Some(td))
+            } else{
+              CodeGen.emitRewriteOutputTrie(s,lhsName,"bag_" + name,scalarResult)
+            }
         }
       }
     }))

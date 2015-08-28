@@ -8,7 +8,7 @@ import argonaut.Json
 import org.apache.commons.math3.optim.linear._
 import org.apache.commons.math3.optim.nonlinear.scalar.GoalType
 
-class Accessor(val trieName:String, val level:Int, val attrs:List[String]){
+class Accessor(val trieName:String, val level:Int, val attrs:List[String], val annotation:Option[String] = None ){
   def getName() : String = {
     if(level == 0)
       "TrieBlock_" + trieName + "_" + level

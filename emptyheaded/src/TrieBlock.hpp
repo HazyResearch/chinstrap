@@ -118,7 +118,7 @@ struct TrieBlock{
     }
   }
 
-  R get_data(uint32_t data){
+  R get_data(uint32_t data) const {
     if(value != 0) 
       return value;
     
@@ -134,7 +134,7 @@ struct TrieBlock{
     return (R)0;
   }
 
-  R get_data(uint32_t index, uint32_t data){
+  R get_data(uint32_t index, uint32_t data) const {
     if(value != 0) 
       return value;
     
