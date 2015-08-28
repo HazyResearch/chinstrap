@@ -46,7 +46,8 @@ namespace allocator{
       return NULL;
     }
     inline void roll_back(size_t num){
-      cur -= (sizeof(T)*num);
+      const size_t roll_back_amount = (num*sizeof(T));
+      cur -= roll_back_amount;
     }
     inline void adjust(long num){
       cur += long(sizeof(T))*num;

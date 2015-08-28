@@ -126,6 +126,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
         (qr.attrs(i) -> (Environment.relations(qr.name)(rName).encodings(i),Environment.relations(qr.name)(rName).types(i)))
       }).toList.distinct
     }).toMap
+    println("ATTR TO ENCODING MAP: " + attrToEncodingMap)
 
     //Figure out the relations and encodings you need for the query
     val reorderedRelations = relations.map(qr => {
@@ -166,7 +167,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       val materializedAttrs = lhsAttrs.union(sharedAttrs).distinct.sortBy(attributeOrdering.indexOf(_))
       seenNodes += ((ghd,parentAttrs))
 
-      val name = myghd.getName(attrOrder)
+      val name = ghd.getName(attrOrder)
       val bagLHS = new QueryRelation("bag_" + name,lhsAttrs)
 
       //for the relation to be in the bag all of its attributes must appear in the GHD
@@ -181,6 +182,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
         else 
           false
 
+      //any attr that comes before gets passed
       val childrenAttrMap = ghd.children.flatMap(cn => {
         val childAttrs = cn.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
         val childName = cn.getName(childAttrs)
@@ -191,10 +193,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
 
       //a list with the attributes that are aggregated in order
       val aggregateOrder = aggregates.toList.map(_._1).sortBy(attributeOrdering.indexOf(_)).filter(a => {
-        if(Environment.yanna)
-          !( (childrenAttrMap.contains(a) || (!root && parent.attrSet.contains(a)) ))  //if attrs are passed do not eliminate
-        else 
-          true
+        !sharedAttrs.contains(a) && attrOrder.contains(a) //must be in current bag and not shared to survive
       })
       println("AGG ORDER: " + aggregateOrder)
       //annotate the last materialized attribute with a aggregate below it
@@ -239,13 +238,28 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
         val equivBag = ( (cg.lhs.attrs.length == lhsAttrs.length) && 
           (cg.attrs.length == codeGenAttrs.length) &&
         ((0 until cg.attrs.length).map(i => {
+          //check if the selections are the same
+          val optionSel1 = cg.attrs(i).selection
+          val optionSel2 = codeGenAttrs(i).selection 
+          val selectionsSame = (optionSel1,optionSel2) match {
+            case (Some(sel1),Some(sel2)) => {
+              println("HERE HERE HERE")
+              (sel1.condition == sel2.condition) && (sel1.value == sel2.value)
+            }
+            case (None,None) => true
+            case (_,_) => false
+          }
           val acc1 = cg.attrs(i).accessors.toSet
           val acc2 = codeGenAttrs(i).accessors.toSet
-          (acc1 == acc2)
+          val accessorsSame = (acc1 == acc2)
+          println("SELECTIONS SAME: " + selectionsSame)
+          (accessorsSame && selectionsSame)
         }).reduce( (a,b) => a && b) ) )
         if(equivBag) Some(cg.lhs.name)
         else None
       })
+
+      println("NO WORK 2: " + noWork2)
 
       val noWork = 
         if(noWork1) Some(codeGenAttrs.head.accessors.head.trieName) 
@@ -273,8 +287,10 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
           println("bag: " + childName)
           println("currAttrs: " + currAttrs)
           println("sharedAttrs: " + sharedAttrs)
-          currAttrs.toList.intersect(lhs.attrs.union(sharedAttrs)).map(a => {
-            (a,new Accessor("bag_"+childName,currAttrs.indexOf(a),currAttrs)) 
+          val materialized = lhs.attrs.union(sharedAttrs)
+          val curAttrsIn = currAttrs.filter(materialized.contains(_))
+          curAttrsIn.map(a => {
+            (a,new Accessor("bag_"+childName,curAttrsIn.indexOf(a),curAttrsIn)) 
           }).filter(tup => tup._1 != "")
         }).groupBy(t => t._1).map(t => (t._1 -> (t._2.map(_._2).distinct)) )
         val td = topDownAttrMap.map(_._1).toList.sortBy(attributeOrdering.indexOf(_)).map(lhsa => {
@@ -307,13 +323,15 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
 
     if(!scalarResult){
       //below here should probably be refactored. this saves the environment and writes the trie to disk
-      println("ADDING RELATION: " + lhsName)
-      Environment.addRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings))
+      println("LHS Encodings: " + lhsEncodings)
+      Environment.addBrandNewRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings))
       Utils.writeEnvironmentToJSON()
 
       s"""mkdir -p ${Environment.dbPath}/relations/${lhs.name} ${Environment.dbPath}/relations/${lhs.name}/${lhsName}""" !
       
       CodeGen.emitWriteBinaryTrie(s,lhs.name,lhsName)
+    } else{
+      s.println(s"""std::cout << "Query Result: " << Trie_${lhsName}->annotation << std::endl;""") 
     }
   }
 }

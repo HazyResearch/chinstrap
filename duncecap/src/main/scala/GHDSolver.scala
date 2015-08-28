@@ -109,12 +109,13 @@ object GHDSolver {
   def getGHD(distinctRelations:List[QueryRelation]) : GHDNode = {
     //compute fractional scores
     val myghd = if(Environment.yanna){
-        val decompositions = getMinFHWDecompositions(distinctRelations) 
-        decompositions.sortBy{ root:GHDNode =>
+      val decompositions = getMinFHWDecompositions(distinctRelations) 
+      decompositions.sortBy{ root:GHDNode =>
         val tup = breadth_first(mutable.LinkedHashSet[GHDNode](root),mutable.LinkedHashSet[GHDNode](root))
         root.depth = tup._1
+        println("DEPTH: " + root.depth)
         root.depth
-      }.head
+      }.head //change
     } else getDecompositions(distinctRelations).last
 
     myghd.num_bags = breadth_first(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd))._2

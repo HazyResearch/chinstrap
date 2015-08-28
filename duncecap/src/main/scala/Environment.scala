@@ -39,6 +39,14 @@ object Environment {
       relations(name) += (r.name -> r)
     }
   }
+
+  def addBrandNewRelation(name: String, r : Relation): Unit = {
+    if(!relations.contains(name)){
+      relations -= name
+    }
+    relations += (name -> mutable.Map(r.name -> r) )
+
+  }
   
   def addEncoding(e : Encoding): Unit = {
     if(!encodings.contains(e.name)){

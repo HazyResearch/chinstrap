@@ -185,7 +185,7 @@ object CodeGen {
   }
 
   def emitPrintRelation(s: CodeStringBuilder,rel:QueryRelation): Unit = {
-    s.println("""////////////////////emitWriteBinaryEncoding////////////////////""")
+    s.println("""////////////////////emitPrintRelation////////////////////""")
     s.println("{")
     //load from binary first
     val qr = rel.name + "_" + (0 until rel.attrs.size).toList.mkString("_")
@@ -250,7 +250,9 @@ object CodeGen {
     cga.agg match {
       case Some(aggregate) => {
         if(cga.last){ //always the last attribute?
-          s.println(s"""${annotationType} annotation_${cga.attr} = (annotation_tmp * (${expression}*${cga.attr}.cardinality));""")
+          val name = if(aggregates.indexOf(cga.attr) == 0) "annotation" else s"""annotation_${cga.attr}"""
+          val exp2 = if(aggregates.indexOf(cga.attr) == 0) "(" else s"""(annotation_tmp * """
+          s.println(s"""${annotationType} ${name} = ${exp2} (${expression}*${cga.attr}.cardinality));""")
         }else {
           if(scalarResult && aggregates.indexOf(cga.attr) == 0) emitAggregateReducer(s,cga)
           else if(aggregates.indexOf(cga.attr) == 0) s.println(s"""${annotationType} annotation = (${annotationType})0;""")    
@@ -451,7 +453,7 @@ object CodeGen {
       }
       case (None,true,_) => {
         if(first){
-          s.println(s"""${attr}.par_foreach_index([&](size_t tid, uint32_t ${attr}_i, uint32_t ${attr}_d){""")
+          s.println(s"""${attr}.par_foreach_index([&](size_t tid, uint32_t ${attr}_i, uint32_t ${attr}_d){ (void) tid;""")
         } else{
           s.println(s"""${attr}.foreach_index([&](uint32_t ${attr}_i, uint32_t ${attr}_d) {""")
         }
@@ -462,18 +464,18 @@ object CodeGen {
   def emitRewriteOutputTrie(s:CodeStringBuilder,outName:String,prevName:String,scalarResult:Boolean) : Unit = {
     s.println("//emitRewriteOutputTrie")
     s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${outName} = Trie_${prevName};""")
-    if(scalarResult){
-      s.println(s"""std::cout << "Query Result: " << Trie_${outName}->annotation << std::endl;""")
-    } 
   }
 
   def emitAnnotationTemporary(s:CodeStringBuilder, cga:CodeGenNPRRAttr, aggregates:List[String], expression:String) : Unit = {
     cga.agg match {
       case Some(a) => {
-        if(aggregates.indexOf(cga.attr) == 0){
-          s.println(s"""${annotationType} annotation_tmp = ${expression};""")
-        } else if(aggregates.indexOf(cga.attr) != (aggregates.length-1)){
-          s.println(s"""annotation_tmp *= ${expression};""")
+        println("GILMORE: " + aggregates.indexOf(cga.attr) + " " + (aggregates.length-1))
+        if(aggregates.indexOf(cga.attr) != (aggregates.length-1) ){
+          if(aggregates.indexOf(cga.attr) == 0){
+            s.println(s"""${annotationType} annotation_tmp = ${expression};""")
+          } else {
+            s.println(s"""annotation_tmp *= ${expression};""")
+          }
         }
       }
       case None =>
@@ -482,7 +484,7 @@ object CodeGen {
 
   def emitAnnotationComputation(s:CodeStringBuilder,cg:CodeGenGHD,cga:CodeGenNPRRAttr,agg:String,tid:String):Unit = {
     s.println("//emitAnnotationComputation")
-    s.println(s"""output_buffer->roll_back(${tid},${cga.attr}.number_of_bytes);""")
+    //s.println(s"""output_buffer->roll_back(${tid},${cga.attr}.number_of_bytes);""")
     println(cga.attr)
     val index = cg.aggregates.indexOf(cga.attr)
     if(index == 1 && cg.scalarResult){
@@ -571,8 +573,9 @@ object CodeGen {
 
       //emit remaining accessors
       accessors.foreach(acc => {
-        if(acc.level != 0)
-          s.println(s"""TrieBlock<${Environment.layout},${annotationType}>* ${acc.getName()} = ${acc.getPrevName()}->get_block(${prev}_d);""")
+        if(acc.level != 0){
+          s.println(s"""TrieBlock<${Environment.layout},${annotationType}>* ${acc.getName()} = ${acc.getPrevName()}->get_block(${acc.attrs(acc.level-1)}_d);""")
+        }
       })
       
       if(!cg.aggregates.contains(attr)){
@@ -602,7 +605,7 @@ object CodeGen {
           s.println(s"""TrieBlock_${attr}->set.foreach([&](uint32_t ${attr}_d) {""")
         }
         s.print(s"""const ${annotationType} annotation_${attr} = (""")
-        accessors.foreach(acc => {
+        accessors.filter(acc => (attr == acc.attrs.last)).foreach(acc => { //filter out those which are not annotations 
           s.println(s"""${acc.getName()}->get_data(${attr}_d)*""")
         })
         s.println("1);")
@@ -638,7 +641,6 @@ object CodeGen {
     s.println(s"""Trie_${name}->head = TrieBlock_${td.head.attr};""")
     if(cg.scalarResult){
       s.println(s"""Trie_${name}->annotation = annotation.evaluate(0);""")
-      s.println(s"""std::cout << annotation.evaluate(0) << std::endl;""")
     }
   }
 
@@ -661,7 +663,7 @@ object CodeGen {
         td.get.foreach(t =>{
           println("attr: " + t.attr)
           t.accessors.foreach(acc => {
-            println("\taccessors: " + acc.trieName + " " + acc.level)
+            println("\taccessors: " + acc.trieName + " " + acc.level + " " + acc.attrs)
           })
         })
       }
