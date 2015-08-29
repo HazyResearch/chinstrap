@@ -487,8 +487,8 @@ object CodeGen {
 
   def emitAnnotationComputation(s:CodeStringBuilder,cg:CodeGenGHD,cga:CodeGenNPRRAttr,agg:String,tid:String,ea:Boolean):Unit = {
     s.println("//emitAnnotationComputation")
-    //s.println(s"""output_buffer->roll_back(${tid},${cga.attr}.number_of_bytes);""")
-    println(cga.attr)
+    if(cga.last)
+      s.println(s"""output_buffer->roll_back(${tid},${cga.attr}.number_of_bytes);""")
     val index = if(ea) cg.aggregates.indexOf(cga.attr)+1 else cg.aggregates.indexOf(cga.attr)
     val extraAnnotation = cga.accessors.filter(acc => acc.annotation.isDefined)
     if(index == 1 && cg.scalarResult){
@@ -594,7 +594,6 @@ object CodeGen {
           new(output_buffer->get_next(${tid}, sizeof(TrieBlock<${Environment.layout},${annotationType}>))) 
           TrieBlock<${Environment.layout},${annotationType}>(${accessors.head.getName()}->set);""")
         //last level we must start rebuilding
-        println(attr + " " + accessors.head.attrs.length + " " + accessors.head.level)
         if(td.last != cg_top_down){
           s.println(s"""TrieBlock_${attr}->init_pointers(${tid},output_buffer);""")
         }

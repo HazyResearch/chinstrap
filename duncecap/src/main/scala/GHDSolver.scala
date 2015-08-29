@@ -113,13 +113,11 @@ object GHDSolver {
       decompositions.sortBy{ root:GHDNode =>
         val tup = breadth_first(mutable.LinkedHashSet[GHDNode](root),mutable.LinkedHashSet[GHDNode](root))
         root.depth = tup._1
-        println("DEPTH: " + root.depth)
         root.depth
       }.head //change
     } else getDecompositions(distinctRelations).last
 
     myghd.num_bags = breadth_first(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd))._2
-    println("NUM BAGS: " + myghd.num_bags)
     assert(myghd.num_bags != 0)
     val fhws = myghd.fractionalScoreTree()
     //print(myghd, "query_plan_" + fhws + ".json")

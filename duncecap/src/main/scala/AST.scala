@@ -126,7 +126,6 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
         (qr.attrs(i) -> (Environment.relations(qr.name)(rName).encodings(i),Environment.relations(qr.name)(rName).types(i)))
       }).toList.distinct
     }).toMap
-    println("ATTR TO ENCODING MAP: " + attrToEncodingMap)
 
     //Figure out the relations and encodings you need for the query
     val reorderedRelations = relations.map(qr => {
@@ -147,7 +146,6 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     val topDownUnecessary = myghd.num_bags == 1 ||  
       (lhs.attrs.intersect(myghd.attrSet.toList).length == lhs.attrs.length && aggregates.size == 0) ||
       (lhs.attrs.intersect(myghd.attrSet.toList).length == (lhs.attrs.length-1) && aggregates.size != 0) //only works for 1 aggregate can probably make more general
-    println("topDownUnecessary: " + topDownUnecessary)
 
     val lhsOrder = (0 until lhs.attrs.length).filter(i => attributeOrdering.contains(lhs.attrs(i))).sortBy(i => attributeOrdering.indexOf(lhs.attrs(i))).toList
     val lhsName = lhs.name+"_"+lhsOrder.mkString("_")
@@ -159,14 +157,11 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     val seenNPRRBags = mutable.ListBuffer[CodeGenGHD]()
     val seenNodes = mutable.ListBuffer[(GHDNode,List[String])]()
 
-    println()
 
     GHDSolver.bottomUp(myghd, ((ghd:GHDNode,root:Boolean,parent:GHDNode) => {
       val attrOrder = ghd.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
       val lhsAttrs = lhs.attrs.filter(attrOrder.contains(_)).sortBy(attrOrder.indexOf(_))
-      println("LHS ATTRS: " + lhs.attrs)
       val childAttrs = ghd.children.flatMap(child => {child.attrSet}).toList.distinct
-      println("CHILD ATTRS: " + childAttrs)
       val parentAttrs = if(!root) parent.attrSet.toList else List()
       val sharedAttrs = attrOrder.intersect(parentAttrs)
       //val sharedAttrs = attrOrder.intersect(childAttrs.union(parentAttrs).distinct)
@@ -189,17 +184,13 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
           false
 
       //any attr that comes before gets passed
-      println("NUM CHILDREN: " + ghd.children.length)
       val childrenAttrMap = ghd.children.flatMap(cn => {
         val childAttrs = cn.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
         val childName = cn.getName(childAttrs)
-        println("CHILD ATTRS: " + childAttrs)
         childAttrs.toList.intersect(attrOrder).map(a => {
-          println(a + " " +  aggregates + " " + attrOrder)
           val childAnnotated = if(aggregates.contains(a)){ //it is annotated
             Some(aggregates(a))
           } else None
-          println("CHILD ANNOTATED: " + childAnnotated)
           (a,new Accessor("bag_"+childName,childAttrs.indexOf(a),childAttrs,childAnnotated)) 
         })
       }).groupBy(t => t._1).map(t => (t._1 -> (t._2.map(_._2).distinct)) )
@@ -208,9 +199,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       val aggregateOrder = aggregates.toList.map(_._1).sortBy(attributeOrdering.indexOf(_)).filter(a => {
         !sharedAttrs.contains(a) && attrOrder.contains(a) //must be in current bag and not shared to survive
       })
-      println("AGG ORDER: " + aggregateOrder)
       //annotate the last materialized attribute with a aggregate below it
-      println("MATERIALIZE ATTRS: " + materializedAttrs)
       val annotatedAttr = 
         if(materializedAttrs.length != 0 && aggregates.size != 0) 
           Some(materializedAttrs.last)
@@ -256,7 +245,6 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
           val optionSel2 = codeGenAttrs(i).selection 
           val selectionsSame = (optionSel1,optionSel2) match {
             case (Some(sel1),Some(sel2)) => {
-              println("HERE HERE HERE")
               (sel1.condition == sel2.condition) && (sel1.value == sel2.value)
             }
             case (None,None) => true
@@ -265,14 +253,11 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
           val acc1 = cg.attrs(i).accessors.toSet
           val acc2 = codeGenAttrs(i).accessors.toSet
           val accessorsSame = (acc1 == acc2)
-          println("SELECTIONS SAME: " + selectionsSame)
           (accessorsSame && selectionsSame)
         }).reduce( (a,b) => a && b) ) )
         if(equivBag) Some(cg.lhs.name)
         else None
       })
-
-      println("NO WORK 2: " + noWork2)
 
       val noWork = 
         if(noWork1) Some(codeGenAttrs.head.accessors.head.trieName) 
@@ -288,7 +273,6 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
         if(root)
           CodeGen.emitRewriteOutputTrie(s,lhsName,"bag_" + name,scalarResult)
       } else {
-        println("HERE HERE HERE HERE")
         //create top down object
         //ensure that the first accessor is the one with valid data (thus the reverse on seen Nodes) and
         //the other accessors are simply tries that we are indexing into
@@ -297,9 +281,6 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
           val currAttrs = cn.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
           val childName = cn.getName(currAttrs)
           val sharedAttrs = parents //appear in the output or are shared
-          println("bag: " + childName)
-          println("currAttrs: " + currAttrs)
-          println("sharedAttrs: " + sharedAttrs)
           val materialized = lhs.attrs.union(sharedAttrs)
           val curAttrsIn = currAttrs.filter(materialized.contains(_))
           curAttrsIn.map(a => {
@@ -339,7 +320,6 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
 
     if(!scalarResult){
       //below here should probably be refactored. this saves the environment and writes the trie to disk
-      println("LHS Encodings: " + lhsEncodings)
       Environment.addBrandNewRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings))
       Utils.writeEnvironmentToJSON()
 
