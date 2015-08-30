@@ -304,7 +304,7 @@ object CodeGen {
     val attr = cga.attr
     val accessors = cga.accessors
     val setName = if(cga.materializeViaSelectionsBelow) s"""${attr}_filtered""" else attr
-    val bufferName = if(cga.materializeViaSelectionsBelow) "tmp_buffer" else "output_buffer"
+    val bufferName = if(cga.agg.isDefined) s"""${cga.attr}_buffer""" else if(cga.materializeViaSelectionsBelow) "tmp_buffer" else "output_buffer"
     val otherBufferName = if(cga.materializeViaSelectionsBelow) "output_buffer" else "tmp_buffer" //trick to save mem when
     //materializations below occur
 
@@ -336,7 +336,7 @@ object CodeGen {
   def emitRollBack(s:CodeStringBuilder,cga:CodeGenNPRRAttr,tid:String):Unit = {
     val attr = cga.attr
     val accessors = cga.accessors
-    if(accessors.length != 1){
+    if(accessors.length != 1 && !cga.agg.isDefined){
       if(cga.materializeViaSelectionsBelow){
         s.println(s"""tmp_buffer->roll_back(${tid},alloc_size_${attr}-${attr}_filtered.number_of_bytes);""")
       } else{
@@ -487,8 +487,8 @@ object CodeGen {
 
   def emitAnnotationComputation(s:CodeStringBuilder,cg:CodeGenGHD,cga:CodeGenNPRRAttr,agg:String,tid:String,ea:Boolean):Unit = {
     s.println("//emitAnnotationComputation")
-    if(cga.last)
-      s.println(s"""output_buffer->roll_back(${tid},${cga.attr}.number_of_bytes);""")
+    if(!ea && !(cga.accessors.length == 1 && !cga.selection.isDefined && !cga.materialize && cga.agg.isDefined))
+      s.println(s"""${cga.attr}_buffer->roll_back(${tid},alloc_size_${cga.attr});""")
     val index = if(ea) cg.aggregates.indexOf(cga.attr)+1 else cg.aggregates.indexOf(cga.attr)
     val extraAnnotation = cga.accessors.filter(acc => acc.annotation.isDefined)
     if(index == 1 && cg.scalarResult){
@@ -710,6 +710,10 @@ object CodeGen {
       new (output_buffer->get_next(0, sizeof(Trie<${Environment.layout}, ${annotationType}>))) 
       Trie<${Environment.layout}, ${annotationType}>(${cg.lhs.attrs.length});""")
     s.println("{")
+
+    cg.aggregates.foreach(cgagg => {
+      s.println(s"""allocator::memory<uint8_t> *${cgagg}_buffer = new allocator::memory<uint8_t>(10000);""")
+    })
     //if(!Environment.quiet) 
     s.println("""auto start_time = debug::start_clock();""")
     s.println("//")
@@ -758,6 +762,10 @@ object CodeGen {
     })
     if(extraAnnotations)
       s.println(s"""Trie_${cg.lhs.name}->annotation = annotation.evaluate(0);""")
+
+    cg.aggregates.foreach(cgagg => {
+      s.println(s"""${cgagg}_buffer->free();""")
+    })
 
     //if(!Environment.quiet) 
     s.println(s"""debug::stop_clock("Bag ${name}",start_time);""")

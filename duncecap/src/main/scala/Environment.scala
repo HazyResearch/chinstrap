@@ -20,8 +20,8 @@ object Environment {
   var yanna = true // delete this crapt
   var pipeline = false
 
-  var quiet = true //debug c++ code
-  val debug = false // debug scala code
+  var quiet = false //debug c++ code
+  val debug = true // debug scala code
   val astNodes = mutable.MutableList[ASTNode]()
   val relations = mutable.Map[String,mutable.Map[String, Relation]]()
   val encodings = mutable.Map[String, Encoding]()
