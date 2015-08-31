@@ -2,13 +2,52 @@ package DunceCap
 
 import java.util
 import scala.collection.immutable.TreeSet
+import scala.collection.mutable.ListBuffer
 
 import argonaut.Argonaut._
 import argonaut.Json
 import org.apache.commons.math3.optim.linear._
 import org.apache.commons.math3.optim.nonlinear.scalar.GoalType
 
+class CodeGenTopDown(val attr:String,val accessors:List[Accessor])
+
+class CodeGenNPRRAttr(val attr:String, 
+  val agg:Option[String], 
+  val accessors:List[Accessor], 
+  val selection:Option[SelectionCondition], 
+  val materialize:Boolean, 
+  val first:Boolean, 
+  val last:Boolean, 
+  val prev:Option[String],
+  val materializeViaSelectionsBelow:Boolean,
+  val checkSelectionNotMaterialize:Boolean)
+
+class CodeGenGHD(val lhs:QueryRelation, val attrs:List[CodeGenNPRRAttr], 
+  val expression:String, val scalarResult:Boolean, 
+  val aggregates:List[String], val annotatedAttr:Option[String],
+  val attrToEncoding:Map[String,(String,String)])
+
+
+/*
+  Rules for attr order:
+    (1) Aggregates must come after materialized attrs.
+    (2) Materialized attributes must come before those projected away
+    except:
+      +Equality selections can come before everything else.
+    (3) Selected attributes that are projected away must occur last or first (no exceptions)
+
+  The central object for code generation. Each GHDNode should construct
+  a CodeGenGHD node during the bottom-up pass. Then the object calls its
+  NPRR code generator. The object contains a nested type which is CodeGenAttr.
+  This specifies information needed for each attribute in the bag (selections,
+  projections etc.)
+*/
+
+//Object that allows us to access and name tries easily
 class Accessor(val trieName:String, val level:Int, val attrs:List[String], val annotation:Option[String] = None ){
+  def printData() : Unit = {
+    println("\t\ttrieName: " + trieName + " level: " + level + " attrs: " + attrs)
+  }
   def getName() : String = {
     if(level == 0)
       "TrieBlock_" + trieName + "_" + level
@@ -35,23 +74,221 @@ class Accessor(val trieName:String, val level:Int, val attrs:List[String], val a
     }
 }
 
-class CodeGenTopDown(val attr:String,val accessors:List[Accessor])
-
-class CodeGenNPRRAttr(val attr:String, 
-  val agg:Option[String], 
-  val accessors:List[Accessor], 
-  val selection:Option[SelectionCondition], 
-  val materialize:Boolean, 
-  val first:Boolean, 
-  val last:Boolean, 
+class Annotation(val operation:String, 
+  val expression:String, 
+  val passedAnnotations:List[Accessor],
   val prev:Option[String],
-  val materializeViaSelectionsBelow:Boolean,
-  val checkSelectionNotMaterialize:Boolean)
+  val last:Boolean) {
+  def printData() = {
+    println("\t\toperation: " + operation)
+    println("\t\texpression: " + expression)
+    println("\t\tpassedAnnotations")
+    passedAnnotations.foreach(_.printData())
+    println("\t\tprev: " + prev)
+    println("\t\tlast: " + last)
+  }
+}
 
-class CodeGenGHD(val lhs:QueryRelation, val attrs:List[CodeGenNPRRAttr], 
-  val expression:String, val scalarResult:Boolean, 
-  val aggregates:List[String], val annotatedAttr:Option[String],
-  val attrToEncoding:Map[String,(String,String)])
+class SelectionCondition(val condition:String,val value:String){
+  def printData() : Unit = {
+    println("\t\tcondition: " + condition + " value: " + value)
+  }
+  override def equals(that: Any): Boolean =
+  that match {
+    case that: SelectionCondition => that.condition.equals(condition) && that.value.equals(value)
+    case _ => false
+  }
+}
+
+class CodeGenAttr (
+  val attr:String, //(current attribute name)
+  val accessors:List[Accessor], //tries we access into (contains those passed from children as well)
+  val annotation:Option[Annotation] = None, //aggregations
+  val annotated:Boolean = false,
+  val selection:Option[SelectionCondition] = None, //selections
+  val selectionBelow:Boolean, //selections below this attribute
+  val prevMaterialized:Option[String] = None,
+  val materialize:Boolean = false,  //projections
+  val lastMaterialized:Boolean = false //tells you if you are annotated attr
+) {
+
+  def printData() = {
+    println("\tattr: " + attr)
+    println("\tannotated: " + selectionBelow)
+    println("\tselectionBelow: " + selectionBelow)
+    println("\taccessors: ")
+    accessors.foreach(_.printData())
+    if(annotation.isDefined)
+      annotation.get.printData()
+    else
+      println("\tannotation: " + annotation)
+    if(selection.isDefined)
+      println("\tselection: " + selection.get.printData())
+    else 
+      println("\tselection: " + selection)
+    println("materialize: " + materialize)
+    println("lastMaterialize: " + lastMaterialized)
+    println("prevMaterialized: " + prevMaterialized)
+  }
+  override def equals(o: Any) = o match {
+    case that: CodeGenAttr => {
+      selection == that.selection &&
+      accessors.length == that.accessors.length &&
+      accessors.map(acc1 =>{
+        accessors.map(acc2 => {
+          acc1 == acc2
+        }).reduce((a,b) => a || b) //each accessor has an equivalent one
+      }).reduce( (a,b) => a && b) //they all must match an equivalent one
+    }
+    case _ => false
+  }
+}
+
+class CodeGenGHDNode(
+  val result:QueryRelation,
+  val scalarResult:Boolean, 
+  val attrToEncoding:Map[String,(String,String)]) {
+  var attributeNodes = new ListBuffer[CodeGenAttr]()
+
+  def printData() = {
+    println("result: " + result.name + " " + result.attrs)
+    println("scalarResult: " + scalarResult)
+    println("attrToEncoding: " + attrToEncoding)
+    attributeNodes.foreach(_.printData())
+  }
+
+  //add an attribute to our linked list of attrs to process
+  def addAttribute(in:CodeGenAttr) = {
+    attributeNodes += in
+  }
+
+  //emit the NPRR code (part of the bottom up pass)
+  def generateNPRR(s:CodeStringBuilder,noWork:Option[String]) = {
+    if(Environment.debug)
+      this.printData()
+    
+    //get the bag started
+    CodeGen.emitAllocateResultTrie(s,noWork,result)
+
+    //Some intialization before the actual algorithm
+    attributeNodes.foreach(an =>{
+      //Each annotation has a buffer to conserve memory usage
+      if(an.annotation.isDefined)
+        CodeGen.emitAllocateAggregateBuffer(s,an.attr)
+      
+      //emit the values for the selection (must lookup because we dictionary encode)
+      an.selection match{
+        case Some(selection) =>{
+          val (encoding,atype) = attrToEncoding(an.attr)
+          CodeGen.emitSelectionValue(s,an.attr,encoding,selection.value)
+        } case None =>
+      }
+    })
+
+    //go forward through the attributes
+    (0 until attributeNodes.length).foreach(i => {
+      val tid = if(i == 0) "0" else "tid"
+      val first = i == 0
+      val curr = attributeNodes(i)
+      curr.accessors.foreach(accessor => {CodeGen.emitTrieBlock(s,curr.attr,accessor)})
+      CodeGen.emitMaxSetAlloc(s,curr.attr,curr.accessors)
+      
+      //Build the new Set 
+      val setName = if(curr.selectionBelow && curr.lastMaterialized) s"""${curr.attr}_filtered""" else curr.attr
+      val bufferName = if(curr.annotation.isDefined) s"""${curr.attr}_buffer""" else if(curr.materialize && curr.selectionBelow) "tmp_buffer" else "output_buffer"
+      val otherBufferName = if(curr.selectionBelow && curr.lastMaterialized) "output_buffer" else "tmp_buffer" //trick to save mem when
+      
+      ///TODO: Refactor into code gen object
+      if(curr.accessors.length == 1){
+        (curr.selection,curr.materialize,(i == attributeNodes.length-1)) match {
+          case (Some(selection),true,_) => CodeGen.emitMaterializedSelection(s,curr.attr,curr.selectionBelow,tid,selection,s"""${curr.accessors.head.getName()}->set""")
+          case (Some(selection),false,true) => CodeGen.emitCheckConditions(s,selection,curr.attr,s"""${curr.accessors.head.getName()}->set""",i==0)
+          case (_,_,_) => s.println(s"""Set<${Environment.layout}> ${setName} = ${curr.accessors.head.getName()}->set;""")
+        }
+      } else if(curr.accessors.length == 2){
+        s.println(s"""Set<${Environment.layout}> ${setName}(${bufferName}->get_next(${tid},alloc_size_${curr.attr}));""")
+        CodeGen.emitIntersection(s,setName,curr.accessors.head.getName()+"->set",curr.accessors.last.getName()+"->set",curr.selection,curr.attr)
+      } else{
+        s.println(s"""Set<${Environment.layout}> ${setName}(${bufferName}->get_next(${tid},alloc_size_${curr.attr}));""")
+        s.println(s"""Set<${Environment.layout}> ${curr.attr}_tmp(${otherBufferName}->get_next(${tid},alloc_size_${curr.attr})); //initialize the memory""")
+        var tmp = (curr.accessors.length % 2) == 1
+        var name = if(tmp) s"""${curr.attr}_tmp""" else setName
+        CodeGen.emitIntersection(s,name,curr.accessors(0).getName()+"->set",curr.accessors(1).getName()+"->set",curr.selection,curr.attr)
+        (2 until curr.accessors.length).foreach(i => {
+          tmp = !tmp
+          name = if(tmp) s"""${curr.attr}_tmp""" else setName
+          val opName = if(!tmp) s"""${curr.attr}_tmp""" else setName
+          CodeGen.emitIntersection(s,name,opName,curr.accessors(i).getName()+"->set",None,curr.attr)
+        })
+        s.println(s"""${otherBufferName}->roll_back(${tid},alloc_size_${curr.attr});""")
+      }
+
+      //save some memory
+      if(curr.accessors.length != 1 && !curr.annotation.isDefined){
+        CodeGen.emitRollBack(s,curr.attr,curr.selectionBelow,tid)
+      }
+      if(curr.selectionBelow) CodeGen.emitSetupFilteredSet(s,i==0,curr.attr,tid) //must occur after roll back
+      if(curr.materialize && !curr.selectionBelow) CodeGen.emitNewTrieBlock(s,curr.attr,tid,curr.lastMaterialized,curr.annotated)
+      if(curr.annotation.isDefined) CodeGen.emitAnnotationInitialization(s,curr.attr,curr.annotation.get,tid,scalarResult)
+
+
+      //foreach
+      (curr.annotation,curr.materialize,curr.selectionBelow) match {
+        case (Some(_),_,_) | (None,false,_) | (None,true,true) =>{  //this should only be for constant expressions really otherwise we need a foreach_index
+          val setName = if(curr.lastMaterialized && curr.selectionBelow) curr.attr + "_filtered" else curr.attr
+          val noMaterializeCheckSelection = (curr.accessors.length == 1 && !curr.materialize && curr.selection.isDefined)
+          val run = (curr.annotation.isDefined && (curr.annotation.get.passedAnnotations.length != 0) ) || (curr.lastMaterialized)
+          if(run) CodeGen.emitForEach(s,setName,curr.attr,i==0)
+        }
+        case (None,true,_) => {
+          if(!curr.lastMaterialized) CodeGen.emitForEachIndex(s,curr.attr,i==0)
+        }
+      }
+
+      //annotation tmp 
+      if(curr.annotation.isDefined) CodeGen.emitAnnotationTemporary(s,curr.attr,curr.annotation.get)
+    })
+
+    //now do a backward pass over the attributes
+    (0 until attributeNodes.length).foreach(j => {
+      val i = attributeNodes.length-1-j //go in reverse now
+
+      val tid = if(i == 0) "0" else "tid"
+      val curr = attributeNodes(i)
+      curr.annotation match {
+        case Some(a) => //emitAnnotationComputation(s,cg,a,tid,extraAnnotations)
+        case None => {
+          if(curr.selectionBelow && curr.lastMaterialized) CodeGen.emitBuildNewSet(s,i==0,curr.lastMaterialized,curr.attr,tid)
+          if(curr.materialize) CodeGen.emitSetTrieBlock(s,curr.attr,curr.lastMaterialized,curr.prevMaterialized,result.name,curr.annotated)
+        }
+      }
+      //close out for loop
+      if(!curr.lastMaterialized || (curr.annotation.isDefined && (curr.annotation.get.passedAnnotations.length != 0) ))
+        s.println("})")
+    })
+
+    //Each annotation has a buffer to conserve memory usage
+    attributeNodes.foreach(an =>{
+      if(an.annotation.isDefined)
+        CodeGen.emitFreeAggregateBuffer(s,an.attr)
+    })
+    CodeGen.emitFinishNPRR(s,result)
+  }
+
+  //emit the top down pass
+  def generateTopDown() = {
+    println("Emitting Top Down")
+  }
+
+  override def equals(o: Any) = o match {
+    case that: CodeGenGHDNode => {
+      scalarResult == that.scalarResult &&
+      result.attrs.length == that.result.attrs.length &&
+      attributeNodes == that.attributeNodes
+    }
+    case _ => false
+  }
+}
 
 class GHDNode(val rels: List[QueryRelation]) {
   val attrSet = rels.foldLeft(TreeSet[String]())(
@@ -63,7 +300,6 @@ class GHDNode(val rels: List[QueryRelation]) {
   final val ATTRIBUTE_NUMBERING_START = 0
   var num_bags:Int = 0
   var depth:Int = 0
-
   var codeGen:CodeGenGHD = null
 
   override def equals(o: Any) = o match {

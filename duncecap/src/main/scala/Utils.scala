@@ -26,6 +26,7 @@ object Utils{
   def loadEnvironmentFromJSON(config:Map[String,Any], create_db:Boolean, db_folder:String):Unit = {
     //Pull top level vars from JSON file
     Environment.layout = config("layout").asInstanceOf[String]
+    println("LAYOUT: " + Environment.layout)
     Environment.algorithm = config("algorithm").asInstanceOf[String]
     Environment.numNUMA = config("numNUMA").asInstanceOf[Double].toInt
     Environment.numThreads = config("numThreads").asInstanceOf[Double].toInt
