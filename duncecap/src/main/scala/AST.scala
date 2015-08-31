@@ -170,7 +170,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
 
       //FIX ME. For a relation to be in a bag right now we require all its attributes are in the bag
       val bagRelations = reorderedRelations.filter(rr => {
-        rr._2.attrs.intersect(attrOrder).length != rr._2.attrs.length
+        rr._2.attrs.intersect(attrOrder).length == rr._2.attrs.length
       })
 
       //any attr that is shared in the children 
@@ -191,12 +191,12 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       val bagScalarResult = (materializedAttrs.length == 0) && (aggregates.size != 0)
       val cgenGHDNode = new CodeGenGHDNode(bagLHS,bagScalarResult,attrToEncodingMap)
       var noWork = false
-      val seenAccessors = mutable.ListBuffer[String]() //don't duplicate accessors
       attrOrder.foreach(a => {
         val selection = if(selections.contains(a)) Some(selections(a)) else None
         val materialize = materializedAttrs.contains(a)
-        val prevMaterialized = if(materializedAttrs.indexOf(a) < 1) None else Some(materializedAttrs(materializedAttrs.indexOf(a)-1))  //prev should be the previous materialized attribute
-        val lastMaterialized = materializedAttrs.indexOf(a) == (materializedAttrs.length-1)
+        val nextMaterialized = if(!materialize || materializedAttrs.indexOf(a) == (materializedAttrs.length-1)) None else Some(materializedAttrs(materializedAttrs.indexOf(a)+1))  //prev should be the previous materialized attribute
+        val prevMaterialized = if(!materialize || materializedAttrs.indexOf(a) < 1) None else Some(materializedAttrs(materializedAttrs.indexOf(a)-1))  //prev should be the previous materialized attribute
+        val lastMaterialized = materializedAttrs.indexOf(a) == (materializedAttrs.length-1) && materializedAttrs.length != 0
 
         //access each of the relations in the bag that contain the attribute
         val attributeAccessors = bagRelations.
@@ -206,20 +206,23 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
         
         //those shared in the children
         val passedAccessors = if(childrenAttrMap.contains(a)) childrenAttrMap(a) else List[Accessor]()
-        val accessors = (attributeAccessors ++ passedAccessors).filter(acc => !seenAccessors.contains(acc.getName()))
-        seenAccessors ++= accessors.map(_.getName())
+        val accessors = (attributeAccessors ++ passedAccessors)
 
-        val selectionBelow = (attrOrder.indexOf(a) until attrOrder.length).map(i => selections.contains(attrOrder(i))).reduce((a,b) => a || b)
-        val annotated = lastMaterialized && (attrOrder.indexOf(a) until attrOrder.length).map(i => aggregates.contains(attrOrder(i))).reduce((a,b) => a || b)
-        val annotation = if(aggregates.contains(a)) {
+        val futureAttrIndex = attrOrder.indexOf(a)+1
+        val futureSelections = (futureAttrIndex until attrOrder.length).map(i => selections.contains(attrOrder(i)))
+        val selectionBelow = if(futureSelections.length != 0) futureSelections.reduce((a,b) => a || b) else false
+        val futureAnnotationIndexes = (futureAttrIndex until attrOrder.length).filter(i => { aggregates.contains(attrOrder(i)) })
+
+        val annotated = if(lastMaterialized && futureAnnotationIndexes.length != 0) Some(attrOrder(futureAnnotationIndexes.head)) else None
+        val annotation = if(aggregates.contains(a) && !materializedAttrs.contains(a)) {
           val passedAnnotations = if(childrenAttrMap.contains(a)) childrenAttrMap(a) else List[Accessor]() 
           val annotationIndex = aggregateOrder.indexOf(a)
           val prevAnnotation = if(annotationIndex < 1) None else Some(aggregateOrder(annotationIndex-1))
-          val lastAnnotation = annotationIndex == aggregateOrder.length
-          Some(new Annotation(aggregates(a),aggregateExpression,passedAnnotations,prevAnnotation,lastAnnotation))
+          val nextAnnotation = if(annotationIndex == (aggregateOrder.length-1)) None else Some(aggregateOrder(annotationIndex+1))
+          Some(new Annotation(aggregates(a),aggregateExpression,passedAnnotations,prevAnnotation,nextAnnotation))
         } else None
 
-        cgenGHDNode.addAttribute(new CodeGenAttr(a,accessors,annotation,annotated,selection,selectionBelow,prevMaterialized,materialize,lastMaterialized))
+        cgenGHDNode.addAttribute(new CodeGenAttr(a,accessors,annotation,annotated,selection,selectionBelow,nextMaterialized,prevMaterialized,materialize,lastMaterialized))
         noWork &&= ((accessors.length == 1) && (attrOrder.indexOf(a) == accessors.head.level) && !annotation.isDefined && !selection.isDefined)  //all just existing relations?
       })
 
@@ -236,7 +239,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       //generate the NPRR code
       cgenGHDNode.generateNPRR(s,equivTrie)
 
-      if(topDownUnecessary) 
+      if(topDownUnecessary && isRoot) 
         CodeGen.emitRewriteOutputTrie(s,lhsName,"bag_" + name,scalarResult)
     }))
     

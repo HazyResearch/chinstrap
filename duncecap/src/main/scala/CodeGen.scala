@@ -240,13 +240,12 @@ object CodeGen {
   }
 
   def emitAnnotationInitialization(s:CodeStringBuilder,attr:String,annotation:Annotation,tid:String,scalarResult:Boolean): Unit = {
-    if(annotation.last && annotation.passedAnnotations.length == 0){ //always the last attribute?
-      val name = if(!annotation.prev.isDefined) "annotation" else s"""annotation_${attr}"""
+    if(!annotation.next.isDefined && annotation.passedAnnotations.length == 0){ //always the last attribute?
       val exp2 = if(!annotation.prev.isDefined) "(" else s"""(annotation_tmp * """
-      s.println(s"""${annotationType} ${name} = ${exp2} (${annotation.expression}*${attr}.cardinality));""")
+      s.println(s"""${annotationType} annotation_${attr} = ${exp2} (${annotation.expression}*${attr}.cardinality));""")
     }else {
-      if(scalarResult && !annotation.prev.isDefined) emitAggregateReducer(s,annotation.expression)
-      else if(!annotation.prev.isDefined) s.println(s"""${annotationType} annotation = (${annotationType})0;""")    
+      if(scalarResult && !annotation.prev.isDefined) emitAggregateReducer(s,annotation.operation)
+      else if(!annotation.prev.isDefined) s.println(s"""${annotationType} annotation_${attr} = (${annotationType})0;""")    
       else s.println(s"""${annotationType} annotation_${attr} = (${annotationType})0;""")            
     }
   }
@@ -288,41 +287,6 @@ object CodeGen {
     s.println(s"""});""")
   }
 
-  /*
-  def emitNewSet(s:CodeStringBuilder,cga:CodeGenAttr,tid:String,materializeWithSelectionsBelowInParallel:Boolean): Unit = {
-    val attr = cga.attr
-    val accessors = cga.accessors
-    val setName = if(cga.selectionBelow && cga.materialize) s"""${attr}_filtered""" else attr
-    val bufferName = if(cga.agg.isDefined) s"""${cga.attr}_buffer""" else if(cga.materialize && cga.selectionBelow) "tmp_buffer" else "output_buffer"
-    val otherBufferName = if(cga.selectionBelow && cga.materialize) "output_buffer" else "tmp_buffer" //trick to save mem when
-    //materializations below occur
-
-    if(accessors.length == 1){
-      (cga.selection,cga.materialize,cga.last) match {
-        case (Some(selection),true,_) => emitMaterializedSelection(s,cga,tid,selection,s"""${accessors.head.getName()}->set""")
-        case (Some(selection),false,true) => emitCheckConditions(s,selection,cga.attr,s"""${accessors.head.getName()}->set""",materializeWithSelectionsBelowInParallel)
-        case (_,_,_) => s.println(s"""Set<${Environment.layout}> ${setName} = ${accessors.head.getName()}->set;""")
-      }
-    } else if(accessors.length == 2){
-      s.println(s"""Set<${Environment.layout}> ${setName}(${bufferName}->get_next(${tid},alloc_size_${attr}));""")
-      emitIntersection(s,setName,accessors.head.getName()+"->set",accessors.last.getName()+"->set",cga.selection,cga.attr)
-    } else{
-      s.println(s"""Set<${Environment.layout}> ${setName}(${bufferName}->get_next(${tid},alloc_size_${attr}));""")
-      s.println(s"""Set<${Environment.layout}> ${attr}_tmp(${otherBufferName}->get_next(${tid},alloc_size_${attr})); //initialize the memory""")
-      var tmp = (accessors.length % 2) == 1
-      var name = if(tmp) s"""${attr}_tmp""" else setName
-      emitIntersection(s,name,accessors(0).getName()+"->set",accessors(1).getName()+"->set",cga.selection,cga.attr)
-      (2 until accessors.length).foreach(i => {
-        tmp = !tmp
-        name = if(tmp) s"""${attr}_tmp""" else setName
-        val opName = if(!tmp) s"""${attr}_tmp""" else setName
-        emitIntersection(s,name,opName,accessors(i).getName()+"->set",None,cga.attr)
-      })
-      s.println(s"""${otherBufferName}->roll_back(${tid},alloc_size_${attr});""")
-    }
-  }
-  */
-
   def emitRollBack(s:CodeStringBuilder,attr:String,selectionBelow:Boolean,tid:String):Unit = {
     if(selectionBelow){
       s.println(s"""tmp_buffer->roll_back(${tid},alloc_size_${attr}-${attr}_filtered.number_of_bytes);""")
@@ -343,35 +307,36 @@ object CodeGen {
     }
   }
 
-  def emitSetTrieBlock(s:CodeStringBuilder,attr:String,lastMaterialized:Boolean,prevMaterialized:Option[String],lhs:String,setData:Boolean): Unit = {
+  def emitSetTrie(s:CodeStringBuilder,lhs:String,attr:String) : Unit = {
+    s.println(s"""Trie_${lhs}->head = TrieBlock_${attr};""")
+  }
+
+  def emitSetTrieBlock(s:CodeStringBuilder,attr:String,lastMaterialized:Boolean,nextMaterialized:Option[String],lhs:String,setData:Option[String]): Unit = {
     s.println("//emitSetTrieBlock")
     if(!lastMaterialized){
-      prevMaterialized match {
+      nextMaterialized match {
         case Some(a) =>
-          s.println(s"""TrieBlock_${a}->set_block(${a}_i,${a}_d,TrieBlock_${attr});""")
+          s.println(s"""TrieBlock_${attr}->set_block(${attr}_i,${attr}_d,TrieBlock_${a});""")
         case None =>
-          s.println(s"""Trie_${lhs}->head = TrieBlock_${attr};""")
       }
-    } else if(setData){
-      prevMaterialized match {
-        case Some(a) => {
-          s.println(s"""TrieBlock_${a}->set_data(${a}_i,${a}_d,annotation);""")
-        }
-        case _ => throw new IllegalStateException("Cannot annotate the root.")
-      }
+    } else if(setData.isDefined){
+      s.println(s"""TrieBlock_${attr}->set_data(${attr}_i,${attr}_d,annotation_${setData.get});""")
     }
   }
 
-  def emitAggregateReducer(s:CodeStringBuilder,expression:String):Unit = {
+  def emitAggregateReducer(s:CodeStringBuilder,operation:String):Unit = {
     s.println("//emitAggregateReducer")
-    expression match {
+    operation match {
       case "SUM" => 
         s.println(s"""par::reducer<${annotationType}> annotation(0,[](size_t a, size_t b){ return a + b; });""")
       case _ =>
-        throw new IllegalStateException("Aggregate: " + expression + " is NOT IMPLEMENTED");
+        throw new IllegalStateException("Aggregate: " + operation + " is NOT IMPLEMENTED");
     }
   }
 
+  def emitScalarAnnotation(s:CodeStringBuilder,lhs:String): Unit = {
+    s.println(s"""Trie_${lhs}->annotation = annotation.evaluate(0);""")
+  }
 
   def emitNoMaterializeCheckSelection(s:CodeStringBuilder,cga:CodeGenNPRRAttr) : Unit = {
     if(cga.accessors.length == 1 && !cga.materialize && !cga.last){
@@ -420,33 +385,66 @@ object CodeGen {
     s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${outName} = Trie_${prevName};""")
   }
 
-  def emitAnnotationTemporary(s:CodeStringBuilder, attr:String, annotation:Annotation) : Unit = {
-    if(!annotation.last){
-      if(annotation.passedAnnotations.length != 0){
-        s.println(s"""${annotationType} annotation_tmp = """)
-        s.println("""${annotation.passedAnnotations.head.getName()}->get_data(${cga.attr}_d)""")
-        annotation.passedAnnotations.tail.foreach(pa => {
-          s.println("""*${pa.getName()}->get_data(${attr}_d)""")
-        })
-      } else if(!annotation.prev.isDefined){
-        s.println(s"""${annotationType} annotation_tmp = ${annotation.expression};""")
-      } else {
-        s.println(s"""annotation_tmp *= ${annotation.expression};""")
+  def emitUpdatePassedAttributes(s:CodeStringBuilder,attr:String,operation:String,passedAnnotations:List[Accessor]) : Unit = {
+    operation match {
+      case "SUM" => {
+        s.println(s"""annotation_${attr} += """)
       }
+      case _ => throw new IllegalStateException("Op not defined")
+    }
+    s.println(s"""(annotation_tmp * ${passedAnnotations.head.getName()}->get_data(${attr}_d)""")
+    passedAnnotations.tail.foreach(pa => {
+      s.println(s"""*${pa.getName()}->get_data(${attr}_d)""")
+    })
+    s.println(");")
+  }
+
+  def emitAnnotationTemporary(s:CodeStringBuilder, attr:String, annotation:Annotation) : Unit = {
+    if(annotation.next.isDefined && annotation.passedAnnotations.length != 0){ //not the last loop and we have passed annotations
+      if(!annotation.prev.isDefined)
+        s.println(s"""${annotationType} annotation_tmp = (${annotation.expression}*(""")
+      else 
+        s.println(s"""annotation_tmp *= (${annotation.expression}*(""")
+
+      s.println(s"""${annotation.passedAnnotations.head.getName()}->get_data(${attr}_d)""")
+      annotation.passedAnnotations.tail.foreach(pa => {
+        s.println(s"""*${pa.getName()}->get_data(${attr}_d)""")
+      })
+      s.println("));")
+    } else if(!annotation.prev.isDefined){
+      s.println(s"""${annotationType} annotation_tmp = ${annotation.expression};""")
+    } else {
+      s.println(s"""annotation_tmp *= ${annotation.expression};""")
     }
   }
 
+  def emitRollBack(s:CodeStringBuilder,attr:String,tid:String) : Unit = {
+    s.println(s"""${attr}_buffer->roll_back(${tid},alloc_size_${attr});""")
+  }
+  /*
+  def emitAnnotationComputation(s:CodeStringBuilder,annotation:Annotation) : Unit = {
+  }
+  */
+  def emitUpdateAnnotationReducer(s:CodeStringBuilder,attr:String,tid:String) : Unit = {
+    s.println(s"""annotation.update(${tid},annotation_${attr});""")
+  }
+  def emitUpdateAnnotation(s:CodeStringBuilder,attr:String,prev:String,operation:String) : Unit = {
+    operation match {
+        case "SUM" => {
+          s.println(s"""annotation_${prev} += annotation_${attr};""")
+        }
+        case _ => throw new IllegalStateException("Op not implemented")
+    }
+  }
+  /*
   def emitAnnotationComputation(s:CodeStringBuilder,cg:CodeGenGHD,cga:CodeGenNPRRAttr,agg:String,tid:String,ea:Boolean):Unit = {
     s.println("//emitAnnotationComputation")
-    if(!ea && !(cga.accessors.length == 1 && !cga.selection.isDefined && !cga.materialize && cga.agg.isDefined))
-      s.println(s"""${cga.attr}_buffer->roll_back(${tid},alloc_size_${cga.attr});""")
     val index = if(ea) cg.aggregates.indexOf(cga.attr)+1 else cg.aggregates.indexOf(cga.attr)
     val extraAnnotation = cga.accessors.filter(acc => acc.annotation.isDefined)
     if(index == 1 && cg.scalarResult){
       if(ea)
         s.println(s"""annotation.update(tid,annotation_tmp);""")
       else
-        s.println(s"""annotation.update(${tid},annotation_${cga.attr});""")
     } else if(index != 0){
       val name = if(index == 1) "annotation" else s"""annotation_${cg.aggregates(index-1)}"""
       agg match {
@@ -467,7 +465,7 @@ object CodeGen {
       }
     }
   }
-
+  */
   //the materialized set condition could be nested so we want a GOTO to break out once a single cond is met
   def emitBuildNewSet(s:CodeStringBuilder,first:Boolean,last:Boolean,attr:String,tid:String) : Unit = {
     s.println(s"""//emitBuildNewSet""")
