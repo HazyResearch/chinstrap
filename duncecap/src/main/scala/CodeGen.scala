@@ -418,8 +418,8 @@ object CodeGen {
     }
   }
 
-  def emitRollBack(s:CodeStringBuilder,attr:String,tid:String) : Unit = {
-    s.println(s"""${attr}_buffer->roll_back(${tid},alloc_size_${attr});""")
+  def emitRollBackALL(s:CodeStringBuilder,attr:String,buffer:String,tid:String) : Unit = {
+    s.println(s"""${buffer}->roll_back(${tid},alloc_size_${attr});""")
   }
   /*
   def emitAnnotationComputation(s:CodeStringBuilder,annotation:Annotation) : Unit = {

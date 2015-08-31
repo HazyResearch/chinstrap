@@ -208,7 +208,7 @@ class CodeGenGHDNode(
       
       //Build the new Set 
       val setName = if(curr.selectionBelow && curr.lastMaterialized) s"""${curr.attr}_filtered""" else curr.attr
-      val bufferName = if(curr.annotation.isDefined) s"""${curr.attr}_buffer""" else if(curr.materialize && curr.selectionBelow) "tmp_buffer" else "output_buffer"
+      val bufferName = if(curr.annotation.isDefined && curr.annotation.get.next.isDefined) s"""${curr.attr}_buffer""" else if(curr.materialize && curr.selectionBelow) "tmp_buffer" else "output_buffer"
       val otherBufferName = if(curr.selectionBelow && curr.lastMaterialized) "output_buffer" else "tmp_buffer" //trick to save mem when
       
       ///TODO: Refactor into code gen object
@@ -283,7 +283,10 @@ class CodeGenGHDNode(
         s.println("});")
 
       if(curr.annotation.isDefined && curr.accessors.length > 1){ //annotations can free memory
-        CodeGen.emitRollBack(s,curr.attr,tid)
+        if(curr.annotation.get.next.isDefined)
+          CodeGen.emitRollBackALL(s,curr.attr,curr.attr+"_buffer",tid)
+        else
+          CodeGen.emitRollBackALL(s,curr.attr,"output_buffer",tid)
       }
 
       if(curr.annotation.isDefined && curr.annotation.get.prev.isDefined){ //update except when we have a scalar result
