@@ -113,7 +113,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     val root = GHDSolver.getGHD(relations) //get minimum GHD's
 
     //find attr ordering
-    val attributeOrdering = GHDSolver.getAttributeOrdering(root,lhs.attrs)
+    val attributeOrdering = GHDSolver.getAttributeOrdering(root,lhs.attrs).sortBy(a => if(selections.contains(a)) 0 else 10 )
     
     if(Environment.debug){
       println("NUM BAGS: " + root.getNumBags())
@@ -177,9 +177,10 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       //map from the attribute to a list of accessors
       val childrenAttrMap = ghd.children.flatMap(cn => {
         val childAttrs = cn.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
+        val childMaterializedAttrs = childAttrs.intersect(attrOrder)
         val childName = cn.getName(childAttrs)
-        childAttrs.toList.intersect(attrOrder).map(a => {
-          (a,new Accessor("bag_"+childName,childAttrs.indexOf(a),childAttrs)) 
+        childMaterializedAttrs.toList.map(a => {
+          (a,new Accessor("bag_"+childName,childMaterializedAttrs.indexOf(a),childAttrs)) 
         })
       }).groupBy(t => t._1).map(t => (t._1 -> (t._2.map(_._2).distinct)) )
 

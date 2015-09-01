@@ -209,6 +209,18 @@ object CodeGen {
         s"""Trie_${accessor.trieName}->head;""" 
       else 
         s"""${accessor.getPrevName()}->get_block(${accessor.getPrevAttr()}_d);"""
+
+    s.println(getBlock)
+  }
+
+  def emitSelectedTrieBlock(s:CodeStringBuilder,attr:String,accessor:Accessor): Unit = {
+    s.println("//emitSelectedTrieBlock")
+    s.print(s"""const TrieBlock<${Environment.layout},${annotationType}>* ${accessor.getName()} = """)
+    val getBlock = if(accessor.level == 0) 
+        s"""Trie_${accessor.trieName}->head;""" 
+      else 
+        s"""${accessor.getPrevName()}->get_block(${accessor.getPrevAttr()}_selection_data_index,${accessor.getPrevAttr()}_selection);"""
+
     s.println(getBlock)
   }
 
@@ -608,15 +620,19 @@ object CodeGen {
 
   //top down still needs refactor
   def emitNPRR(s: CodeStringBuilder,name: String,cg:CodeGenGHD,noWork:Option[String],td:Option[List[CodeGenTopDown]]): Unit = {
-
     //emit top down code if you have it
     td match {
-      case Some(top_down) =>
+      case Some(top_down) =>{
+        s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${cg.lhs.name} = 
+          new (output_buffer->get_next(0, sizeof(Trie<${Environment.layout}, ${annotationType}>))) 
+          Trie<${Environment.layout}, ${annotationType}>(${cg.lhs.attrs.length});""")
+        s.println("{")
         val lastBlock = if(cg.attrs.length == 0) cg.lhs.name else cg.lhs.attrs.last
         emitTopDown(s,cg.attrs.length == 0,top_down,lastBlock,cg)
+        s.println("}")
+      }
       case None =>
     }
-
   }
 
 }
