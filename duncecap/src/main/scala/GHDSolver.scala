@@ -36,21 +36,8 @@ object GHDSolver {
       next_frontier.clear
       val level_attr = scala.collection.mutable.ListBuffer.empty[String]
       frontier.foreach{ cur:GHDNode =>
-        //first add attributes with elements in common with children, then add others        
-        val children_attrs = cur.children.flatMap{ c => c.rels.flatMap{r => r.attrs}.toList}
-        //sort by frequency
-        val children_attrs_sorted = children_attrs.distinct.sortBy(children_attrs count _.==).reverse
         val cur_attrs = cur.rels.flatMap{r => r.attrs}.sorted
 
-        //find shared attributes and sort by frequency
-        val shared_attrs = cur_attrs.intersect(children_attrs_sorted).sortBy(e => children_attrs_sorted.indexOf(e)).sorted
-        //shared attributes added first. Should be added in order of how many times
-        //appears in the child.
-        shared_attrs.foreach{ a =>
-          if(!attr.contains(a)){
-            attr += a
-          }
-        }
         //collect others
         cur_attrs.foreach{ a =>
           if(!attr.contains(a) && !level_attr.contains(a)){
@@ -106,21 +93,33 @@ object GHDSolver {
     }
     return (depth,seen.size)
   }
-  def getGHD(distinctRelations:List[QueryRelation]) : GHDNode = {
+  def getGHD(distinctRelations:List[QueryRelation],lhs:QueryRelation) : GHDNode = {
     //compute fractional scores
     val myghd = if(Environment.yanna){
       val decompositions = getMinFHWDecompositions(distinctRelations) 
-      decompositions.sortBy{ root:GHDNode =>
+      val decompositionsSortedByNumbags = decompositions.sortBy(root => {root.getNumBags()})
+      decompositionsSortedByNumbags.filter(_.getNumBags() == decompositionsSortedByNumbags.head.getNumBags()).sortBy{ root:GHDNode =>
+        //print(myghd, "query_plan_" + fhws + ".json")
+
         val tup = breadth_first(mutable.LinkedHashSet[GHDNode](root),mutable.LinkedHashSet[GHDNode](root))
         root.depth = tup._1
-        root.depth
-      }.head //change
-    } else getDecompositions(distinctRelations).last
+        val childAttrs = root.children.flatMap(child => child.attrSet.toList).toList.distinct
+        println("CHILD ATTRS: " + childAttrs)
+        println("ROOT SET: " + root.attrSet)
+        val numShared = childAttrs.intersect(root.attrSet.toList).distinct.length
+        val numInOutput = root.attrSet.toList.intersect(lhs.attrs).distinct.length
+        val additionalHeuristic = if(numInOutput == 0) numShared*10 else numInOutput*20
+        println("NUM SHARED: " + numShared + " NUM IN OUTPUT: " + numInOutput)
+        val depthHeursitc = (root.depth + additionalHeuristic )
+        println("DEPTH: " + depthHeursitc)
+        depthHeursitc
+      }.last //take the tallest GHD
+    } else getDecompositions(distinctRelations).last //take the single bag
 
     myghd.num_bags = breadth_first(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd))._2
     assert(myghd.num_bags != 0)
     val fhws = myghd.fractionalScoreTree()
-    //print(myghd, "query_plan_" + fhws + ".json")
+    print(myghd, "query_plan_" + fhws + ".json")
     return myghd
   }
   def getAttributeOrdering(myghd:GHDNode, resultAttrs:List[String]) : List[String] ={

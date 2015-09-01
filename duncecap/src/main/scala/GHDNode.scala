@@ -200,23 +200,19 @@ class CodeGenGHDNode(
     var parallelSelectionMaterialized = false
     (0 until attributeNodes.length).foreach(i => {
       val curr = attributeNodes(i)
-      val tid = if( (!curr.prevMaterialized.isDefined || scalarResult) || (i==0)) "0" else "tid"
+      val tid = if( (!curr.prevMaterialized.isDefined && !scalarResult) || (i==0)) "0" else "tid"
       val first = i == 0
       val last = i == attributeNodes.length-1
 
       parallelSelectionMaterialized ||= (first && curr.selectionBelow && curr.lastMaterialized)
 
-      if(curr.prevMaterialized.isDefined || i == 0){
-        curr.accessors.filter(acc => !seenAccessors.contains(acc.getName())).foreach(accessor => {
-          if( accessor.level != 0  && seenSelections.contains(accessor.getPrevAttr()))
-            CodeGen.emitSelectedTrieBlock(s,curr.attr,accessor)
-          else
-            CodeGen.emitTrieBlock(s,curr.attr,accessor)
-        })
-      }
-      else 
-        curr.accessors.filter(acc => !seenAccessors.contains(acc.getName())).foreach(accessor => {CodeGen.emitSelectedTrieBlock(s,curr.attr,accessor)})
-
+      curr.accessors.filter(acc => !seenAccessors.contains(acc.getName())).foreach(accessor => {
+        if( accessor.level != 0  && seenSelections.contains(accessor.getPrevAttr()))
+          CodeGen.emitSelectedTrieBlock(s,curr.attr,accessor)
+        else
+          CodeGen.emitTrieBlock(s,curr.attr,accessor)
+      })
+      
       if(curr.selection.isDefined)
         seenSelections += curr.attr
       seenAccessors ++= curr.accessors.map(_.getName())
@@ -273,7 +269,7 @@ class CodeGenGHDNode(
         CodeGen.emitForEach(s,curr.attr,curr.attr,tid=="0")
       } 
       //annotation tmp 
-      if(curr.annotation.isDefined && curr.annotation.get.next.isDefined) CodeGen.emitAnnotationTemporary(s,curr.attr,curr.annotation.get)
+      if(curr.annotation.isDefined) CodeGen.emitAnnotationTemporary(s,curr.attr,curr.annotation.get)
       if(curr.annotation.isDefined && !curr.annotation.get.next.isDefined && curr.annotation.get.passedAnnotations.length > 0)
         CodeGen.emitUpdatePassedAttributes(s,curr.attr,curr.annotation.get.operation,curr.annotation.get.passedAnnotations)
     })
@@ -285,7 +281,7 @@ class CodeGenGHDNode(
       val last = i == attributeNodes.length-1
 
       val curr = attributeNodes(i)
-      val tid = if( (!curr.prevMaterialized.isDefined || scalarResult) || (i==0)) "0" else "tid"
+      val tid = if( (!curr.prevMaterialized.isDefined && !scalarResult) || (i==0)) "0" else "tid"
 
       if(curr.selection.isDefined && !curr.materialize && !last){
         s.println("}")

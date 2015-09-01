@@ -110,7 +110,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     val relations = join.map(qr => new QueryRelation(qr.name,qr.attrs.map{_._1}))
     val selections = join.flatMap(qr => qr.attrs.filter(atup => atup._2 != "").map(atup => (atup._1,new SelectionCondition(atup._2,atup._3)) ) ).toMap
 
-    val root = GHDSolver.getGHD(relations) //get minimum GHD's
+    val root = GHDSolver.getGHD(relations,lhs) //get minimum GHD's
 
     //find attr ordering
     val attributeOrdering = GHDSolver.getAttributeOrdering(root,lhs.attrs).sortBy(a => if(selections.contains(a)) 0 else 10 )
@@ -132,6 +132,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     val reorderedRelations = relations.map(qr => {
       val reorderedAttrs = qr.attrs.sortBy(attributeOrdering.indexOf(_))
       val rName = qr.name + "_" + reorderedAttrs.map(qr.attrs.indexOf(_)).mkString("_")
+      println(rName)
       assert(Environment.relations.contains(qr.name))
       assert(Environment.relations(qr.name).contains(rName))
       ((qr.name,new QueryRelation(rName,reorderedAttrs)))
@@ -236,6 +237,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
         val selectionBelow = if(futureSelections.length != 0) futureSelections.reduce((a,b) => a || b) else false
         val futureAnnotationIndexes = (futureAttrIndex until attrOrder.length).filter(i => { aggregates.contains(attrOrder(i)) })
 
+        println("CHILD ATTR MAP: " + childrenAttrMap)
         val annotated = if(lastMaterialized && futureAnnotationIndexes.length != 0) Some(attrOrder(futureAnnotationIndexes.head)) else None
         val annotation = if(aggregates.contains(a) && !materializedAttrs.contains(a)) {
           val passedAnnotations = if(childrenAttrMap.contains(a)) childrenAttrMap(a) else List[Accessor]() 
@@ -312,7 +314,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     
     if(!scalarResult){
       //below here should probably be refactored. this saves the environment and writes the trie to disk
-      Environment.addBrandNewRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings))
+      //Environment.addBrandNewRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings))
       Utils.writeEnvironmentToJSON()
 
       s"""mkdir -p ${Environment.dbPath}/relations/${lhs.name} ${Environment.dbPath}/relations/${lhs.name}/${lhsName}""" !
