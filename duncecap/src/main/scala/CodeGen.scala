@@ -277,14 +277,27 @@ object CodeGen {
 
     //the materialized set condition could be nested so we want a GOTO to break out once a single cond is met
     //to do this will only work with one nested condition.
-  def emitCheckConditions(s:CodeStringBuilder,selection:SelectionCondition,attr:String,loopSet:String,first:Boolean) : Unit = {
-    s.println(s"""${loopSet}.foreach_until([&](uint32_t ${attr}_s_d){""")
-    val condition = if(selection.condition == "=") "==" else selection.condition
-    s.println(s"""ret_value = (${attr}_s_d ${condition} ${attr}_selection);""")
+  def emitCheckConditions(s:CodeStringBuilder,selection:SelectionCondition,attr:String,loopSet:String) : Unit = {
+    s.println(s"""//emitCheckConditions""")
+    selection.condition match {
+      case "=" => {
+        s.println(s"""const long ${attr}_selection_data_index = ${loopSet}.find(${attr}_selection);""")
+        s.println(s"""if(${attr}_selection_data_index != -1){""")
+      } case _ => throw new IllegalStateException("Selection condition not allowed")
+    }
+  }
+
+    //the materialized set condition could be nested so we want a GOTO to break out once a single cond is met
+    //to do this will only work with one nested condition.
+  def emitFinalCheckConditions(s:CodeStringBuilder,selection:SelectionCondition,attr:String,loopSet:String,first:Boolean,prevAttr:String) : Unit = {
+    s.println(s"""//emitCheckConditions""")
     val fi = if(first) "filter_index.fetch_add(1)" else "filter_index++"
-    s.println(s"""if(ret_value) filtered_data[${fi}] = filter_value;""")
-    s.println(s"""return ret_value;""")
-    s.println(s"""});""")
+    selection.condition match {
+      case "=" => {
+        s.println(s"""const long ${attr}_selection_data_index = ${loopSet}.find(${attr}_selection);""")
+        s.println(s"""if(${attr}_selection_data_index != -1) filtered_data[${fi}] = ${prevAttr}_d;""")
+      } case _ => throw new IllegalStateException("Selection condition not allowed")
+    }
   }
 
   def emitRollBack(s:CodeStringBuilder,attr:String,selectionBelow:Boolean,tid:String):Unit = {
@@ -436,36 +449,7 @@ object CodeGen {
         case _ => throw new IllegalStateException("Op not implemented")
     }
   }
-  /*
-  def emitAnnotationComputation(s:CodeStringBuilder,cg:CodeGenGHD,cga:CodeGenNPRRAttr,agg:String,tid:String,ea:Boolean):Unit = {
-    s.println("//emitAnnotationComputation")
-    val index = if(ea) cg.aggregates.indexOf(cga.attr)+1 else cg.aggregates.indexOf(cga.attr)
-    val extraAnnotation = cga.accessors.filter(acc => acc.annotation.isDefined)
-    if(index == 1 && cg.scalarResult){
-      if(ea)
-        s.println(s"""annotation.update(tid,annotation_tmp);""")
-      else
-    } else if(index != 0){
-      val name = if(index == 1) "annotation" else s"""annotation_${cg.aggregates(index-1)}"""
-      agg match {
-        case "SUM" => {
-          if(extraAnnotation.length == 0)
-            s.println(s"""${name} += annotation_${cga.attr};""")
-          else 
-            s.println(s"""annotation_${cga.attr} += ${extraAnnotation.head.getName()}->get_data(${cga.attr}_d);""")
-        }
-        case _ => s.println(s"""//${agg} not implemented""")
-      }
-    } else {
-      cga.prev match {
-        case Some(a) =>
-          s.println(s"""TrieBlock_${a}->set_data(${a}_i,${a}_d,annotation);""")
-        case None => //scalar result
-          s.println(s"""Trie_${cg.lhs.name}->annotation = annotation.evaluate(0);""")
-      }
-    }
-  }
-  */
+
   //the materialized set condition could be nested so we want a GOTO to break out once a single cond is met
   def emitBuildNewSet(s:CodeStringBuilder,first:Boolean,last:Boolean,attr:String,tid:String) : Unit = {
     s.println(s"""//emitBuildNewSet""")

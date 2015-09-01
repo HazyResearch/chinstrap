@@ -194,8 +194,30 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       attrOrder.foreach(a => {
         val selection = if(selections.contains(a)) Some(selections(a)) else None
         val materialize = materializedAttrs.contains(a)
-        val nextMaterialized = if(!materialize || materializedAttrs.indexOf(a) == (materializedAttrs.length-1)) None else Some(materializedAttrs(materializedAttrs.indexOf(a)+1))  //prev should be the previous materialized attribute
-        val prevMaterialized = if(!materialize || materializedAttrs.indexOf(a) < 1) None else Some(materializedAttrs(materializedAttrs.indexOf(a)-1))  //prev should be the previous materialized attribute
+
+        val curIndex = attrOrder.indexOf(a)
+        var nextMaterialized:Option[String] = None
+        var i = curIndex+1
+        var done = false
+        while(i < attrOrder.length && !done){
+          if(materializedAttrs.contains(attrOrder(i))){
+            nextMaterialized = Some(attrOrder(i))
+            done = true
+          }
+          i += 1
+        }
+
+        var prevMaterialized:Option[String] = None
+        i = 0
+        done = false
+        while(i < curIndex && !done){
+          if(materializedAttrs.contains(attrOrder(i))){
+            prevMaterialized = Some(attrOrder(i))
+            done = true
+          }
+          i += 1
+        }
+
         val lastMaterialized = materializedAttrs.indexOf(a) == (materializedAttrs.length-1) && materializedAttrs.length != 0
 
         //access each of the relations in the bag that contain the attribute
