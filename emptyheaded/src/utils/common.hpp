@@ -55,7 +55,7 @@ static size_t NUM_THREADS = NUM_THREADS_IN;
 
 namespace common{
   static size_t bitset_length = 5;
-  static double bitset_req = 256.0;
+  static double bitset_req = 128.0;//256.0;
 
   inline bool is_sparse(size_t length, size_t range) {
     if(length > bitset_length){

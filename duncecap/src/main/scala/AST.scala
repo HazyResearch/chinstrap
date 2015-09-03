@@ -314,7 +314,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     
     if(!scalarResult){
       //below here should probably be refactored. this saves the environment and writes the trie to disk
-      //Environment.addBrandNewRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings))
+      Environment.addBrandNewRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings))
       Utils.writeEnvironmentToJSON()
 
       s"""mkdir -p ${Environment.dbPath}/relations/${lhs.name} ${Environment.dbPath}/relations/${lhs.name}/${lhsName}""" !

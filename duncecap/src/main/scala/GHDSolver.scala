@@ -104,14 +104,10 @@ object GHDSolver {
         val tup = breadth_first(mutable.LinkedHashSet[GHDNode](root),mutable.LinkedHashSet[GHDNode](root))
         root.depth = tup._1
         val childAttrs = root.children.flatMap(child => child.attrSet.toList).toList.distinct
-        println("CHILD ATTRS: " + childAttrs)
-        println("ROOT SET: " + root.attrSet)
         val numShared = childAttrs.intersect(root.attrSet.toList).distinct.length
         val numInOutput = root.attrSet.toList.intersect(lhs.attrs).distinct.length
         val additionalHeuristic = if(numInOutput == 0) numShared*10 else numInOutput*20
-        println("NUM SHARED: " + numShared + " NUM IN OUTPUT: " + numInOutput)
         val depthHeursitc = (root.depth + additionalHeuristic )
-        println("DEPTH: " + depthHeursitc)
         depthHeursitc
       }.last //take the tallest GHD
     } else getDecompositions(distinctRelations).last //take the single bag
@@ -119,7 +115,7 @@ object GHDSolver {
     myghd.num_bags = breadth_first(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd))._2
     assert(myghd.num_bags != 0)
     val fhws = myghd.fractionalScoreTree()
-    print(myghd, "query_plan_" + fhws + ".json")
+    //print(myghd, "query_plan_" + fhws + ".json")
     return myghd
   }
   def getAttributeOrdering(myghd:GHDNode, resultAttrs:List[String]) : List[String] ={

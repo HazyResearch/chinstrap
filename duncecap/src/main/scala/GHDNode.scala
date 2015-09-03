@@ -137,6 +137,12 @@ class CodeGenAttr (
   }
   override def equals(o: Any) = o match {
     case that: CodeGenAttr => {
+      val annotationEquiv = 
+      if(annotation.isDefined && that.annotation.isDefined) 
+        annotation.get.passedAnnotations.length == 0 && that.annotation.get.passedAnnotations.length == 0
+      else 
+        annotation.isDefined && that.annotation.isDefined
+      annotationEquiv && 
       selection == that.selection &&
       accessors.length == that.accessors.length &&
       accessors.map(acc1 =>{

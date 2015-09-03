@@ -17,7 +17,7 @@ object Environment {
   var numNUMA = 4
   var layout = "hybrid"
   var algorithm = ""
-  var yanna = true // delete this crapt
+  var yanna = false // delete this crapt
   var pipeline = false
 
   var quiet = false //debug c++ code
