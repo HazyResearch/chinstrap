@@ -1,0 +1,24 @@
+{
+  "numThreads": 48,
+  "numNUMA": 4,
+  "database": "/dfs/scratch0/caberger/systems/db",
+  "algorithm": "NPRR",
+  "layout": "hybrid",
+  "relations": [
+    {
+      "name": "R",
+      "source": "/dfs/scratch0/caberger/systems/chinstrap/simple.tsv",
+      "attributes":[
+        {
+          "type":"std::string",
+          "encoding":"node"
+        },
+        {
+          "type":"std::string",
+          "encoding":"node"
+        }
+      ],
+      "orderings":["all"]
+    }
+  ]
+}
