@@ -134,7 +134,7 @@ case class ASTQueryStatement(
     CodeGen.emitAllocators(s)
 
     //run GHD decomp
-    val relations = join.map(qr => new QueryRelation(qr.name,qr.attrs.map{_._1}))
+    val joinRelations = join.map(qr => new QueryRelation(qr.name,qr.attrs.map{_._1}))
     val selections = join.flatMap(qr => qr.attrs.filter(atup => atup._2 != "").map(atup => (atup._1,new SelectionCondition(atup._2,atup._3)) ) ).toMap
 
     val recursiveLambda:Option[ASTLambdaFunction] = if(recursion.isDefined) 
@@ -145,12 +145,9 @@ case class ASTQueryStatement(
     val recursiveRelations = recursiveJoin.map(qr => {if(qr.name == recursiveLambda.get.inputArgument.name) new QueryRelation(recursion.get.inputArgument.name,qr.attrs) else qr})
     val recursiveAggregates = if(recursiveLambda.isDefined) recursiveLambda.get.aggregates else Map()
 
-    println("recursiveRelations")
-    recursiveRelations.foreach(_.printData())
-
     val tcRelations = if(tc.isDefined) tc.get.join.map(qr => new QueryRelation(qr.name,qr.attrs.map{_._1})) else List()
 
-    val root = GHDSolver.getGHD(relations,recursiveRelations,tcRelations,lhs) //get minimum GHD's
+    val root = GHDSolver.getGHD(joinRelations,recursiveRelations,tcRelations,lhs) //get minimum GHD's
 
     //find attr ordering
     val attributeOrdering = GHDSolver.getAttributeOrdering(root,lhs.attrs).sortBy(a => if(selections.contains(a)) 0 else 10 )
@@ -160,7 +157,8 @@ case class ASTQueryStatement(
       println("GLOBAL ATTR ORDER: " + attributeOrdering)
     }
     
-    /*
+    val relations = joinRelations ++ recursiveRelations ++ tcRelations
+    
     //map each attribute to an encoding and type
     val attrToEncodingMap = relations.flatMap(qr => {
       val rName = qr.name + "_" + (0 until qr.attrs.length).mkString("_")
@@ -188,7 +186,8 @@ case class ASTQueryStatement(
     //if the number of bags is 1 or the attributes in the root match those in the result
     //we intersect the lhs attrs with the attribute ordering so the aggregations are eliminated
     val topDownUnecessary = root.getNumBags() == 1 ||  
-      (lhs.attrs.intersect(root.attrSet.toList).length == lhs.attrs.intersect(attributeOrdering).length)
+      (lhs.attrs.intersect(root.attrSet.toList).length == lhs.attrs.intersect(attributeOrdering).length) ||
+      recursion.isDefined || tc.isDefined
 
     val lhsOrder = (0 until lhs.attrs.length).filter(i => attributeOrdering.contains(lhs.attrs(i))).sortBy(i => attributeOrdering.indexOf(lhs.attrs(i))).toList
     val lhsName = lhs.name+"_"+lhsOrder.mkString("_")
@@ -198,7 +197,9 @@ case class ASTQueryStatement(
     val seenNodes = mutable.ListBuffer[CodeGenGHDNode]()
     val seenGHDNodes = mutable.ListBuffer[(GHDNode,List[String])]()
 
-s    GHDSolver.bottomUp(root, ((ghd:GHDNode,isRoot:Boolean,parent:GHDNode) => {
+    println("TOP DOWN UN: " + topDownUnecessary)
+    /*
+    GHDSolver.bottomUp(root, ((ghd:GHDNode,isRoot:Boolean,parent:GHDNode) => {
       val attrOrder = ghd.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
       val lhsAttrs = lhs.attrs.filter(attrOrder.contains(_)).sortBy(attrOrder.indexOf(_))
       val parentAttrs = if(!isRoot) parent.attrSet.toList.sortBy(attrOrder.indexOf(_)) else List()
@@ -347,6 +348,7 @@ s    GHDSolver.bottomUp(root, ((ghd:GHDNode,isRoot:Boolean,parent:GHDNode) => {
 
     CodeGen.emitStopQueryTimer(s)
 
+  */
     val lhsEncodings = lhsOrder.map(i => attrToEncodingMap(lhs.attrs(i))._1).toList
     val lhsTypes = lhsOrder.map(i => attrToEncodingMap(lhs.attrs(i))._2).toList
     val annotations = (lhs.attrs.filter(!attributeOrdering.contains(_)).mkString("_"))
@@ -354,6 +356,8 @@ s    GHDSolver.bottomUp(root, ((ghd:GHDNode,isRoot:Boolean,parent:GHDNode) => {
     if(!scalarResult){
       //below here should probably be refactored. this saves the environment and writes the trie to disk
       Environment.addBrandNewRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings))
+      }
+      /*
       Utils.writeEnvironmentToJSON()
 
       s"""mkdir -p ${Environment.dbPath}/relations/${lhs.name} ${Environment.dbPath}/relations/${lhs.name}/${lhsName}""" !

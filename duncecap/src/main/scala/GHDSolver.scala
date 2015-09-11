@@ -38,8 +38,6 @@ object GHDSolver {
       frontier.foreach{ cur:GHDNode =>
         val cur_attrs = cur.rels.flatMap{r => r.attrs}.sorted.distinct
 
-        println("ATTRS: " + cur_attrs)
-
         //collect others
         cur_attrs.foreach{ a =>
           if(!attr.contains(a) && !level_attr.contains(a)){
@@ -57,7 +55,6 @@ object GHDSolver {
 
       //put those in the result first 
       val cur_attrs_sorted = level_attr.sortBy(e => if(resultAttrs.contains(e)) resultAttrs.indexOf(e) else resultAttrs.size+1).sorted
-      println("CUR ATTRS SORTED: " + cur_attrs_sorted)
       cur_attrs_sorted.foreach{ a =>
         if(!attr.contains(a)){
           attr += a
