@@ -42,8 +42,9 @@ object DCParser extends RegexParsers {
   def converganceCondition:Parser[String] = """\d+\.?\d*""".r 
 
   def selectionOp:Parser[String] = """=""".r
-  def typename:Parser[String] = """long|string|float""".r
+  def typename:Parser[String] = """long|string|float|int""".r
   def emptyStatement = "".r ^^ {case r => List()}
+  def emptyQueryRelation = "".r ^^ {case r => new QueryRelation("",List())}
   def emptyString = "".r ^^ {case r => ""}
   def emptyStatementMap:Parser[Map[String,String]] = "".r ^^ {case r => Map[String,String]()}
 
@@ -56,12 +57,12 @@ object DCParser extends RegexParsers {
   def lastAttr = identifierName ^^ {case a => List(a)}
   
   //for the join query
-  def joinAndRecursionStatements = ((joinStatement <~ ",") | emptyStatement) ~ recursionStatement ^^ {case a~b => (a,b)}
+  def joinAndRecursionStatements = (joinStatement | emptyStatement) ~ recursionStatement ^^ {case a~b => (a,b)}
   def recursionStatement = transitiveClosure | recursion | emptyRecursion
-  def transitiveClosure = ("[" ~> joinStatement ~ emptyString <~ "]*") ~ emptyString ~ emptyString ~ emptyString ^^ {case a~b~c~d~e => (a,b,c,d,e)}
-  def recursion = ("[" ~> emptyStatement) ~  identifierName ~ ("]*" ~>  converganceStatement) ^^ {case a~b~(c~d~e) => (a,b,c,d,e)}
+  def transitiveClosure = ("[" ~> joinStatement ~ emptyString ~ emptyQueryRelation <~ "]*") ~ emptyString ~ emptyString ~ emptyString ^^ {case a~b~c~d~e~f => (a,b,c,d,e,f)}
+  def recursion = ("[" ~> emptyStatement) ~  identifierName ~ ("(" ~> relationIdentifier <~ ")") ~ ("]*" ~>  converganceStatement) ^^ {case a~b~c~(d~e~f) => (a,b,c,d,e,f)}
   def converganceStatement = ( ("""{""" ~> converganceCriteria) ~ converganceOp ~ (converganceCondition <~ """}""") ) | (emptyString~emptyString~emptyString)
-  def emptyRecursion = emptyStatement ~ emptyString ~ emptyString ~ emptyString ~ emptyString ^^ {case a~b~c~d~e => (a,b,c,d,e)}
+  def emptyRecursion = emptyStatement ~ emptyString ~ emptyQueryRelation ~ emptyString ~ emptyString ~ emptyString ^^ {case a~b~c~d~e~f => (a,b,c,d,e,f)}
   
   def joinStatement:Parser[List[SelectionRelation]] = multipleJoinIdentifiers | singleJoinIdentifier
   def multipleJoinIdentifiers = (singleJoinIdentifier <~ ",") ~ joinStatement ^^ {case t~rest => t ++: rest}
@@ -82,8 +83,9 @@ object DCParser extends RegexParsers {
   def expression:Parser[String] = """[^<]*""".r
   def annotation:Parser[AnnotationExpression] = (";" ~> identifierName <~ "=") ~ expression ~ aggregateStatement ^^ {case a~b~c => new AnnotationExpression(a,b,c)} 
   def aggInit:Parser[String] = (";" ~> selectionElement) | emptyString ^^ { case a => a}
-  def aggOp:Parser[String] = """SUM|COUNT""".r
-  def aggregateStatement = "<" ~> aggOp ~ ("(" ~> attrList) ~ (aggInit <~ ")") <~ ">" ^^ {case a~b~c => new AggregateExpression(a,b,c) }
+  def aggOp:Parser[String] = """SUM|COUNT|MIN""".r
+  def aggregateStatement = "<" ~> aggOp ~ ("(" ~> (findStar | attrList)) ~ (aggInit <~ ")") <~ ">" ^^ {case a~b~c => new AggregateExpression(a,b,c) }
+  def findStar = """\*""".r ^^ {case a => List[String](a)}
 
   def joinType:Parser[String] = """\+""".r
   def emptyJoinType = "".r ^^ {case r => """*"""}
@@ -93,25 +95,55 @@ object DCParser extends RegexParsers {
     val recursion = a._2
     val transitiveClosure = recursion._1
     val recursiveFunction = recursion._2
-    val convIdentifier = recursion._3
-    val convOperator = recursion._4
-    val convCriteria = recursion._5
-    //a._1 contains the raw join information
-    //a._2 contains the recursion information
+    val recursiveInputArg = recursion._3
+    val convIdentifier = recursion._4
+    val convOperator = recursion._5
+    val convCriteria = recursion._6
+
+    /*
     println("joins")
     a._1.foreach{_.printData()}
-    println("recursion joins")
-    a._2._1.foreach{_.printData()}
-    println("recursion function: " + a._2._1) 
+    println("TC")
+    transitiveClosure.foreach{_.printData()}
+    println("recursion function: " + recursiveFunction) 
     println("Convergance" + convIdentifier + " " + convOperator + " " + convCriteria)
     b.printData() 
+    */
 
-    //build a recursion object
-    //do things to take COUNT(*) to SUM over all attrs init with a value of 1
+    val boundVariable = b.boundVariable
+    val expr = b.expr
+    val aggregate = b.agg
+    val operation = aggregate.op
+    val init = if(operation == "COUNT") "1" else aggregate.init
+    val attrs = if(aggregate.attrs == List[String]("*")) a._1.flatMap(r => r.attrs.map(attr => attr._1)).distinct else aggregate.attrs
+    val aggregatesIn = attrs.map(attr => ((attr -> new ParsedAggregate(operation,expr,init)))).toMap 
+
+    val recursionIn = if(recursiveFunction != "") Some(new RecursionStatement(recursiveFunction,recursiveInputArg,new ConverganceCriteria(convIdentifier,convOperator,convCriteria))) else None
+    val tc = if(transitiveClosure.length != 0) Some(new TransitiveClosureStatement(transitiveClosure))  else None
+    (a._1,recursionIn,tc,aggregatesIn)
   }
 
-  def queryStatement = (lhsStatement ~ (":-" ~> joinTypeStatement) ~  joinAndAnnotationStatement <~ ".")
-  def lambdaExpression = ( (identifierName <~ ":-") ~ ("(" ~> lhsStatement <~ "=>") ~ ("{" ~> joinAndAnnotationStatement <~ "}).") )
+  def lambdaExpression = ( (identifierName <~ ":-") ~ ("(" ~> lhsStatement <~ "=>") ~ ("{" ~> joinStatement) ~ (annotationStatement <~ "}).") ) ^^ {case a~b~c~d =>
+   /*
+    println("Function name: " + a)
+    println("Input Argument: " + b)
+    println("JOIN: " + c)
+    println("Annotation: " + d)
+  */
+    val boundVariable = d.boundVariable
+    val expr = d.expr
+    val aggregate = d.agg
+    val operation = aggregate.op
+    val init = if(operation == "COUNT") "1" else aggregate.init
+    val attrs = if(aggregate.attrs == List[String]("*")) c.flatMap(r => r.attrs.map(attr => attr._1)).distinct else aggregate.attrs
+    val aggregatesIn = attrs.map(attr => ((attr -> new ParsedAggregate(operation,expr,init)))).toMap 
+    Environment.addLambdaFunction(a,new ASTLambdaFunction(b,c,aggregatesIn))
+  }
+
+
+  def queryStatement = (lhsStatement ~ (":-" ~> joinTypeStatement) ~  joinAndAnnotationStatement <~ ".") ^^ {case a~b~c =>
+    Environment.addASTNode(new ASTQueryStatement(a,b,c._1,c._2,c._3,c._4))
+  }
   def printStatement = (lhsStatement <~ ".") ^^ {case l => Environment.addASTNode(new ASTPrintStatement(l))}
   def statement = queryStatement | lambdaExpression | printStatement
   def statements = rep(statement)

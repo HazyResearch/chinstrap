@@ -156,12 +156,16 @@ class CodeGenAttr (
 }
 
 class CodeGenGHDNode(
+  val joinType:String,
+  val recursive:Boolean,
+  val transitiveClosure:Boolean,
   val result:QueryRelation,
   val scalarResult:Boolean, 
   val attrToEncoding:Map[String,(String,String)]) {
   var attributeNodes = new ListBuffer[CodeGenAttr]()
 
   def printData() = {
+    println("join type: " + joinType)
     println("result: " + result.name + " " + result.attrs)
     println("scalarResult: " + scalarResult)
     println("attrToEncoding: " + attrToEncoding)

@@ -88,7 +88,18 @@ class QueryRelation(val name:String,val attrs:List[String],val annotation:String
       case that: QueryRelation => that.attrs.equals(attrs) && that.name.equals(name)
       case _ => false
     }
+  def printData() = {
+    println("name: " + name + " attrs: " + attrs + " annotation: " + annotation + " annotationType: " + annotationType)
+  }
 }
+
+class RecursionStatement(val functionName:String, val inputArgument:QueryRelation, val convergance:ConverganceCriteria)
+
+class TransitiveClosureStatement(val join:List[SelectionRelation])
+
+class ParsedAggregate(val op:String, val expression:String, val init:String)
+
+class ConverganceCriteria(val converganceType:String, val converganceOp:String, val converganceCondition:String)
 
 abstract trait ASTStatement extends ASTNode {}
 
@@ -105,11 +116,20 @@ case class ASTPrintStatement(rel:QueryRelation) extends ASTStatement {
 //(4) list of attrs with selections
 //(5) list of exressions for aggregations
 
+class ASTLambdaFunction(val inputArgument:QueryRelation,
+  val join:List[SelectionRelation],
+  val aggregates:Map[String,ParsedAggregate])
+
 //change this to lhs; aggregates[attr,(op,expression,init)], join, recursion
-case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],join:List[SelectionRelation],aggregateExpressions:Map[String,String]) extends ASTStatement {
+case class ASTQueryStatement(
+  lhs:QueryRelation,
+  joinType:String,
+  join:List[SelectionRelation],
+  recursion:Option[RecursionStatement],
+  tc:Option[TransitiveClosureStatement],
+  aggregates:Map[String,ParsedAggregate] ) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     //perform syntax checking (TODO)
-
     //first emit allocators
     CodeGen.emitAllocators(s)
 
@@ -117,7 +137,20 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     val relations = join.map(qr => new QueryRelation(qr.name,qr.attrs.map{_._1}))
     val selections = join.flatMap(qr => qr.attrs.filter(atup => atup._2 != "").map(atup => (atup._1,new SelectionCondition(atup._2,atup._3)) ) ).toMap
 
-    val root = GHDSolver.getGHD(relations,lhs) //get minimum GHD's
+    val recursiveLambda:Option[ASTLambdaFunction] = if(recursion.isDefined) 
+        Some(Environment.getLambdaFunction(recursion.get.functionName))
+      else 
+        None
+    val recursiveJoin = if(recursiveLambda.isDefined) recursiveLambda.get.join.map(qr => new QueryRelation(qr.name,qr.attrs.map{_._1})) else List()
+    val recursiveRelations = recursiveJoin.map(qr => {if(qr.name == recursiveLambda.get.inputArgument.name) new QueryRelation(recursion.get.inputArgument.name,qr.attrs) else qr})
+    val recursiveAggregates = if(recursiveLambda.isDefined) recursiveLambda.get.aggregates else Map()
+
+    println("recursiveRelations")
+    recursiveRelations.foreach(_.printData())
+
+    val tcRelations = if(tc.isDefined) tc.get.join.map(qr => new QueryRelation(qr.name,qr.attrs.map{_._1})) else List()
+
+    val root = GHDSolver.getGHD(relations,recursiveRelations,tcRelations,lhs) //get minimum GHD's
 
     //find attr ordering
     val attributeOrdering = GHDSolver.getAttributeOrdering(root,lhs.attrs).sortBy(a => if(selections.contains(a)) 0 else 10 )
@@ -127,6 +160,7 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
       println("GLOBAL ATTR ORDER: " + attributeOrdering)
     }
     
+    /*
     //map each attribute to an encoding and type
     val attrToEncodingMap = relations.flatMap(qr => {
       val rName = qr.name + "_" + (0 until qr.attrs.length).mkString("_")
@@ -160,13 +194,11 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     val lhsName = lhs.name+"_"+lhsOrder.mkString("_")
     val scalarResult = lhsOrder.length == 0
 
-    val aggregateExpression = if(aggregateExpressions.isEmpty) "" else aggregateExpressions.head._2
-
     //run algorithm
     val seenNodes = mutable.ListBuffer[CodeGenGHDNode]()
     val seenGHDNodes = mutable.ListBuffer[(GHDNode,List[String])]()
 
-    GHDSolver.bottomUp(root, ((ghd:GHDNode,isRoot:Boolean,parent:GHDNode) => {
+s    GHDSolver.bottomUp(root, ((ghd:GHDNode,isRoot:Boolean,parent:GHDNode) => {
       val attrOrder = ghd.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
       val lhsAttrs = lhs.attrs.filter(attrOrder.contains(_)).sortBy(attrOrder.indexOf(_))
       val parentAttrs = if(!isRoot) parent.attrSet.toList.sortBy(attrOrder.indexOf(_)) else List()
@@ -330,5 +362,6 @@ case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],joi
     } else{
       s.println(s"""std::cout << "Query Result: " << Trie_${lhsName}->annotation << std::endl;""") 
     }
+    */
   }
 }
