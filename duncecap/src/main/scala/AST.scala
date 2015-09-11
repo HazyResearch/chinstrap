@@ -76,8 +76,13 @@ case class ASTWriteBinaryTries() extends ASTNode {
   }
 }
 
-class SelectionRelation(val name:String,val attrs:List[(String,String,String)])
-class QueryRelation(val name:String,val attrs:List[String]) {
+class SelectionRelation(val name:String,val attrs:List[(String,String,String)]) {
+  def printData() = {
+    println("name: " + name + " attrs: " + attrs)
+  }
+}
+
+class QueryRelation(val name:String,val attrs:List[String],val annotation:String="", val annotationType:String="") {
   override def equals(that: Any): Boolean =
     that match {
       case that: QueryRelation => that.attrs.equals(attrs) && that.name.equals(name)
@@ -99,6 +104,8 @@ case class ASTPrintStatement(rel:QueryRelation) extends ASTStatement {
 //(3) list of relations joined
 //(4) list of attrs with selections
 //(5) list of exressions for aggregations
+
+//change this to lhs; aggregates[attr,(op,expression,init)], join, recursion
 case class ASTQueryStatement(lhs:QueryRelation,aggregates:Map[String,String],join:List[SelectionRelation],aggregateExpressions:Map[String,String]) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     //perform syntax checking (TODO)
