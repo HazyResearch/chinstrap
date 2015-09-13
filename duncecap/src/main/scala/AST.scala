@@ -82,14 +82,14 @@ class SelectionRelation(val name:String,val attrs:List[(String,String,String)]) 
   }
 }
 
-class QueryRelation(val name:String,val attrs:List[String],val annotation:String="", val annotationType:String="") {
+class QueryRelation(val name:String,val attrs:List[String],val annotation:Option[(String,String)]=None) {
   override def equals(that: Any): Boolean =
     that match {
       case that: QueryRelation => that.attrs.equals(attrs) && that.name.equals(name)
       case _ => false
     }
   def printData() = {
-    println("name: " + name + " attrs: " + attrs + " annotation: " + annotation + " annotationType: " + annotationType)
+    println("name: " + name + " attrs: " + attrs + " annotation: " + annotation)
   }
 }
 
@@ -131,6 +131,10 @@ case class ASTQueryStatement(
   override def code(s: CodeStringBuilder): Unit = {
     //perform syntax checking (TODO)
     //first emit allocators
+    if(lhs.annotation.isDefined)
+      CodeGen.annotationType = lhs.annotation.get._2 //(boundVar,type)
+    CodeGen.joinType = joinType
+
     CodeGen.emitAllocators(s)
 
     //run GHD decomp
@@ -174,7 +178,7 @@ case class ASTQueryStatement(
       println(rName)
       assert(Environment.relations.contains(qr.name))
       assert(Environment.relations(qr.name).contains(rName))
-      ((qr.name,new QueryRelation(rName,reorderedAttrs)))
+      ((qr.name,new QueryRelation(rName,reorderedAttrs,Environment.relations(qr.name)(rName).annotation))) //add in the annotations if they exist in environemtn
     })
     val encodings = reorderedRelations.flatMap(r => Environment.relations(r._1).head._2.encodings ).toList.distinct
 
@@ -198,7 +202,6 @@ case class ASTQueryStatement(
     val seenGHDNodes = mutable.ListBuffer[(GHDNode,List[String])]()
 
     println("TOP DOWN UN: " + topDownUnecessary)
-    /*
     GHDSolver.bottomUp(root, ((ghd:GHDNode,isRoot:Boolean,parent:GHDNode) => {
       val attrOrder = ghd.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
       val lhsAttrs = lhs.attrs.filter(attrOrder.contains(_)).sortBy(attrOrder.indexOf(_))
@@ -207,13 +210,13 @@ case class ASTQueryStatement(
       val materializedAttrs = lhsAttrs.union(sharedAttrs).distinct.sortBy(attributeOrdering.indexOf(_))
 
       val name = ghd.getName(attrOrder)
-      val bagLHS = new QueryRelation("bag_" + name,lhsAttrs)
+      val bagLHS = new QueryRelation("bag_" + name,lhsAttrs,lhs.annotation)
 
       //FIX ME. For a relation to be in a bag right now we require all its attributes are in the bag
       val bagRelations = reorderedRelations.filter(rr => {
         rr._2.attrs.intersect(attrOrder).length == rr._2.attrs.length
       })
-
+      
       //any attr that is shared in the children 
       //map from the attribute to a list of accessors
       val childrenAttrMap = ghd.children.flatMap(cn => {
@@ -221,7 +224,8 @@ case class ASTQueryStatement(
         val childMaterializedAttrs = childAttrs.intersect(attrOrder)
         val childName = cn.getName(childAttrs)
         childMaterializedAttrs.toList.map(a => {
-          (a,new Accessor("bag_"+childName,childMaterializedAttrs.indexOf(a),childAttrs)) 
+          val childAnnotation = aggregates.contains(a) && childMaterializedAttrs.contains(a) 
+          (a,new Accessor("bag_"+childName,childMaterializedAttrs.indexOf(a),childAttrs,childAnnotation)) 
         })
       }).groupBy(t => t._1).map(t => (t._1 -> (t._2.map(_._2).distinct)) )
 
@@ -231,12 +235,13 @@ case class ASTQueryStatement(
       })
 
       val bagScalarResult = (materializedAttrs.length == 0) && (aggregates.size != 0)
-      val cgenGHDNode = new CodeGenGHDNode(bagLHS,bagScalarResult,attrToEncodingMap)
+      val cgenGHDNode = new CodeGenGHDNode(joinType,recursion.isDefined,tc.isDefined,bagLHS,bagScalarResult,attrToEncodingMap)
       var noWork = false
       attrOrder.foreach(a => {
         val selection = if(selections.contains(a)) Some(selections(a)) else None
         val materialize = materializedAttrs.contains(a)
 
+        //find next materialized
         val curIndex = attrOrder.indexOf(a)
         var nextMaterialized:Option[String] = None
         var i = curIndex+1
@@ -249,6 +254,7 @@ case class ASTQueryStatement(
           i += 1
         }
 
+        //find prev materialized
         var prevMaterialized:Option[String] = None
         i = 0
         done = false
@@ -260,6 +266,7 @@ case class ASTQueryStatement(
           i += 1
         }
 
+        //last attr materialized?
         val lastMaterialized = materializedAttrs.indexOf(a) == (materializedAttrs.length-1) && materializedAttrs.length != 0
 
         //access each of the relations in the bag that contain the attribute
@@ -277,14 +284,13 @@ case class ASTQueryStatement(
         val selectionBelow = if(futureSelections.length != 0) futureSelections.reduce((a,b) => a || b) else false
         val futureAnnotationIndexes = (futureAttrIndex until attrOrder.length).filter(i => { aggregates.contains(attrOrder(i)) })
 
-        println("CHILD ATTR MAP: " + childrenAttrMap)
+        //set up annotation
         val annotated = if(lastMaterialized && futureAnnotationIndexes.length != 0) Some(attrOrder(futureAnnotationIndexes.head)) else None
         val annotation = if(aggregates.contains(a) && !materializedAttrs.contains(a)) {
-          val passedAnnotations = if(childrenAttrMap.contains(a)) childrenAttrMap(a) else List[Accessor]() 
           val annotationIndex = aggregateOrder.indexOf(a)
           val prevAnnotation = if(annotationIndex < 1) None else Some(aggregateOrder(annotationIndex-1))
           val nextAnnotation = if(annotationIndex == (aggregateOrder.length-1)) None else Some(aggregateOrder(annotationIndex+1))
-          Some(new Annotation(aggregates(a),aggregateExpression,passedAnnotations,prevAnnotation,nextAnnotation))
+          Some(new Annotation(aggregates(a).op,aggregates(a).init,aggregates(a).expression,prevAnnotation,nextAnnotation))
         } else None
 
         cgenGHDNode.addAttribute(new CodeGenAttr(a,accessors,annotation,annotated,selection,selectionBelow,nextMaterialized,prevMaterialized,materialize,lastMaterialized))
@@ -308,6 +314,10 @@ case class ASTQueryStatement(
         CodeGen.emitRewriteOutputTrie(s,lhsName,"bag_" + name,scalarResult)
     }))
     
+    if(!topDownUnecessary){
+      throw new IllegalArgumentException("top down pass not implemented");
+    }
+    /*
     //////top down code
     //at the root generate the top down pass if we need it
     val topDown = (!topDownUnecessary)
@@ -339,16 +349,20 @@ case class ASTQueryStatement(
         if(lhs.attrs.length != 0 && aggregateTopDown.size != 0) 
           Some(lhs.attrs.sortBy(attributeOrdering.indexOf(_)).last)
         else None
+      
+      val aggregateExpression = "1" //HACK FIX ME
+
+      //wtf is this type below here...
       val dummy_bag = new CodeGenGHD(bagLHS,List[CodeGenNPRRAttr](),aggregateExpression,scalarResult,aggregateTopDown,annotatedAttrIn,attrToEncodingMap)
       CodeGen.emitNPRR(s,lhsName,dummy_bag,None,Some(td))
-
+    
       //end refactor portion
     } 
     ///end top down
+    */
 
     CodeGen.emitStopQueryTimer(s)
 
-  */
     val lhsEncodings = lhsOrder.map(i => attrToEncodingMap(lhs.attrs(i))._1).toList
     val lhsTypes = lhsOrder.map(i => attrToEncodingMap(lhs.attrs(i))._2).toList
     val annotations = (lhs.attrs.filter(!attributeOrdering.contains(_)).mkString("_"))
@@ -356,16 +370,15 @@ case class ASTQueryStatement(
     if(!scalarResult){
       //below here should probably be refactored. this saves the environment and writes the trie to disk
       Environment.addBrandNewRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings))
-      }
       /*
       Utils.writeEnvironmentToJSON()
 
       s"""mkdir -p ${Environment.dbPath}/relations/${lhs.name} ${Environment.dbPath}/relations/${lhs.name}/${lhsName}""" !
       
       CodeGen.emitWriteBinaryTrie(s,lhs.name,lhsName)
+      */
     } else{
       s.println(s"""std::cout << "Query Result: " << Trie_${lhsName}->annotation << std::endl;""") 
     }
-    */
   }
 }

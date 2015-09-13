@@ -5,7 +5,8 @@ import scala.collection.mutable
  * All code generation methods start from this object:
  */
 object CodeGen {
-  val annotationType = "long"
+  var annotationType = "int"
+  var joinType = "*"
   def emitCode(s: CodeStringBuilder, root: List[ASTNode]) = {
     emitHeader(s,root)
     emitMainMethod(s)
@@ -14,8 +15,7 @@ object CodeGen {
   def emitHeader(s:CodeStringBuilder, root:List[ASTNode]) = {
     s.println("#define GENERATED")
     s.println("#include \"main.hpp\"")
-    s.println(s"""extern \"C\" void* run(std::unordered_map<std::string, void*>& relations, std::unordered_map<std::string, Trie<${Environment.layout},${annotationType}>*> tries, std::unordered_map<std::string, std::vector<void*>*> encodings) {""")
-    s.println("""(void) relations; (void) tries; (void) encodings; //TODO keep in memory across repl calls""")
+    s.println(s"""extern \"C\" void* run() {""")
     root.foreach{_.code(s)}
     s.println("return NULL;")
     s.println("}")  
@@ -26,11 +26,8 @@ object CodeGen {
   def emitMainMethod(s : CodeStringBuilder): Unit = {
     s.println("#ifndef GOOGLE_TEST")
     s.println("int main() {")
-    s.println("std::unordered_map<std::string, void*> relations;")
-    s.println(s"std::unordered_map<std::string, Trie<${Environment.layout},${annotationType}>*> tries;")
-    s.println(s"std::unordered_map<std::string, std::vector<void*>*> encodings;")
     s.println("thread_pool::initializeThreadPool();")
-    s.println("run(relations,tries,encodings);")
+    s.println("run();")
     s.println("}")
     s.println("#endif")
   }
@@ -252,14 +249,9 @@ object CodeGen {
   }
 
   def emitAnnotationInitialization(s:CodeStringBuilder,attr:String,annotation:Annotation,tid:String,scalarResult:Boolean): Unit = {
-    if(!annotation.next.isDefined && annotation.passedAnnotations.length == 0){ //always the last attribute?
-      val exp2 = if(!annotation.prev.isDefined) "(" else s"""(annotation_tmp * """
-      s.println(s"""${annotationType} annotation_${attr} = ${exp2} (${annotation.expression}*${attr}.cardinality));""")
-    }else {
-      if(scalarResult && !annotation.prev.isDefined) emitAggregateReducer(s,annotation.operation)
-      else if(!annotation.prev.isDefined) s.println(s"""${annotationType} annotation_${attr} = (${annotationType})0;""")    
-      else s.println(s"""${annotationType} annotation_${attr} = (${annotationType})0;""")            
-    }
+    s.println("//emitAnnotationInitialization")
+    if(scalarResult && !annotation.prev.isDefined) emitAggregateReducer(s,annotation.operation)
+    else s.println(s"""${annotationType} annotation_${attr} = (${annotationType})0;""")    
   }
 
   def emitMaterializedSelection(s:CodeStringBuilder,attr:String,selectionsBelow:Boolean,tid:String,selection:SelectionCondition,loopSet:String) : Unit = {
@@ -417,48 +409,84 @@ object CodeGen {
       }
       case _ => throw new IllegalStateException("Op not defined")
     }
-    s.println(s"""(annotation_tmp * ${passedAnnotations.head.getName()}->get_data(${attr}_d)""")
+    s.println(s"""(annotation_tmp ${joinType} ${passedAnnotations.head.getName()}->get_data(${attr}_d)""")
     passedAnnotations.tail.foreach(pa => {
-      s.println(s"""*${pa.getName()}->get_data(${attr}_d)""")
+      s.println(s"""${joinType}${pa.getName()}->get_data(${attr}_d)""")
     })
     s.println(");")
   }
 
-  def emitAnnotationTemporary(s:CodeStringBuilder, attr:String, annotation:Annotation) : Unit = {
-    if(annotation.next.isDefined && annotation.passedAnnotations.length != 0){ //not the last loop and we have passed annotations
-      if(!annotation.prev.isDefined)
-        s.println(s"""${annotationType} annotation_tmp = (${annotation.expression}*(""")
-      else 
-        s.println(s"""annotation_tmp *= (${annotation.expression}*(""")
-
-      s.println(s"""${annotation.passedAnnotations.head.getName()}->get_data(${attr}_d)""")
-      annotation.passedAnnotations.tail.foreach(pa => {
-        s.println(s"""*${pa.getName()}->get_data(${attr}_d)""")
+  def emitAnnotationComputation(s:CodeStringBuilder, attr:String, annotation:Annotation, accessors:List[Accessor]) : Unit = {
+    s.println("//emitAnnotationComputation")
+    val annotationAccesors = accessors.filter(_.annotation)
+    annotation.operation match {
+      case "SUM" =>       
+        s.println(s"""annotation_${attr} += """)
+      case _ =>
+        throw new IllegalStateException("ANNOTATION OP NOT SUPPORTED")
+    }
+    if(annotationAccesors.length > 0){
+      s.println(s"""(${annotationAccesors.head.getName()}->get_data(${attr}_d)""")
+      annotationAccesors.tail.foreach(pa => {
+        s.println(s"""${joinType}${pa.getName()}->get_data(${attr}_d)""")
       })
-      s.println("));")
-    } else if(!annotation.prev.isDefined){
-      s.println(s"""${annotationType} annotation_tmp = ${annotation.expression};""")
+      (annotationAccesors.length until accessors.length).foreach{i =>
+        s.println(s"""${joinType}${annotation.init}""")
+      }
+      s.println(");")
     } else {
-      s.println(s"""annotation_tmp *= ${annotation.expression};""")
+      s.println(s"""(${attr}.cardinality""")
+      (0 until accessors.length).foreach{i =>
+        s.println(s""" ${joinType} ${annotation.init}""")
+      }
+      s.println(s""");""")
     }
   }
 
   def emitRollBackALL(s:CodeStringBuilder,attr:String,buffer:String,tid:String) : Unit = {
     s.println(s"""${buffer}->roll_back(${tid},alloc_size_${attr});""")
   }
-  /*
-  def emitAnnotationComputation(s:CodeStringBuilder,annotation:Annotation) : Unit = {
+  def emitUpdateAnnotationReducer(s:CodeStringBuilder,attr:String,tid:String,annotation:Annotation,prev:String,prevaccessors:List[Accessor]) : Unit = {
+    s.println(s"""annotation.update(${tid},(annotation_${attr}""")
+    val annotationAccesors = prevaccessors.filter(_.annotation)
+    if(annotationAccesors.length > 0){
+      s.println(s"""${joinType} ${annotationAccesors.head.getName()}->get_data(${prev}_d)""")
+      annotationAccesors.tail.foreach(pa => {
+        s.println(s"""${joinType}${pa.getName()}->get_data(${prev}_d)""")
+      })
+      (annotationAccesors.length until prevaccessors.length).foreach{i =>
+        s.println(s"""${joinType}${annotation.init}""")
+      }
+      s.println("));")
+    } else {
+      (0 until prevaccessors.length).foreach{i =>
+        s.println(s""" ${joinType} ${annotation.init} """)
+      }
+      s.println(s"""));""")
+    }
   }
-  */
-  def emitUpdateAnnotationReducer(s:CodeStringBuilder,attr:String,tid:String) : Unit = {
-    s.println(s"""annotation.update(${tid},annotation_${attr});""")
-  }
-  def emitUpdateAnnotation(s:CodeStringBuilder,attr:String,prev:String,operation:String) : Unit = {
-    operation match {
+  def emitUpdateAnnotation(s:CodeStringBuilder,attr:String,annotation:Annotation,prev:String,prevaccessors:List[Accessor]) : Unit = {
+    annotation.operation match {
         case "SUM" => {
-          s.println(s"""annotation_${prev} += annotation_${attr};""")
+          s.println(s"""annotation_${annotation.prev.get} += (annotation_${attr} """)
         }
         case _ => throw new IllegalStateException("Op not implemented")
+    }
+    val annotationAccesors = prevaccessors.filter(_.annotation)
+    if(annotationAccesors.length > 0){
+      s.println(s"""${joinType} ${annotationAccesors.head.getName()}->get_data(${prev}_d)""")
+      annotationAccesors.tail.foreach(pa => {
+        s.println(s"""${joinType}${pa.getName()}->get_data(${prev}_d)""")
+      })
+      (annotationAccesors.length until prevaccessors.length).foreach{i =>
+        s.println(s"""${joinType}${annotation.init}""")
+      }
+      s.println(");")
+    } else {
+      (0 until prevaccessors.length).foreach{i =>
+        s.println(s""" ${joinType} ${annotation.init} """)
+      }
+      s.println(s""");""")
     }
   }
 

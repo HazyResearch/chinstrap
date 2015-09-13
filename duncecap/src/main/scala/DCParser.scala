@@ -46,12 +46,13 @@ object DCParser extends RegexParsers {
   def emptyStatement = "".r ^^ {case r => List()}
   def emptyQueryRelation = "".r ^^ {case r => new QueryRelation("",List())}
   def emptyString = "".r ^^ {case r => ""}
+  def emptyAggType = "".r ^^ {case r => "int"}
   def emptyStatementMap:Parser[Map[String,String]] = "".r ^^ {case r => Map[String,String]()}
 
   //for the lhs expression
   def lhsStatement = relationIdentifier 
-  def relationIdentifier: Parser[QueryRelation] = identifierName ~ ("(" ~> attrList) ~ (aggStatement <~ ")")  ^^ {case id~attrs~(agg~t) => new QueryRelation(id, attrs, agg, t)}
-  def aggStatement = ((";" ~> identifierName) ~ (":" ~> typename)) | (emptyString~emptyString)
+  def relationIdentifier: Parser[QueryRelation] = identifierName ~ ("(" ~> attrList) ~ (aggStatement <~ ")")  ^^ {case id~attrs~(agg~t) => new QueryRelation(id, attrs, if( (agg,t) != ("","")) Some((agg,t)) else None) }
+  def aggStatement = ((";" ~> identifierName) ~ (":" ~> typename)) | (emptyString~emptyAggType)
   def attrList : Parser[List[String]] = notLastAttr | lastAttr | emptyStatement
   def notLastAttr = identifierName ~ ("," ~> attrList) ^^ {case a~rest => a +: rest}
   def lastAttr = identifierName ^^ {case a => List(a)}
@@ -113,8 +114,8 @@ object DCParser extends RegexParsers {
     val boundVariable = b.boundVariable
     val expr = b.expr
     val aggregate = b.agg
-    val operation = aggregate.op
-    val init = if(operation == "COUNT") "1" else aggregate.init
+    val operation = if(aggregate.op == "COUNT") "SUM" else aggregate.op
+    val init = if(aggregate.op == "COUNT") "1" else aggregate.init
     val attrs = if(aggregate.attrs == List[String]("*")) a._1.flatMap(r => r.attrs.map(attr => attr._1)).distinct else aggregate.attrs
     val aggregatesIn = attrs.map(attr => ((attr -> new ParsedAggregate(operation,expr,init)))).toMap 
 
@@ -124,17 +125,11 @@ object DCParser extends RegexParsers {
   }
 
   def lambdaExpression = ( (identifierName <~ ":-") ~ ("(" ~> lhsStatement <~ "=>") ~ ("{" ~> joinStatement) ~ (annotationStatement <~ "}).") ) ^^ {case a~b~c~d =>
-   /*
-    println("Function name: " + a)
-    println("Input Argument: " + b)
-    println("JOIN: " + c)
-    println("Annotation: " + d)
-  */
     val boundVariable = d.boundVariable
     val expr = d.expr
     val aggregate = d.agg
-    val operation = aggregate.op
-    val init = if(operation == "COUNT") "1" else aggregate.init
+    val operation = if(aggregate.op == "COUNT") "SUM" else aggregate.op
+    val init = if(aggregate.op == "COUNT") "1" else aggregate.init
     val attrs = if(aggregate.attrs == List[String]("*")) c.flatMap(r => r.attrs.map(attr => attr._1)).distinct else aggregate.attrs
     val aggregatesIn = attrs.map(attr => ((attr -> new ParsedAggregate(operation,expr,init)))).toMap 
     Environment.addLambdaFunction(a,new ASTLambdaFunction(b,c,aggregatesIn))

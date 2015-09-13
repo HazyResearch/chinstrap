@@ -44,9 +44,9 @@ class CodeGenGHD(val lhs:QueryRelation, val attrs:List[CodeGenNPRRAttr],
 */
 
 //Object that allows us to access and name tries easily
-class Accessor(val trieName:String, val level:Int, val attrs:List[String], val annotation:Option[String] = None ){
+class Accessor(val trieName:String, val level:Int, val attrs:List[String], val annotation:Boolean = false ){
   def printData() : Unit = {
-    println("\t\ttrieName: " + trieName + " level: " + level + " attrs: " + attrs)
+    println("\t\ttrieName: " + trieName + " level: " + level + " attrs: " + attrs + " annotation: " + annotation)
   }
   def getName() : String = {
     if(level == 0)
@@ -69,21 +69,28 @@ class Accessor(val trieName:String, val level:Int, val attrs:List[String], val a
   }
   override def equals(that: Any): Boolean =
     that match {
-      case that: Accessor => that.trieName.equals(trieName) && that.level.equals(level)
+      case that: Accessor => that.trieName.equals(trieName) && that.level.equals(level) && that.annotation.equals(annotation)
       case _ => false
     }
 }
 
-class Annotation(val operation:String, 
+class Annotation(val operation:String,
+  val init:String, 
   val expression:String, 
-  val passedAnnotations:List[Accessor],
   val prev:Option[String],
   val next:Option[String]) {
+
+  override def equals(that: Any): Boolean =
+    that match {
+    case that: Annotation => that.init.equals(init) && that.expression.equals(expression) && 
+      that.next.isDefined.equals(next.isDefined) && that.prev.isDefined.equals(prev.isDefined)
+    case _ => false
+  }
+
   def printData() = {
     println("\t\toperation: " + operation)
+    println("\t\tinit: " + init)
     println("\t\texpression: " + expression)
-    println("\t\tpassedAnnotations")
-    passedAnnotations.foreach(_.printData())
     println("\t\tprev: " + prev)
     println("\t\tnext: " + next)
   }
@@ -139,9 +146,9 @@ class CodeGenAttr (
     case that: CodeGenAttr => {
       val annotationEquiv = 
       if(annotation.isDefined && that.annotation.isDefined) 
-        annotation.get.passedAnnotations.length == 0 && that.annotation.get.passedAnnotations.length == 0
+        annotation == that.annotation
       else 
-        annotation.isDefined && that.annotation.isDefined
+        annotation.isDefined == that.annotation.isDefined
       annotationEquiv && 
       selection == that.selection &&
       accessors.length == that.accessors.length &&
@@ -166,6 +173,8 @@ class CodeGenGHDNode(
 
   def printData() = {
     println("join type: " + joinType)
+    println("recursive: " + recursive)
+    println("transitiveClosure: " + transitiveClosure)
     println("result: " + result.name + " " + result.attrs)
     println("scalarResult: " + scalarResult)
     println("attrToEncoding: " + attrToEncoding)
@@ -275,13 +284,14 @@ class CodeGenGHDNode(
       }
       else if(curr.lastMaterialized && curr.selectionBelow && !curr.nextMaterialized.isDefined && !curr.annotated.isDefined){ //materialized with a selection below & no annotations
         CodeGen.emitForEach(s,curr.attr + "_filtered",curr.attr,tid=="0")
-      } else if(curr.annotation.isDefined && ((curr.annotation.get.passedAnnotations.length != 0) || curr.annotation.get.next.isDefined) ) { //just an aggregate
+      } 
+
+      if(curr.annotation.isDefined && (curr.accessors.map(_.annotation).reduce((a,b) => a || b) || curr.annotation.get.next.isDefined) ) { //just an aggregate
         CodeGen.emitForEach(s,curr.attr,curr.attr,tid=="0")
       } 
-      //annotation tmp 
-      if(curr.annotation.isDefined) CodeGen.emitAnnotationTemporary(s,curr.attr,curr.annotation.get)
-      if(curr.annotation.isDefined && !curr.annotation.get.next.isDefined && curr.annotation.get.passedAnnotations.length > 0)
-        CodeGen.emitUpdatePassedAttributes(s,curr.attr,curr.annotation.get.operation,curr.annotation.get.passedAnnotations)
+      //annotation computation on the last level 
+      if(curr.annotation.isDefined && !curr.annotation.get.next.isDefined) 
+        CodeGen.emitAnnotationComputation(s,curr.attr,curr.annotation.get,curr.accessors)
     })
 
     //now do a backward pass over the attributes
@@ -301,7 +311,7 @@ class CodeGenGHDNode(
         CodeGen.emitSetTrieBlock(s,curr.attr,curr.lastMaterialized,curr.nextMaterialized,result.name,curr.annotated)
       }
 
-      val annotationCondition = (curr.annotation.isDefined && ((curr.annotation.get.passedAnnotations.length != 0) || curr.annotation.get.next.isDefined ) )
+      val annotationCondition = curr.annotation.isDefined && (curr.accessors.map(_.annotation).reduce((a,b) => a || b) || curr.annotation.get.next.isDefined)
       val forCondition = ((curr.lastMaterialized && curr.annotated.isDefined) || (!curr.lastMaterialized && curr.materialize)) ||
         (curr.lastMaterialized && curr.selectionBelow && !curr.annotated.isDefined) ||
         annotationCondition
@@ -320,10 +330,11 @@ class CodeGenGHDNode(
       }
 
       if(curr.annotation.isDefined && curr.annotation.get.prev.isDefined){ //update except when we have a scalar result
+        val prev = attributeNodes(i-1) //a little weird but necessary for parallelization, lift multiplication outside of inner loop
         if(!(i == 1 && scalarResult))
-          CodeGen.emitUpdateAnnotation(s,curr.attr,curr.annotation.get.prev.get,curr.annotation.get.operation)
+          CodeGen.emitUpdateAnnotation(s,curr.attr,curr.annotation.get,prev.attr,prev.accessors)
         else 
-          CodeGen.emitUpdateAnnotationReducer(s,curr.attr,tid)
+          CodeGen.emitUpdateAnnotationReducer(s,curr.attr,tid,curr.annotation.get,prev.attr,prev.accessors)
       } else if(curr.annotation.isDefined && !curr.annotation.get.prev.isDefined && scalarResult){
         CodeGen.emitScalarAnnotation(s,result.name)
       }
