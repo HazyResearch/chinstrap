@@ -127,7 +127,7 @@ case class ASTQueryStatement(
   join:List[SelectionRelation],
   recursion:Option[RecursionStatement],
   tc:Option[TransitiveClosureStatement],
-  aggregates:Map[String,ParsedAggregate] ) extends ASTStatement {
+  joinAggregates:Map[String,ParsedAggregate] ) extends ASTStatement {
   override def code(s: CodeStringBuilder): Unit = {
     //perform syntax checking (TODO)
     //first emit allocators
@@ -135,7 +135,10 @@ case class ASTQueryStatement(
       CodeGen.annotationType = lhs.annotation.get._2 //(boundVar,type)
     CodeGen.joinType = joinType
 
-    CodeGen.emitAllocators(s)
+    if(Environment.allocatorsInit){
+      Environment.allocatorsInit = false
+      CodeGen.emitAllocators(s)
+    }
 
     //run GHD decomp
     val joinRelations = join.map(qr => new QueryRelation(qr.name,qr.attrs.map{_._1}))
@@ -162,7 +165,8 @@ case class ASTQueryStatement(
     }
     
     val relations = joinRelations ++ recursiveRelations ++ tcRelations
-    
+    val aggregates = joinAggregates ++ recursiveAggregates    
+
     //map each attribute to an encoding and type
     val attrToEncodingMap = relations.flatMap(qr => {
       val rName = qr.name + "_" + (0 until qr.attrs.length).mkString("_")
@@ -183,9 +187,18 @@ case class ASTQueryStatement(
     val encodings = reorderedRelations.flatMap(r => Environment.relations(r._1).head._2.encodings ).toList.distinct
 
     //load binaries you need
-    CodeGen.emitLoadBinaryEncodings(s,encodings)
-    CodeGen.emitLoadBinaryRelations(s,reorderedRelations.map(r => (r._1,r._2.name) ).distinct)
-    CodeGen.emitStartQueryTimer(s)
+    encodings.foreach(e => {
+      if(!Environment.loadedEncodings.contains(e)){
+        CodeGen.emitLoadBinaryEncoding(s,e)
+        Environment.loadedEncodings += e
+      }
+    })
+    reorderedRelations.map(r => (r._1,r._2.name) ).distinct.foreach(r => {
+      if(!Environment.loadedRelations.contains(r._2)){
+        CodeGen.emitLoadBinaryRelation(s,r)
+        Environment.loadedRelations += r._2
+      }
+    })
 
     //if the number of bags is 1 or the attributes in the root match those in the result
     //we intersect the lhs attrs with the attribute ordering so the aggregations are eliminated
@@ -200,6 +213,9 @@ case class ASTQueryStatement(
     //run algorithm
     val seenNodes = mutable.ListBuffer[CodeGenGHDNode]()
     val seenGHDNodes = mutable.ListBuffer[(GHDNode,List[String])]()
+
+    CodeGen.emitLHSRelation(s,lhsName)
+    CodeGen.emitStartQueryTimer(s)
 
     println("TOP DOWN UN: " + topDownUnecessary)
     GHDSolver.bottomUp(root, ((ghd:GHDNode,isRoot:Boolean,parent:GHDNode) => {
@@ -272,7 +288,7 @@ case class ASTQueryStatement(
         //access each of the relations in the bag that contain the attribute
         val attributeAccessors = bagRelations.
           filter(rr => rr._2.attrs.contains(a)). //get the accessors the match this attr
-          map(rr => new Accessor(rr._2.name,rr._2.attrs.indexOf(a),rr._2.attrs) ). 
+          map(rr => new Accessor(rr._2.name,rr._2.attrs.indexOf(a),rr._2.attrs,rr._2.annotation.isDefined) ). 
           groupBy(a => a.getName()).map(_._2.head).toList //perform a distinct operation on the accessors
         
         //those shared in the children
@@ -293,7 +309,11 @@ case class ASTQueryStatement(
           Some(new Annotation(aggregates(a).op,aggregates(a).init,aggregates(a).expression,prevAnnotation,nextAnnotation))
         } else None
 
-        cgenGHDNode.addAttribute(new CodeGenAttr(a,accessors,annotation,annotated,selection,selectionBelow,nextMaterialized,prevMaterialized,materialize,lastMaterialized))
+        //eliminate the attribute loop if it is just a projection
+        val noAttrWork = !materialize && !nextMaterialized.isDefined && !selectionBelow && accessors.length == 1 && !selection.isDefined && !annotation.isDefined
+        if(!noAttrWork)
+          cgenGHDNode.addAttribute(new CodeGenAttr(a,accessors,annotation,annotated,selection,selectionBelow,nextMaterialized,prevMaterialized,materialize,lastMaterialized))
+        
         noWork &&= ((accessors.length == 1) && (attrOrder.indexOf(a) == accessors.head.level) && !annotation.isDefined && !selection.isDefined)  //all just existing relations?
       })
 
@@ -310,8 +330,9 @@ case class ASTQueryStatement(
       //generate the NPRR code
       cgenGHDNode.generateNPRR(s,equivTrie)
 
-      if(topDownUnecessary && isRoot) 
+      if(topDownUnecessary && isRoot){
         CodeGen.emitRewriteOutputTrie(s,lhsName,"bag_" + name,scalarResult)
+      }
     }))
     
     if(!topDownUnecessary){
@@ -369,7 +390,9 @@ case class ASTQueryStatement(
     
     if(!scalarResult){
       //below here should probably be refactored. this saves the environment and writes the trie to disk
-      Environment.addBrandNewRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings))
+      println("ADDING RELATION: " + lhs.name + " " +  lhsName + " " + lhs.annotation)
+      Environment.addBrandNewRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings,lhs.annotation))
+      Environment.loadedRelations += lhsName
       /*
       Utils.writeEnvironmentToJSON()
 

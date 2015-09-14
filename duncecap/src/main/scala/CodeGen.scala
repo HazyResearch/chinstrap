@@ -145,6 +145,10 @@ object CodeGen {
     s.println("} \n")
   }
 
+  def emitLHSRelation(s: CodeStringBuilder,lhs:String): Unit = {
+    s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${lhs};""")
+  }
+
   def emitWriteBinaryEncoding(s: CodeStringBuilder,enc:Encoding): Unit = {
     s.println("""////////////////////emitWriteBinaryEncoding////////////////////""")
     s.println("{")
@@ -154,24 +158,20 @@ object CodeGen {
     s.println("} \n")
   }
  
-  def emitLoadBinaryEncodings(s: CodeStringBuilder,encodings:List[String]): Unit = {
+  def emitLoadBinaryEncoding(s: CodeStringBuilder,encoding:String): Unit = {
     s.println("""////////////////////emitLoadBinaryEncoding////////////////////""")
     if(!Environment.quiet) s.println("""auto belt = debug::start_clock();""")
-    encodings.foreach(e => {
-      s.println(s"""Encoding<${Environment.encodings(e)._type}>* Encoding_${e} = Encoding<${Environment.encodings(e)._type}>::from_binary("${Environment.dbPath}/encodings/${e}/");""")
-      s.println(s"""(void) Encoding_${e};""")
-    })
-    if(!Environment.quiet) s.println(s"""debug::stop_clock("LOADING ENCODINGS",belt);""")
+    s.println(s"""Encoding<${Environment.encodings(encoding)._type}>* Encoding_${encoding} = Encoding<${Environment.encodings(encoding)._type}>::from_binary("${Environment.dbPath}/encodings/${encoding}/");""")
+    s.println(s"""(void) Encoding_${encoding};""")
+    if(!Environment.quiet) s.println(s"""debug::stop_clock("LOADING ENCODINGS ${encoding}",belt);""")
     s.print("\n")
   }
  
-  def emitLoadBinaryRelations(s: CodeStringBuilder,relations:List[(String,String)]): Unit = {
+  def emitLoadBinaryRelation(s: CodeStringBuilder,relation:(String,String)): Unit = {
     s.println("""////////////////////emitLoadBinaryRelation////////////////////""")
     if(!Environment.quiet) s.println("""auto btlt = debug::start_clock();""")
-    relations.foreach(qr => {
-      s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${qr._2} = Trie<${Environment.layout},${annotationType}>::from_binary("${Environment.dbPath}/relations/${qr._1}/${qr._2}/");""")
-    })
-    if(!Environment.quiet) s.println(s"""debug::stop_clock("LOADING RELATIONS",btlt);""")
+    s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${relation._2} = Trie<${Environment.layout},${annotationType}>::from_binary("${Environment.dbPath}/relations/${relation._1}/${relation._2}/");""")
+    if(!Environment.quiet) s.println(s"""debug::stop_clock("LOADING RELATION ${relation._1}",btlt);""")
     s.print("\n")
   }
 
@@ -188,7 +188,9 @@ object CodeGen {
     val qr = rel.name + "_" + (0 until rel.attrs.size).toList.mkString("_")
     s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${qr} = Trie<${Environment.layout},${annotationType}>::from_binary("${Environment.dbPath}/relations/${rel.name}/${qr}/");""")
     val loadEncodings = (0 until rel.attrs.size).map(i => { Environment.relations(rel.name)(qr).encodings(i)}).toList.distinct
-    emitLoadBinaryEncodings(s,loadEncodings)
+    loadEncodings.foreach(e => {
+      emitLoadBinaryEncoding(s,e)
+    })
 
     s.println(s"""Trie_${qr}->foreach([&](std::vector<uint32_t>* tuple){""")
     (0 until rel.attrs.size).foreach(i => {
@@ -351,8 +353,8 @@ object CodeGen {
     }
   }
 
-  def emitScalarAnnotation(s:CodeStringBuilder,lhs:String): Unit = {
-    s.println(s"""Trie_${lhs}->annotation = annotation.evaluate(0);""")
+  def emitScalarAnnotation(s:CodeStringBuilder,lhs:String, expression:String): Unit = {
+    s.println(s"""Trie_${lhs}->annotation = ${expression}annotation.evaluate(0);""")
   }
 
   def emitNoMaterializeCheckSelection(s:CodeStringBuilder,cga:CodeGenNPRRAttr) : Unit = {
@@ -399,7 +401,7 @@ object CodeGen {
 
   def emitRewriteOutputTrie(s:CodeStringBuilder,outName:String,prevName:String,scalarResult:Boolean) : Unit = {
     s.println("//emitRewriteOutputTrie")
-    s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${outName} = Trie_${prevName};""")
+    s.println(s"""Trie_${outName} = Trie_${prevName};""")
   }
 
   def emitUpdatePassedAttributes(s:CodeStringBuilder,attr:String,operation:String,passedAnnotations:List[Accessor]) : Unit = {
@@ -490,6 +492,12 @@ object CodeGen {
     }
   }
 
+  def emitAnnotationScalarExpression(s:CodeStringBuilder,attr:String,annotation:Annotation) = {
+    s.println("//emitAnnotationScalarExpression")
+    s.println(s"""annotation_${attr} = ${annotation.expression}annotation_${attr};""")
+  }
+
+
   //the materialized set condition could be nested so we want a GOTO to break out once a single cond is met
   def emitBuildNewSet(s:CodeStringBuilder,first:Boolean,last:Boolean,attr:String,tid:String) : Unit = {
     s.println(s"""//emitBuildNewSet""")
@@ -508,10 +516,10 @@ object CodeGen {
   }
 
   def emitStartQueryTimer(s:CodeStringBuilder) : Unit = {
-    s.println("""auto query_time = debug::start_clock();""")
+    s.println("""{auto query_time = debug::start_clock();""")
   }
   def emitStopQueryTimer(s:CodeStringBuilder) : Unit = {
-    s.println("""debug::stop_clock("QUERY TIME",query_time);""")
+    s.println("""debug::stop_clock("QUERY TIME",query_time);}""")
   }
 
   def emitSelectionValue(s:CodeStringBuilder, attr:String, encoding:String, value:String) : Unit = {

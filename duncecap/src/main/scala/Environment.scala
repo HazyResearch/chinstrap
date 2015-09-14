@@ -26,6 +26,11 @@ object Environment {
   val relations = mutable.Map[String,mutable.Map[String, Relation]]()
   val encodings = mutable.Map[String, Encoding]()
   val lambdaFunctions = mutable.Map[String,ASTLambdaFunction]()
+  
+  //code to not perform duplicate loads across query calls
+  val loadedRelations = mutable.Set[String]()
+  val loadedEncodings = mutable.Set[String]()
+  var allocatorsInit = true
 
   def addLambdaFunction(functionName:String,function:ASTLambdaFunction) : Unit = {
     assert(!lambdaFunctions.contains(functionName))

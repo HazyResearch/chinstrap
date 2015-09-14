@@ -329,6 +329,9 @@ class CodeGenGHDNode(
           CodeGen.emitRollBackALL(s,curr.attr,"output_buffer",tid)
       }
 
+      if(curr.annotation.isDefined && !(i == 1 && scalarResult) && curr.annotation.get.expression != "")
+        CodeGen.emitAnnotationScalarExpression(s,curr.attr,curr.annotation.get)
+
       if(curr.annotation.isDefined && curr.annotation.get.prev.isDefined){ //update except when we have a scalar result
         val prev = attributeNodes(i-1) //a little weird but necessary for parallelization, lift multiplication outside of inner loop
         if(!(i == 1 && scalarResult))
@@ -336,7 +339,7 @@ class CodeGenGHDNode(
         else 
           CodeGen.emitUpdateAnnotationReducer(s,curr.attr,tid,curr.annotation.get,prev.attr,prev.accessors)
       } else if(curr.annotation.isDefined && !curr.annotation.get.prev.isDefined && scalarResult){
-        CodeGen.emitScalarAnnotation(s,result.name)
+        CodeGen.emitScalarAnnotation(s,result.name,curr.annotation.get.expression)
       }
 
       if(curr.materialize && !curr.prevMaterialized.isDefined)
