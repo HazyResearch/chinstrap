@@ -85,7 +85,7 @@ class SelectionRelation(val name:String,val attrs:List[(String,String,String)]) 
 class QueryRelation(val name:String,val attrs:List[String],val annotation:Option[(String,String)]=None) {
   override def equals(that: Any): Boolean =
     that match {
-      case that: QueryRelation => that.attrs.equals(attrs) && that.name.equals(name)
+      case that: QueryRelation => that.attrs.length.equals(attrs.length) && that.name.equals(name) && that.annotation.equals(annotation)
       case _ => false
     }
   def printData() = {
@@ -218,6 +218,7 @@ case class ASTQueryStatement(
     CodeGen.emitStartQueryTimer(s)
 
     println("TOP DOWN UN: " + topDownUnecessary)
+
     GHDSolver.bottomUp(root, ((ghd:GHDNode,isRoot:Boolean,parent:GHDNode) => {
       val attrOrder = ghd.attrSet.toList.sortBy(attributeOrdering.indexOf(_))
       val lhsAttrs = lhs.attrs.filter(attrOrder.contains(_)).sortBy(attrOrder.indexOf(_))
@@ -232,6 +233,9 @@ case class ASTQueryStatement(
       val bagRelations = reorderedRelations.filter(rr => {
         rr._2.attrs.intersect(attrOrder).length == rr._2.attrs.length
       })
+
+      if(recursion.isDefined && bagRelations.length == recursiveRelations.length)
+        CodeGen.emitRecursionHeader(s,recursion.get)
       
       //any attr that is shared in the children 
       //map from the attribute to a list of accessors
@@ -333,6 +337,13 @@ case class ASTQueryStatement(
       if(topDownUnecessary && isRoot){
         CodeGen.emitRewriteOutputTrie(s,lhsName,"bag_" + name,scalarResult)
       }
+
+      if(recursion.isDefined && bagRelations.length == recursiveRelations.length){
+        val reorderedAttrs = recursion.get.inputArgument.attrs.sortBy(attributeOrdering.indexOf(_))
+        val rName = recursion.get.inputArgument.name + "_" + reorderedAttrs.map(recursion.get.inputArgument.attrs.indexOf(_)).mkString("_")
+        CodeGen.emitRecursionFooter(s,recursion.get,"Trie_"+rName,"Trie_bag_" + name)
+      }
+
     }))
     
     if(!topDownUnecessary){

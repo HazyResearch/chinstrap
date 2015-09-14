@@ -527,6 +527,32 @@ object CodeGen {
     s.println(s"""const uint32_t ${attr}_selection = Encoding_${encoding}->value_to_key.at(${value});""")
   }
 
+  //class RecursionStatement(val functionName:String, val inputArgument:QueryRelation, val convergance:ConverganceCriteria)
+  //class ConverganceCriteria(val converganceType:String, val converganceOp:String, val converganceCondition:String)
+
+  def emitRecursionHeader(s:CodeStringBuilder, recursion:RecursionStatement): Unit = {
+    s.println("//recursion header")
+    s.println(s"""size_t iteration_counter = 0;""")
+    val convLHS = recursion.convergance.converganceType match {
+      case "i" => "iteration_counter"
+      case "c" => {
+        throw new IllegalStateException("Convergance Not implmeeted yet")
+      }
+      case _ =>
+        throw new IllegalStateException("CONVERGANCE CRITERIA NOT SUPPORTED")
+    }
+    val convOp = if(recursion.convergance.converganceOp == "=") "==" else recursion.convergance.converganceOp
+    s.println(s"""while( !(${convLHS} ${convOp} ${recursion.convergance.converganceCondition}) ){""")
+    //s.println(s"""par::reducer<${annotationType}> convergance_reducer(0,[](size_t a, size_t b){ return a + b; });""")
+  }
+  def emitRecursionFooter(s:CodeStringBuilder, recursion:RecursionStatement, inputName:String, outputName:String): Unit = {
+    s.println("//recursion header")
+    //s.println(s"""convergance = (${annotationType})0;""")
+    s.println("iteration_counter++;")
+    s.println(s"""${inputName} = ${outputName};""")
+    s.println("}")
+  }
+
   def emitTopDown(s: CodeStringBuilder, first:Boolean, td:List[CodeGenTopDown], name:String, cg:CodeGenGHD) : Unit = {
     //First emit the blocks for the heads of all the relations
     td.foreach(cg_top_down =>{

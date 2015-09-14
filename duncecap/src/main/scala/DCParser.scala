@@ -83,7 +83,7 @@ object DCParser extends RegexParsers {
   
   def expression:Parser[String] = """[^<]*""".r
   def annotation:Parser[AnnotationExpression] = (";" ~> identifierName <~ "=") ~ expression ~ aggregateStatement ^^ {case a~b~c => new AnnotationExpression(a,b,c)} 
-  def aggInit:Parser[String] = (";" ~> selectionElement) | emptyString ^^ { case a => a}
+  def aggInit:Parser[String] = (";" ~> converganceCondition) | emptyString ^^ { case a => a}
   def aggOp:Parser[String] = """SUM|COUNT|MIN""".r
   def aggregateStatement = "<" ~> aggOp ~ ("(" ~> (findStar | attrList)) ~ (aggInit <~ ")") <~ ">" ^^ {case a~b~c => new AggregateExpression(a,b,c) }
   def findStar = """\*""".r ^^ {case a => List[String](a)}
