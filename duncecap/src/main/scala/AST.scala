@@ -90,7 +90,7 @@ class SelectionRelation(val name:String,val attrs:List[(String,String,String)]) 
 class QueryRelation(val name:String,val attrs:List[String],val annotation:Option[(String,String)]=None) {
   override def equals(that: Any): Boolean =
     that match {
-      case that: QueryRelation => that.attrs.length.equals(attrs.length) && that.name.equals(name) && that.annotation.equals(annotation)
+      case that: QueryRelation => that.attrs.equals(attrs) && that.name.equals(name) && that.annotation.equals(annotation)
       case _ => false
     }
   def printData() = {
@@ -160,6 +160,7 @@ case class ASTQueryStatement(
     val tcRelations = if(tc.isDefined) tc.get.join.map(qr => new QueryRelation(qr.name,qr.attrs.map{_._1})) else List()
     val tcSelections = if(tc.isDefined) tc.get.join.flatMap(qr => qr.attrs.filter(atup => atup._2 != "").map(atup => (atup._1,new SelectionCondition(atup._2,atup._3)) ) ).toMap else Map[String,SelectionCondition]()
 
+    println("JOIN RELATIONS: " + joinRelations.length)
     val root = GHDSolver.getGHD(joinRelations,recursiveRelations,tcRelations,lhs) //get minimum GHD's
 
     val selections = tcSelections ++ joinSelections
@@ -323,9 +324,9 @@ case class ASTQueryStatement(
         } else None
 
         //eliminate the attribute loop if it is just a projection
-        val noAttrWork = !materialize && !nextMaterialized.isDefined && !selectionBelow && accessors.length == 1 && !selection.isDefined && !annotation.isDefined
-        if(!noAttrWork)
-          cgenGHDNode.addAttribute(new CodeGenAttr(a,accessors,annotation,annotated,selection,selectionBelow,nextMaterialized,prevMaterialized,materialize,lastMaterialized))
+        //val noAttrWork = !materialize && !nextMaterialized.isDefined && !selectionBelow && accessors.length == 1 && !selection.isDefined && !annotation.isDefined
+        //if(!noAttrWork)
+        cgenGHDNode.addAttribute(new CodeGenAttr(a,accessors,annotation,annotated,selection,selectionBelow,nextMaterialized,prevMaterialized,materialize,lastMaterialized))
         
         noWork &&= ((accessors.length == 1) && (attrOrder.indexOf(a) == accessors.head.level) && !annotation.isDefined && !selection.isDefined)  //all just existing relations?
       })
@@ -368,7 +369,7 @@ case class ASTQueryStatement(
 
       } 
       //FIXME we should have equality on the relations
-      else if(recursion.isDefined && bagRelations.length == recursiveRelations.length){
+      if(recursion.isDefined && bagRelations.length == recursiveRelations.length){
         val reorderedAttrs = recursion.get.inputArgument.attrs.sortBy(attributeOrdering.indexOf(_))
         val rName = recursion.get.inputArgument.name + "_" + reorderedAttrs.map(recursion.get.inputArgument.attrs.indexOf(_)).mkString("_")
         CodeGen.emitRecursionFooter(s,recursion.get,"Trie_"+rName,"Trie_bag_" + name)

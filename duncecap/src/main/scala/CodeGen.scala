@@ -160,18 +160,18 @@ object CodeGen {
  
   def emitLoadBinaryEncoding(s: CodeStringBuilder,encoding:String): Unit = {
     s.println("""////////////////////emitLoadBinaryEncoding////////////////////""")
-    if(!Environment.quiet) s.println("""auto belt = debug::start_clock();""")
+    if(!Environment.quiet) s.println(s"""auto belt_${encoding} = debug::start_clock();""")
     s.println(s"""Encoding<${Environment.encodings(encoding)._type}>* Encoding_${encoding} = Encoding<${Environment.encodings(encoding)._type}>::from_binary("${Environment.dbPath}/encodings/${encoding}/");""")
     s.println(s"""(void) Encoding_${encoding};""")
-    if(!Environment.quiet) s.println(s"""debug::stop_clock("LOADING ENCODINGS ${encoding}",belt);""")
+    if(!Environment.quiet) s.println(s"""debug::stop_clock("LOADING ENCODINGS ${encoding}",belt_${encoding});""")
     s.print("\n")
   }
  
   def emitLoadBinaryRelation(s: CodeStringBuilder,relation:(String,String)): Unit = {
     s.println("""////////////////////emitLoadBinaryRelation////////////////////""")
-    if(!Environment.quiet) s.println("""auto btlt = debug::start_clock();""")
+    if(!Environment.quiet) s.println(s"""auto btlt_${relation._2} = debug::start_clock();""")
     s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${relation._2} = Trie<${Environment.layout},${annotationType}>::from_binary("${Environment.dbPath}/relations/${relation._1}/${relation._2}/");""")
-    if(!Environment.quiet) s.println(s"""debug::stop_clock("LOADING RELATION ${relation._1}",btlt);""")
+    if(!Environment.quiet) s.println(s"""debug::stop_clock("LOADING RELATION ${relation._2}",btlt_${relation._2});""")
     s.print("\n")
   }
 

@@ -97,13 +97,13 @@ object GHDSolver {
     //compute fractional scores
     val myghd = 
       if(distinctRelations.length != 0){
-        val root = 
+        val rootNode = 
           if(Environment.yanna){
             val decompositions = getMinFHWDecompositions(distinctRelations) 
-            val decompositionsSortedByNumbags = decompositions.sortBy(root => {root.getNumBags()})
+            val decompositionsSortedByNumbags = decompositions.sortBy(root => {
+              println("NUM BAGSZ: " + root.getNumBags())
+              root.getNumBags()})
             decompositionsSortedByNumbags.filter(_.getNumBags() == decompositionsSortedByNumbags.head.getNumBags()).sortBy{ root:GHDNode =>
-              //print(myghd, "query_plan_" + fhws + ".json")
-
               val tup = breadth_first(mutable.LinkedHashSet[GHDNode](root),mutable.LinkedHashSet[GHDNode](root))
               root.depth = tup._1
               val childAttrs = root.children.flatMap(child => child.attrSet.toList).toList.distinct
@@ -114,15 +114,19 @@ object GHDSolver {
               depthHeursitc
             }.last
           } else getDecompositions(distinctRelations).last //take the single bag
-        Some(root)
+
+        println("NUM BAGS: " + rootNode.getNumBags())
+
+        Some(rootNode)
       } else None
 
-    val myghdplus = if(recursiveRelations.length != 0){
+    println("RECURSION: " + recursiveRelations.length + " " + tcRelations.length)
+    val myghdplus = if(recursiveRelations.length > 0){
         val newroot = new GHDNode(recursiveRelations)
         if(myghd.isDefined)
           newroot.children = List(myghd.get)
         newroot
-      } else if(tcRelations.length != 0){
+      } else if(tcRelations.length > 0){
         val newroot = new GHDNode(tcRelations)
         if(myghd.isDefined)
           newroot.children = List(myghd.get)
@@ -237,6 +241,7 @@ object GHDSolver {
   }
 
   def getMinFHWDecompositions(rels: List[QueryRelation]): List[GHDNode] = {
+    println("NUMBER OF FHW RELATIONS:" + rels.length)
     val decomps = getDecompositions(rels)
     val fhwsAndDecomps = decomps.map((root : GHDNode) => (root.fractionalScoreTree(), root))
     val minScore = fhwsAndDecomps.unzip._1.min
