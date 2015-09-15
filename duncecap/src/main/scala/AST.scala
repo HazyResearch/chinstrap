@@ -147,7 +147,7 @@ case class ASTQueryStatement(
 
     //run GHD decomp
     val joinRelations = join.map(qr => new QueryRelation(qr.name,qr.attrs.map{_._1}))
-    val selections = join.flatMap(qr => qr.attrs.filter(atup => atup._2 != "").map(atup => (atup._1,new SelectionCondition(atup._2,atup._3)) ) ).toMap
+    val joinSelections = join.flatMap(qr => qr.attrs.filter(atup => atup._2 != "").map(atup => (atup._1,new SelectionCondition(atup._2,atup._3)) ) ).toMap
 
     val recursiveLambda:Option[ASTLambdaFunction] = if(recursion.isDefined) 
         Some(Environment.getLambdaFunction(recursion.get.functionName))
@@ -158,9 +158,12 @@ case class ASTQueryStatement(
     val recursiveAggregates = if(recursiveLambda.isDefined) recursiveLambda.get.aggregates else Map()
 
     val tcRelations = if(tc.isDefined) tc.get.join.map(qr => new QueryRelation(qr.name,qr.attrs.map{_._1})) else List()
+    val tcSelections = if(tc.isDefined) tc.get.join.flatMap(qr => qr.attrs.filter(atup => atup._2 != "").map(atup => (atup._1,new SelectionCondition(atup._2,atup._3)) ) ).toMap else Map[String,SelectionCondition]()
 
     val root = GHDSolver.getGHD(joinRelations,recursiveRelations,tcRelations,lhs) //get minimum GHD's
 
+    val selections = tcSelections ++ joinSelections
+    
     //find attr ordering
     val attributeOrdering = GHDSolver.getAttributeOrdering(root,lhs.attrs).sortBy(a => if(selections.contains(a)) 0 else 10 )
     
@@ -338,17 +341,34 @@ case class ASTQueryStatement(
       seenGHDNodes += ((ghd,parentAttrs))
 
       //generate the NPRR code
-      if(!tc.isDefined)
+      if(!tc.isDefined){ //fixme
         cgenGHDNode.generateNPRR(s,equivTrie)
-      else 
-        s.println("EMIT TC CODE")
+        if(topDownUnecessary && isRoot){
+          CodeGen.emitRewriteOutputTrie(s,lhsName,"bag_" + name,scalarResult)
+        }
+      } else if(tc.isDefined){
+        cgenGHDNode.printData()
 
-      if(topDownUnecessary && isRoot){
-        CodeGen.emitRewriteOutputTrie(s,lhsName,"bag_" + name,scalarResult)
-      }
+        assert(bagRelations.length == 1)
+        assert(bagRelations.head._2.attrs.length == 2)
+        assert(cgenGHDNode.attributeNodes.head.selection.isDefined)
+        assert(cgenGHDNode.attributeNodes.last.annotation.isDefined)
+        assert(cgenGHDNode.attributeNodes.last.annotation.get.operation == "MIN")
+        assert(attrToEncodingMap(cgenGHDNode.attributeNodes.last.attr) == attrToEncodingMap(cgenGHDNode.attributeNodes.head.attr))
+        cgenGHDNode.attributeNodes.head.selection match{
+          case Some(selection) =>{
+            val (encoding,atype) = attrToEncodingMap(cgenGHDNode.attributeNodes.head.attr)
+            CodeGen.emitSelectionValue(s,"tc",encoding,selection.value)
+            CodeGen.emitUnweightedSingleSourceTransitiveClosure(s,cgenGHDNode.attributeNodes.head.accessors.head.trieName,cgenGHDNode.attributeNodes.last.annotation.get.init,attrToEncodingMap(cgenGHDNode.attributeNodes.head.attr)._1,joinType,lhsName,lhs.attrs.length)
 
+          } case None =>
+          throw new IllegalArgumentException("ONLY SINGLE SOURCE TRANSITIVE CLOSURE CURRENTLY SUPPORTED")
+        }
+
+
+      } 
       //FIXME we should have equality on the relations
-      if(recursion.isDefined && bagRelations.length == recursiveRelations.length){
+      else if(recursion.isDefined && bagRelations.length == recursiveRelations.length){
         val reorderedAttrs = recursion.get.inputArgument.attrs.sortBy(attributeOrdering.indexOf(_))
         val rName = recursion.get.inputArgument.name + "_" + reorderedAttrs.map(recursion.get.inputArgument.attrs.indexOf(_)).mkString("_")
         CodeGen.emitRecursionFooter(s,recursion.get,"Trie_"+rName,"Trie_bag_" + name)
