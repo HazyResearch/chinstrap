@@ -47,6 +47,10 @@
 #define SOCKET_THREADS 12
 #define MAX_MEMORY 768 //GB
 
+#define BITS_PER_WORD 64
+#define ADDRESS_BITS_PER_WORD 6
+#define BYTES_PER_WORD 8
+
 #ifndef NUM_THREADS_IN
 static size_t NUM_THREADS = 48;
 #else
@@ -54,7 +58,7 @@ static size_t NUM_THREADS = NUM_THREADS_IN;
 #endif
 
 namespace common{
-  static size_t bitset_length = 5;
+  static size_t bitset_length = 2;
   static double bitset_req = 128.0;//256.0;
 
   inline bool is_sparse(size_t length, size_t range) {

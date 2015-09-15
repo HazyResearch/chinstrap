@@ -80,6 +80,11 @@ class SelectionRelation(val name:String,val attrs:List[(String,String,String)]) 
   def printData() = {
     println("name: " + name + " attrs: " + attrs)
   }
+  override def equals(that: Any): Boolean =
+    that match {
+      case that: SelectionRelation => that.name.equals(name) && that.attrs.equals(attrs)
+      case _ => false
+    }
 }
 
 class QueryRelation(val name:String,val attrs:List[String],val annotation:Option[(String,String)]=None) {
@@ -234,6 +239,7 @@ case class ASTQueryStatement(
         rr._2.attrs.intersect(attrOrder).length == rr._2.attrs.length
       })
 
+      //FIXME we should really have equality on the realtions
       if(recursion.isDefined && bagRelations.length == recursiveRelations.length)
         CodeGen.emitRecursionHeader(s,recursion.get)
       
@@ -332,12 +338,16 @@ case class ASTQueryStatement(
       seenGHDNodes += ((ghd,parentAttrs))
 
       //generate the NPRR code
-      cgenGHDNode.generateNPRR(s,equivTrie)
+      if(!tc.isDefined)
+        cgenGHDNode.generateNPRR(s,equivTrie)
+      else 
+        s.println("EMIT TC CODE")
 
       if(topDownUnecessary && isRoot){
         CodeGen.emitRewriteOutputTrie(s,lhsName,"bag_" + name,scalarResult)
       }
 
+      //FIXME we should have equality on the relations
       if(recursion.isDefined && bagRelations.length == recursiveRelations.length){
         val reorderedAttrs = recursion.get.inputArgument.attrs.sortBy(attributeOrdering.indexOf(_))
         val rName = recursion.get.inputArgument.name + "_" + reorderedAttrs.map(recursion.get.inputArgument.attrs.indexOf(_)).mkString("_")

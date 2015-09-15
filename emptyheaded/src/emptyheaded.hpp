@@ -1,4 +1,5 @@
 #include "Relation.hpp"
+#include "TransitiveClosure.hpp"
 #include "Trie.hpp"
 
 template<class T>

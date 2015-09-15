@@ -71,7 +71,7 @@ struct TrieBlock{
   //refactor this code
 
   void init_pointers(const size_t tid, allocator::memory<uint8_t> *allocator_in){
-    is_sparse = (set.range == 0) ? ((double)set.cardinality/(double)set.range) > (1.0/256.0) : true;
+    is_sparse = common::is_sparse(set.cardinality,set.range);
     if(!is_sparse){
       next_level = (TrieBlock<T,R>**)allocator_in->get_next(tid, sizeof(TrieBlock<T,R>*)*(set.range+1) );
     } else{
@@ -80,6 +80,7 @@ struct TrieBlock{
   }
 
   void alloc_data(size_t tid, allocator::memory<uint8_t> *allocator_in, const size_t cardinality, const size_t range){
+    is_sparse = common::is_sparse(set.cardinality,set.range);
     if(!is_sparse){
       values = (R*)allocator_in->get_next(tid, sizeof(R)*(range+1));
     } else{
@@ -88,7 +89,7 @@ struct TrieBlock{
   }
 
   void init_pointers_and_data(const size_t tid, allocator::memory<uint8_t> *allocator_in){
-    is_sparse = (set.range == 0) ? ((double)set.cardinality/(double)set.range) > (1.0/256.0) : true;
+    is_sparse = common::is_sparse(set.cardinality,set.range);
     if(!is_sparse){
       next_level = (TrieBlock<T,R>**)allocator_in->get_next(tid, sizeof(TrieBlock<T,R>*)*(set.range+1) );
       values = (R*)allocator_in->get_next(tid, sizeof(R)*(set.range+1));
@@ -99,6 +100,7 @@ struct TrieBlock{
   }
 
   void init_data(const size_t tid, allocator::memory<uint8_t> *allocator_in, const R value){
+    is_sparse = common::is_sparse(set.cardinality,set.range);
     if(!is_sparse){
       values = (R*)allocator_in->get_next(tid, sizeof(R)*(set.range+1));
       std::fill(values,values+set.range+1,value);

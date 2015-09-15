@@ -7,10 +7,6 @@ THIS CLASS IMPLEMENTS THE FUNCTIONS ASSOCIATED WITH THE range_bitset LAYOUT.
 #include "utils/utils.hpp"
 #include "../ops/sse_masks.hpp"
 
-#define BITS_PER_WORD 64
-#define ADDRESS_BITS_PER_WORD 6
-#define BYTES_PER_WORD 8
-
 class range_bitset{
   public:
     static size_t word_index(const uint32_t bit_index);
@@ -25,6 +21,10 @@ class range_bitset{
     static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
     static size_t get_number_of_words(size_t num_bytes);
     static size_t get_num_set(const uint32_t key, const uint64_t data, const uint32_t offset);
+    static void set_indices(const uint8_t *data_in,
+        const size_t cardinality,
+        const size_t number_of_bytes,
+        const type::layout t);
 
     template<typename F>
     static void foreach(
@@ -220,6 +220,30 @@ inline void range_bitset::foreach(
         }
       }
       A64_data++;
+    }
+  }
+}
+
+//Iterates over set applying a lambda.
+inline void range_bitset::set_indices(
+    const uint8_t * const A,
+    const size_t cardinality,
+    const size_t number_of_bytes,
+    const type::layout type) {
+  (void) cardinality; (void) type;
+
+  if(number_of_bytes > 0){
+    const size_t num_data_words = get_number_of_words(number_of_bytes);
+    const uint64_t* A64_data = (uint64_t*)(A+sizeof(uint64_t));
+    uint32_t* A32_index = (uint32_t*)(A64_data+num_data_words);
+
+    size_t count = 0;
+    for(size_t i = 0; i < num_data_words; i++){
+      const uint64_t cur_word = *A64_data;
+      *A32_index = count;
+      count += _mm_popcnt_u64(cur_word);
+      A64_data++;
+      A32_index++;
     }
   }
 }
