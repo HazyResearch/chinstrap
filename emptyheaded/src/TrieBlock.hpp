@@ -34,16 +34,31 @@ struct TrieBlock{
   * from the previous level to the current level. We write out these first, followed
   * by the set data then next the pointers to the next level.
   */
-  void to_binary(std::ofstream* outfile, const uint32_t prev_index, const uint32_t prev_data){
+  void to_binary(
+    std::ofstream* outfile, 
+    const uint32_t prev_index, 
+    const uint32_t prev_data,
+    bool annotated){
+    
     outfile->write((char *)&prev_index, sizeof(prev_index));
     outfile->write((char *)&prev_data, sizeof(prev_data));
     outfile->write((char *)&is_sparse, sizeof(is_sparse));
+    
     set.to_binary(outfile);
+  
+    if(annotated){
+      set.foreach_index([&](uint32_t s_i, uint32_t s_d){
+        R value = get_data(s_i,s_d);
+        outfile->write((char *)&value, sizeof(value));
+      });  
+    }
   }
 
-  static std::tuple<TrieBlock<T,R>*,uint32_t,uint32_t> from_binary(std::ifstream* infile, 
-      allocator::memory<uint8_t> *allocator_in, 
-      const size_t tid){
+  static std::tuple<TrieBlock<T,R>*,uint32_t,uint32_t> from_binary(
+    std::ifstream* infile, 
+    allocator::memory<uint8_t> *allocator_in, 
+    const size_t tid,
+    bool annotated){
     
     uint32_t prev_index; uint32_t prev_data;
 
@@ -56,14 +71,17 @@ struct TrieBlock{
               TrieBlock<T, R>();
 
     infile->read((char *)&output_block->is_sparse, sizeof(output_block->is_sparse));
-    
+
     output_block->set = *Set<T>::from_binary(infile,allocator_in,tid);
-    /*
-    std::cout << "reading binary: " << tid << std::endl;
-    output_block->set.foreach([&](uint32_t data){
-      std::cout << data << std::endl;
-    });
-    */
+
+    if(annotated){
+      output_block->alloc_data(tid,allocator_in);
+      output_block->set.foreach_index([&](uint32_t s_i, uint32_t s_d){
+        R value;
+        infile->read((char *)&value, sizeof(value));
+        output_block->set_data(s_i,s_d,value);
+      });  
+    }
 
     return std::tuple<TrieBlock<T,R>*,uint32_t,uint32_t>(output_block,prev_index,prev_data);
   }
@@ -79,12 +97,12 @@ struct TrieBlock{
     }
   }
 
-  void alloc_data(size_t tid, allocator::memory<uint8_t> *allocator_in, const size_t cardinality, const size_t range){
+  void alloc_data(size_t tid, allocator::memory<uint8_t> *allocator_in){
     is_sparse = common::is_sparse(set.cardinality,set.range);
     if(!is_sparse){
-      values = (R*)allocator_in->get_next(tid, sizeof(R)*(range+1));
+      values = (R*)allocator_in->get_next(tid, sizeof(R)*(set.range+1));
     } else{
-      values = (R*)allocator_in->get_next(tid, sizeof(R)*cardinality);
+      values = (R*)allocator_in->get_next(tid, sizeof(R)*set.cardinality);
     }
   }
 

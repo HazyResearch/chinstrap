@@ -89,7 +89,7 @@ object CodeGen {
 
   def emitReorderEncodedRelation(s: CodeStringBuilder,rel:Relation,name:String,order:List[Int],masterName:String): Unit = {
     s.println("""////////////////////emitReorderEncodedRelation////////////////////""")
-    s.println(s"""EncodedRelation<${rel.annotationType}>* Encoded_${rel.name} = new EncodedRelation<${rel.annotationType}>();""")
+    s.println(s"""EncodedRelation<${rel.annotationType}>* Encoded_${rel.name} = new EncodedRelation<${rel.annotationType}>(&Encoded_${masterName}->annotation);""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//encodeRelation")
@@ -103,7 +103,7 @@ object CodeGen {
   def emitEncodeRelation(s: CodeStringBuilder,rel:Relation): Unit = {
     val name = rel.name
     s.println("""////////////////////emitEncodeRelation////////////////////""")
-    s.println(s"""EncodedRelation<${rel.annotationType}>* Encoded_${rel.name} = new EncodedRelation<${rel.annotationType}>();""")
+    s.println(s"""EncodedRelation<${rel.annotationType}>* Encoded_${rel.name} = new EncodedRelation<${rel.annotationType}>(annotation_${rel.name});""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//encodeRelation")
@@ -176,7 +176,8 @@ object CodeGen {
   def emitLoadBinaryRelation(s: CodeStringBuilder,relation:(String,String),aType:String): Unit = {
     s.println("""////////////////////emitLoadBinaryRelation////////////////////""")
     if(!Environment.quiet) s.println(s"""auto btlt_${relation._2} = debug::start_clock();""")
-    s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${relation._2} = Trie<${Environment.layout},${annotationType}>::from_binary("${Environment.dbPath}/relations/${relation._1}/${relation._2}/");""")
+    val loadAnnotation = if(aType == "void*") "false" else "true"
+    s.println(s"""Trie<${Environment.layout},${aType}>* Trie_${relation._2} = Trie<${Environment.layout},${aType}>::from_binary("${Environment.dbPath}/relations/${relation._1}/${relation._2}/",${loadAnnotation});""")
     if(!Environment.quiet) s.println(s"""debug::stop_clock("LOADING RELATION ${relation._2}",btlt_${relation._2});""")
     s.print("\n")
   }
@@ -192,24 +193,28 @@ object CodeGen {
     s.println("{")
     //load from binary first
     val qr = rel.name + "_" + (0 until rel.attrs.size).toList.mkString("_")
-    s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${qr} = Trie<${Environment.layout},${annotationType}>::from_binary("${Environment.dbPath}/relations/${rel.name}/${qr}/");""")
+    val aType = Environment.relations(rel.name)(qr).annotationType
+    val annotatedRel = if(aType == "void*") "false" else "true"
+    s.println(s"""Trie<${Environment.layout},${aType}>* Trie_${qr} = Trie<${Environment.layout},${aType}>::from_binary("${Environment.dbPath}/relations/${rel.name}/${qr}/",${annotatedRel});""")
     val loadEncodings = (0 until rel.attrs.size).map(i => { Environment.relations(rel.name)(qr).encodings(i)}).toList.distinct
     loadEncodings.foreach(e => {
       emitLoadBinaryEncoding(s,e)
     })
 
-    s.println(s"""Trie_${qr}->foreach([&](std::vector<uint32_t>* tuple){""")
+    s.println(s"""Trie_${qr}->foreach([&](std::vector<uint32_t>* tuple, ${aType} annotation){""")
     (0 until rel.attrs.size).foreach(i => {
       val encodingName = Environment.relations(rel.name)(qr).encodings(i)
       s.println(s"""std::cout << Encoding_${encodingName}->key_to_value.at(tuple->at(${i})) << "\t" << " "; """)
     })
+    if(annotatedRel == "true")
+      s.println(s"""std::cout << "a: " << annotation;""")
     s.println(s"""std::cout << std::endl;""")
     s.println("});")
     s.println("} \n")
   }
 
   def emitTrieBlock(s:CodeStringBuilder,attr:String,accessor:Accessor): Unit = {
-    s.print(s"""const TrieBlock<${Environment.layout},${annotationType}>* ${accessor.getName()} = """)
+    s.print(s"""const TrieBlock<${Environment.layout},${annotationType}>* ${accessor.getName()} = (TrieBlock<${Environment.layout},${annotationType}>*)""")
     val getBlock = if(accessor.level == 0) 
         s"""Trie_${accessor.trieName}->head;""" 
       else 
@@ -688,9 +693,10 @@ object CodeGen {
       return
     }
 
+    val annotatedRel = if(result.annotationType != "void*") "true" else "false"
     s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${result.name} = 
       new (output_buffer->get_next(0, sizeof(Trie<${Environment.layout}, ${annotationType}>))) 
-      Trie<${Environment.layout}, ${annotationType}>(${result.attrs.length});""")
+      Trie<${Environment.layout}, ${annotationType}>(${result.attrs.length},${annotatedRel});""")
     s.println("{")
 
     s.println("""auto start_time = debug::start_clock();""")

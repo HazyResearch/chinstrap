@@ -1,4 +1,5 @@
 #include "Relation.hpp"
+#include "EncodedRelation.hpp"
 #include "TransitiveClosure.hpp"
 #include "Trie.hpp"
 

@@ -38,17 +38,20 @@ struct SortColumns{
 */
 template<class T, class R>
 struct Trie{
+  bool annotated;
   size_t num_levels;
   R annotation = (R)0;
   TrieBlock<T,R>* head;
 
-  Trie<T,R>(size_t num_levels_in){
+  Trie<T,R>(size_t num_levels_in, bool annotated_in){
     num_levels = num_levels_in;
+    annotated = annotated_in;
   };
 
-  Trie<T,R>(TrieBlock<T,R>* head_in, size_t num_levels_in){
+  Trie<T,R>(TrieBlock<T,R>* head_in, size_t num_levels_in, bool annotated_in){
     num_levels = num_levels_in;
     head = head_in;
+    annotated = annotated_in;
   };
 
   template<typename F>
@@ -66,12 +69,13 @@ struct Trie{
   void recursive_foreach(
     TrieBlock<T,R> *current, 
     const size_t level, 
-    const size_t num_levels,std::vector<uint32_t>* tuple, 
+    const size_t num_levels,
+    std::vector<uint32_t>* tuple, 
     const F body);
   
   void to_binary(const std::string path);
 
-  static Trie<T,R>* from_binary(std::string path);
+  static Trie<T,R>* from_binary(std::string path, bool annotated_in);
 };
 
 template<class T, class R> template <typename F>
@@ -83,9 +87,12 @@ void Trie<T,R>::recursive_foreach(
   const F body){
 
   if(level+1 == num_levels){
-    current->set.foreach([&](uint32_t a_d){
+    current->set.foreach_index([&](uint32_t a_i, uint32_t a_d){
       tuple->push_back(a_d);
-      body(tuple);
+      if(annotated)
+        body(tuple,current->get_data(a_i,a_d));
+      else 
+        body(tuple,(R)0);
       tuple->pop_back();
     });
   } else {
@@ -108,13 +115,22 @@ void recursive_visit(
   const size_t num_levels,
   const uint32_t prev_index,
   const uint32_t prev_data, 
-  std::vector<std::vector<std::ofstream*>>* writefiles){
+  std::vector<std::vector<std::ofstream*>>* writefiles,
+  bool annotated){
 
-  current->to_binary(writefiles->at(level).at(tid),prev_index,prev_data);
+  current->to_binary(writefiles->at(level).at(tid),prev_index,prev_data,annotated && level+1 == num_levels);
   current->set.foreach_index([&](uint32_t a_i, uint32_t a_d){
     //if not done recursing and we have data
     if(level+1 != num_levels && current->get_block(a_i,a_d) != NULL){
-      recursive_visit(tid,current->get_block(a_i,a_d),level+1,num_levels,a_i,a_d,writefiles);
+      recursive_visit(
+        tid,
+        current->get_block(a_i,a_d),
+        level+1,
+        num_levels,
+        a_i,
+        a_d,
+        writefiles,
+        annotated);
     }
   });
 }
@@ -126,9 +142,10 @@ void recursive_build_binary(
   const size_t level, 
   const size_t num_levels,
   std::vector<std::vector<std::ifstream*>>* infiles,
-  allocator::memory<uint8_t> *allocator_in){
+  allocator::memory<uint8_t> *allocator_in,
+  bool annotated_in){
 
-  auto tup = TrieBlock<T,R>::from_binary(infiles->at(level).at(tid),allocator_in,tid);
+  auto tup = TrieBlock<T,R>::from_binary(infiles->at(level).at(tid),allocator_in,tid,annotated_in && level+1 == num_levels);
 
   TrieBlock<T,R>* current = std::get<0>(tup);
   const uint32_t index = std::get<1>(tup);
@@ -140,7 +157,7 @@ void recursive_build_binary(
 
   current->init_pointers(tid,allocator_in);
   for(size_t i = 0; i < current->set.cardinality; i++){
-    recursive_build_binary<T,R>(tid,current,level+1,num_levels,infiles,allocator_in);
+    recursive_build_binary<T,R>(tid,current,level+1,num_levels,infiles,allocator_in,annotated_in);
   }
 }
 
@@ -156,7 +173,7 @@ void Trie<T,R>::foreach(const F body){
     if(num_levels > 1 && head->get_block(a_i,a_d) != NULL){
       recursive_foreach(head->get_block(a_i,a_d),1,num_levels,tuple,body);
     } else {
-      body(tuple);
+      body(tuple,annotation);
     }
   });
 }
@@ -188,13 +205,21 @@ void Trie<T,R>::to_binary(const std::string path){
   }
 
   //write the data
-  head->to_binary(writefiles.at(0).at(0),0,0);
+  head->to_binary(writefiles.at(0).at(0),0,0,annotated && num_levels ==1);
   //dump the set contents
   const Set<T> A = head->set;
   if(num_levels > 1){
     A.static_par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d){
       if(head->get_block(a_i,a_d) != NULL){
-        recursive_visit<T,R>(tid,head->get_block(a_i,a_d),1,num_levels,a_i,a_d,&writefiles);
+        recursive_visit<T,R>(
+          tid,
+          head->get_block(a_i,a_d),
+          1,
+          num_levels,
+          a_i,
+          a_d,
+          &writefiles,
+          annotated);
       }
     });
   }
@@ -208,7 +233,7 @@ void Trie<T,R>::to_binary(const std::string path){
 }
 
 template<class T, class R>
-Trie<T,R>* Trie<T,R>::from_binary(const std::string path){
+Trie<T,R>* Trie<T,R>::from_binary(const std::string path, bool annotated_in){
   size_t num_levels_in;
   //first read the number of levels
   std::ifstream *infile = new std::ifstream();
@@ -231,7 +256,7 @@ Trie<T,R>* Trie<T,R>::from_binary(const std::string path){
   }
 
   allocator::memory<uint8_t> *allocator_in = new allocator::memory<uint8_t>(10000); //TODO Fix this.
-  auto tup = TrieBlock<T,R>::from_binary(infiles.at(0).at(0),allocator_in,0);
+  auto tup = TrieBlock<T,R>::from_binary(infiles.at(0).at(0),allocator_in,0,annotated_in && num_levels_in == 1);
   TrieBlock<T,R>* head = std::get<0>(tup);  
   head->init_pointers(0,allocator_in);
   const Set<T> A = head->set;
@@ -239,7 +264,7 @@ Trie<T,R>* Trie<T,R>::from_binary(const std::string path){
   if(num_levels_in > 1){
     A.static_par_foreach_index([&](size_t tid, uint32_t a_d, uint32_t a_i){
       (void) a_d; (void) a_i;
-      recursive_build_binary<T,R>(tid,head,1,num_levels_in,&infiles,allocator_in);
+      recursive_build_binary<T,R>(tid,head,1,num_levels_in,&infiles,allocator_in,annotated_in);
     });
   }
 
@@ -250,7 +275,7 @@ Trie<T,R>* Trie<T,R>::from_binary(const std::string path){
     }
   }
 
-  return new Trie<T,R>(head,num_levels_in);
+  return new Trie<T,R>(head,num_levels_in,annotated_in);
 }
 /*
 * Given a range of values figure out the distinct values to go in the set.
@@ -463,6 +488,6 @@ inline Trie<T,R>* Trie<T,R>::build(
   //should be a 1-1 between pointers in block and next ranges
   //also a 1-1 between blocks and numbers of next ranges
 
-  return new Trie<T,R>(new_head,num_levels_in);
+  return new Trie<T,R>(new_head,num_levels_in,annotation->size()!=0);
 }
 #endif
