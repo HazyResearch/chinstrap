@@ -87,14 +87,14 @@ class SelectionRelation(val name:String,val attrs:List[(String,String,String)]) 
     }
 }
 
-class QueryRelation(val name:String,val attrs:List[String],val annotation:Option[(String,String)]=None) {
+class QueryRelation(val name:String,val attrs:List[String],val annotationType:String="void*") {
   override def equals(that: Any): Boolean =
     that match {
-      case that: QueryRelation => that.attrs.equals(attrs) && that.name.equals(name) && that.annotation.equals(annotation)
+      case that: QueryRelation => that.attrs.equals(attrs) && that.name.equals(name) && that.annotationType.equals(annotationType)
       case _ => false
     }
   def printData() = {
-    println("name: " + name + " attrs: " + attrs + " annotation: " + annotation)
+    println("name: " + name + " attrs: " + attrs + " annotationType: " + annotationType)
   }
 }
 
@@ -136,8 +136,7 @@ case class ASTQueryStatement(
   override def code(s: CodeStringBuilder): Unit = {
     //perform syntax checking (TODO)
     //first emit allocators
-    if(lhs.annotation.isDefined)
-      CodeGen.annotationType = lhs.annotation.get._2 //(boundVar,type)
+    CodeGen.annotationType = lhs.annotationType 
     CodeGen.joinType = joinType
 
     if(Environment.allocatorsInit){
@@ -188,10 +187,9 @@ case class ASTQueryStatement(
     val reorderedRelations = relations.map(qr => {
       val reorderedAttrs = qr.attrs.sortBy(attributeOrdering.indexOf(_))
       val rName = qr.name + "_" + reorderedAttrs.map(qr.attrs.indexOf(_)).mkString("_")
-      println(rName)
       assert(Environment.relations.contains(qr.name))
       assert(Environment.relations(qr.name).contains(rName))
-      ((qr.name,new QueryRelation(rName,reorderedAttrs,Environment.relations(qr.name)(rName).annotation))) //add in the annotations if they exist in environemtn
+      ((qr.name,new QueryRelation(rName,reorderedAttrs,Environment.relations(qr.name)(rName).annotationType))) //add in the annotations if they exist in environemtn
     })
     val encodings = reorderedRelations.flatMap(r => Environment.relations(r._1).head._2.encodings ).toList.distinct
 
@@ -204,7 +202,7 @@ case class ASTQueryStatement(
     })
     reorderedRelations.map(r => (r._1,r._2.name) ).distinct.foreach(r => {
       if(!Environment.loadedRelations.contains(r._2)){
-        CodeGen.emitLoadBinaryRelation(s,r)
+        CodeGen.emitLoadBinaryRelation(s,r,Environment.relations(r._1)(r._2).annotationType)
         Environment.loadedRelations += r._2
       }
     })
@@ -236,7 +234,7 @@ case class ASTQueryStatement(
       val materializedAttrs = lhsAttrs.union(sharedAttrs).distinct.sortBy(attributeOrdering.indexOf(_))
 
       val name = ghd.getName(attrOrder)
-      val bagLHS = new QueryRelation("bag_" + name,lhsAttrs,lhs.annotation)
+      val bagLHS = new QueryRelation("bag_" + name,lhsAttrs,lhs.annotationType)
 
       //FIX ME. For a relation to be in a bag right now we require all its attributes are in the bag
       val bagRelations = reorderedRelations.filter(rr => {
@@ -302,7 +300,7 @@ case class ASTQueryStatement(
         //access each of the relations in the bag that contain the attribute
         val attributeAccessors = bagRelations.
           filter(rr => rr._2.attrs.contains(a)). //get the accessors the match this attr
-          map(rr => new Accessor(rr._2.name,rr._2.attrs.indexOf(a),rr._2.attrs,rr._2.annotation.isDefined) ). 
+          map(rr => new Accessor(rr._2.name,rr._2.attrs.indexOf(a),rr._2.attrs,rr._2.annotationType != "void*") ). 
           groupBy(a => a.getName()).map(_._2.head).toList //perform a distinct operation on the accessors
         
         //those shared in the children
@@ -432,8 +430,7 @@ case class ASTQueryStatement(
     
     if(!scalarResult){
       //below here should probably be refactored. this saves the environment and writes the trie to disk
-      println("ADDING RELATION: " + lhs.name + " " +  lhsName + " " + lhs.annotation)
-      Environment.addBrandNewRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings,lhs.annotation))
+      Environment.addBrandNewRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings,lhs.annotationType))
       Environment.loadedRelations += lhsName
       /*
       Utils.writeEnvironmentToJSON()

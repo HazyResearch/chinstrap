@@ -18,6 +18,7 @@
           "encoding":"node"
         }
       ],
+      "annotation":"void*",
       "orderings":["all"]
     }
   ]

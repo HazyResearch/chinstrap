@@ -122,11 +122,11 @@ object CodeGen {
     s.println("""////////////////////emitBuildTrie////////////////////""")
     s.println(s"""const size_t alloc_size_${rel.name} = 8*Encoded_${rel.name}->data.size()*Encoded_${rel.name}->data.at(0).size()*sizeof(uint64_t)*sizeof(TrieBlock<${Environment.layout},${annotationType}>);""")
     s.println(s"""allocator::memory<uint8_t>* data_allocator_${rel.name} = new allocator::memory<uint8_t>(alloc_size_${rel.name});""")
-    s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${rel.name} = NULL;""")
+    s.println(s"""Trie<${Environment.layout},${rel.annotationType}>* Trie_${rel.name} = NULL;""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//buildTrie")
-    s.println(s"""Trie_${rel.name} = Trie<${Environment.layout},${annotationType}>::build(data_allocator_${rel.name},&Encoded_${rel.name}->max_set_size,&Encoded_${rel.name}->data,[&](size_t index){ (void) index; return true;});""")
+    s.println(s"""Trie_${rel.name} = Trie<${Environment.layout},${rel.annotationType}>::build(data_allocator_${rel.name},&Encoded_${rel.name}->max_set_size,&Encoded_${rel.name}->data,[&](size_t index){ (void) index; return true;});""")
     if(!Environment.quiet) s.println(s"""debug::stop_clock("BUILDING TRIE ${rel.name}",start_time);""")
     s.println("} \n")
     emitWriteBinaryTrie(s,relName,rel.name)
@@ -167,7 +167,7 @@ object CodeGen {
     s.print("\n")
   }
  
-  def emitLoadBinaryRelation(s: CodeStringBuilder,relation:(String,String)): Unit = {
+  def emitLoadBinaryRelation(s: CodeStringBuilder,relation:(String,String),aType:String): Unit = {
     s.println("""////////////////////emitLoadBinaryRelation////////////////////""")
     if(!Environment.quiet) s.println(s"""auto btlt_${relation._2} = debug::start_clock();""")
     s.println(s"""Trie<${Environment.layout},${annotationType}>* Trie_${relation._2} = Trie<${Environment.layout},${annotationType}>::from_binary("${Environment.dbPath}/relations/${relation._1}/${relation._2}/");""")

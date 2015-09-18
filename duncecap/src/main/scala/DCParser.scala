@@ -51,7 +51,12 @@ object DCParser extends RegexParsers {
 
   //for the lhs expression
   def lhsStatement = relationIdentifier 
-  def relationIdentifier: Parser[QueryRelation] = identifierName ~ ("(" ~> attrList) ~ (aggStatement <~ ")")  ^^ {case id~attrs~(agg~t) => new QueryRelation(id, attrs, if( (agg,t) != ("","")) Some((agg,t)) else None) }
+  def relationIdentifier: Parser[QueryRelation] = identifierName ~ ("(" ~> attrList) ~ (aggStatement <~ ")")  ^^ {case id~attrs~(agg~t) => 
+    if((agg,t) != ("",""))
+      new QueryRelation(id, attrs, t)
+    else 
+      new QueryRelation(id, attrs)
+  }
   def aggStatement = ((";" ~> identifierName) ~ (":" ~> typename)) | (emptyString~emptyAggType)
   def attrList : Parser[List[String]] = notLastAttr | lastAttr | emptyStatement
   def notLastAttr = identifierName ~ ("," ~> attrList) ^^ {case a~rest => a +: rest}

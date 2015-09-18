@@ -43,6 +43,7 @@ object Utils{
       val name = r("name").asInstanceOf[String]
       val source = if(create_db) r("source").asInstanceOf[String] else ""
       val attributes = r("attributes").asInstanceOf[List[Map[String,String]]]
+      val annotationType = r("annotation").asInstanceOf[String]
 
       if(create_db){
         s"""mkdir -p ${db_folder}/relations/${name}""" !
@@ -64,7 +65,7 @@ object Utils{
       }
 
       if(create_db){
-        val master_relation = new Relation(name,attribute_types,attribute_encodings)
+        val master_relation = new Relation(name,attribute_types,attribute_encodings,annotationType)
         Environment.addASTNode(ASTLoadRelation(source,master_relation))
         Environment.addASTNode(ASTEncodeRelation(master_relation))
         Environment.addASTNode(ASTLoadEncodedRelation(master_relation,num))
@@ -75,7 +76,7 @@ object Utils{
         val o_name = s"""${name}_${o_aname}""" 
         val o_types = o_attrs.map(a => attribute_types(attributePositions.indexOf(a)) )
         val o_encod = o_attrs.map(a => attribute_encodings(attributePositions.indexOf(a)) )
-        val relationIn = new Relation(o_name,o_types,o_encod)
+        val relationIn = new Relation(o_name,o_types,o_encod,annotationType)
         Environment.addRelation(name,relationIn)
         if(create_db){
           Environment.addASTNode(ASTBuildTrie(relationIn,name,o_attrs,name,(num+1)))
@@ -103,6 +104,7 @@ object Utils{
       val masterRelation = r(name + "_" + ordering.mkString("_"))
       Json("name" -> jString(name),
           "orderings" -> jArray(orderings),
+          "annotation" -> jString(masterRelation.annotationType),
           "attributes" -> jArray(
             (0 until ordering.length).map(i => {
               Json("type" -> jString(masterRelation.types(ordering(i))),

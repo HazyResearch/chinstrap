@@ -44,7 +44,12 @@ class CodeGenGHD(val lhs:QueryRelation, val attrs:List[CodeGenNPRRAttr],
 */
 
 //Object that allows us to access and name tries easily
-class Accessor(val trieName:String, val level:Int, val attrs:List[String], val annotation:Boolean = false ){
+class Accessor(
+  val trieName:String, 
+  val level:Int, 
+  val attrs:List[String], 
+  val annotation:Boolean = false 
+){
   def printData() : Unit = {
     println("\t\ttrieName: " + trieName + " level: " + level + " attrs: " + attrs + " annotation: " + annotation)
   }
