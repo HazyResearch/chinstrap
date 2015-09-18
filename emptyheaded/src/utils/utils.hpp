@@ -37,6 +37,12 @@ namespace utils {
     return element;
   }
   template<>
+  inline float from_string(const char *string_element){
+    float element;
+    sscanf(string_element,"%f",&element);
+    return element;
+  }
+  template<>
   inline std::string from_string(const char *string_element){
     return string_element;
   }

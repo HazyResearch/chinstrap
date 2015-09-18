@@ -96,13 +96,19 @@ struct Relation : RelationImpl <range <sizeof...(T)>, T...>
   size_t num_rows = 0;
 };
 
+template<class R>
 struct EncodedRelation {
   std::vector<std::vector<uint32_t>> data;
   std::vector<uint32_t> max_set_size;
+  std::vector<R> annotation;
   EncodedRelation(){}
-  EncodedRelation(std::vector<std::vector<uint32_t>> data_in, std::vector<uint32_t> num_distinct_in){
+  EncodedRelation(
+    std::vector<std::vector<uint32_t>> data_in, 
+    std::vector<uint32_t> num_distinct_in,
+    std::vector<R> annotation_in){
     data = data_in;
     max_set_size = num_distinct_in;
+    annotation = annotation_in;
   }
 
   std::vector<uint32_t>* column(size_t i){
@@ -129,10 +135,16 @@ struct EncodedRelation {
         writefile->write((char *)&data.at(i).at(j), sizeof(data.at(i).at(j)));
       }
     }
+    const size_t num_rows = annotation.size();
+    writefile->write((char *)&num_rows, sizeof(num_rows));
+    for(size_t i = 0; i < annotation.size(); i++){
+      const R aValue = annotation.at(i);
+      writefile->write((char *)&aValue, sizeof(aValue));
+    }
     writefile->close();
   }
   
-  static EncodedRelation* from_binary(std::string path){
+  static EncodedRelation<R>* from_binary(std::string path){
     std::ifstream *infile = new std::ifstream();
     std::string file = path+std::string("encoded.bin");
     infile->open(file, std::ios::binary | std::ios::in);
@@ -160,9 +172,17 @@ struct EncodedRelation {
       }
       data_in.at(i) = *new_column;
     }
-    infile->close();
-    
-    return new EncodedRelation(data_in,max_set_size_in);
+
+    size_t num_annotation_rows;
+    infile->read((char *)&num_annotation_rows, sizeof(num_annotation_rows));
+    std::vector<R>* annotation_in = new std::vector<R>();
+    annotation_in->resize(num_annotation_rows);
+    for(size_t j = 0; j < num_annotation_rows; j++){
+      R value;
+      infile->read((char *)&value, sizeof(value));
+      annotation_in->at(j) = value;
+    }
+    return new EncodedRelation<R>(data_in,max_set_size_in,*annotation_in);
   }
 
 };

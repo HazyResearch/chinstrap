@@ -52,14 +52,25 @@ struct Trie{
   };
 
   template<typename F>
-  static Trie<T,R>* build(allocator::memory<uint8_t>* data_allocator,std::vector<uint32_t>* max_set_sizes, std::vector<std::vector<uint32_t>>* attr_in, F f);
+  static Trie<T,R>* build(
+    allocator::memory<uint8_t>* data_allocator,
+    std::vector<uint32_t>* max_set_sizes, 
+    std::vector<std::vector<uint32_t>>* attr_in, 
+    std::vector<R>* annotation, 
+    F f);
 
   template<typename F>
   void foreach(const F body);
   
   template<typename F>
-  void recursive_foreach(TrieBlock<T,R> *current, const size_t level, const size_t num_levels,std::vector<uint32_t>* tuple, const F body);
+  void recursive_foreach(
+    TrieBlock<T,R> *current, 
+    const size_t level, 
+    const size_t num_levels,std::vector<uint32_t>* tuple, 
+    const F body);
+  
   void to_binary(const std::string path);
+
   static Trie<T,R>* from_binary(std::string path);
 };
 
@@ -314,13 +325,21 @@ B* build_block(const size_t tid, allocator::memory<uint8_t> *data_allocator,
 * Recursively build the trie. Terminates when we hit the number of levels.
 */
 template<class B,class T, class R>
-void recursive_build(const size_t index, const size_t start, const size_t end, const uint32_t data, B* prev_block, 
-  const size_t level, const size_t num_levels, const size_t tid, 
+void recursive_build(
+  const size_t index, 
+  const size_t start, 
+  const size_t end, 
+  const uint32_t data, 
+  B* prev_block, 
+  const size_t level, 
+  const size_t num_levels, 
+  const size_t tid, 
   std::vector<std::vector<uint32_t>> *attr_in,
   allocator::memory<uint8_t> *data_allocator, 
   std::vector<size_t*> *ranges_buffer, 
   std::vector<uint32_t*> *set_data_buffer, 
-  uint32_t *indicies){
+  uint32_t *indicies,
+  std::vector<R>* annotation){
 
   uint32_t *sb = set_data_buffer->at(level*NUM_THREADS+tid);
   encode_tail(start,end,sb,&attr_in->at(level),indicies);
@@ -336,7 +355,28 @@ void recursive_build(const size_t index, const size_t start, const size_t end, c
       const size_t next_start = ranges_buffer->at(level*NUM_THREADS+tid)[i];
       const size_t next_end = ranges_buffer->at(level*NUM_THREADS+tid)[i+1];
       const uint32_t next_data = set_data_buffer->at(level*NUM_THREADS+tid)[i];        
-      recursive_build<B,T,R>(i,next_start,next_end,next_data,tail,level+1,num_levels,tid,attr_in,data_allocator,ranges_buffer,set_data_buffer,indicies);
+      recursive_build<B,T,R>(
+        i,
+        next_start,
+        next_end,
+        next_data,
+        tail,
+        level+1,
+        num_levels,
+        tid,
+        attr_in,
+        data_allocator,
+        ranges_buffer,
+        set_data_buffer,
+        indicies,
+        annotation);
+    }
+  } else if(annotation->size() != 0){
+    tail->init_data(tid,data_allocator,(R)0);
+    for(size_t i = start; i < end; i++){
+      uint32_t data_value = attr_in->at(level).at(indicies[i]);
+      R annotationValue = annotation->at(indicies[i]);
+      tail->set_data(i-start,data_value,annotationValue);
     }
   }
 }
@@ -345,7 +385,8 @@ template<class T, class R> template <typename F>
 inline Trie<T,R>* Trie<T,R>::build(
   allocator::memory<uint8_t>* data_allocator,
   std::vector<uint32_t>* max_set_sizes, 
-  std::vector<std::vector<uint32_t>> *attr_in, 
+  std::vector<std::vector<uint32_t>> *attr_in,
+  std::vector<R>* annotation, 
   F f){
   const size_t num_levels_in = attr_in->size();
   const size_t num_rows = attr_in->at(0).size();
@@ -400,9 +441,21 @@ inline Trie<T,R>* Trie<T,R>::build(
       const size_t end = ranges_buffer->at(0)[i+1];
       const uint32_t data = set_data_buffer->at(0)[i];    
 
-      recursive_build<TrieBlock<T,R>,T,R>(i,start,end,data,new_head,
-        cur_level,num_levels_in,tid,attr_in,
-        data_allocator,ranges_buffer,set_data_buffer,indicies);
+      recursive_build<TrieBlock<T,R>,T,R>(
+        i,
+        start,
+        end,
+        data,
+        new_head,
+        cur_level,
+        num_levels_in,
+        tid,
+        attr_in,
+        data_allocator,
+        ranges_buffer,
+        set_data_buffer,
+        indicies,
+        annotation);
     });
   }
   

@@ -39,6 +39,7 @@ object CodeGen {
       val (name,rmap) = tuple
       val typeString = rmap.head._2.types.mkString(",")
       s.println(s"""Relation<${typeString}>* ${name} = new Relation<${typeString}>();""")
+      s.println(s"""std::vector<${rmap.head._2.annotationType}>* annotation_${name} = new std::vector<${rmap.head._2.annotationType}>();""")
     })
 
     s.println("""//init encodings""")
@@ -62,6 +63,11 @@ object CodeGen {
       s.println(s"""${rel.encodings(i)}_encodingMap->update(${rel.name}->append_from_string<${i}>(next));""") 
       s.println(s"""next = f_reader.tsv_get_next();""")
     }
+    if(rel.annotationType != "void*"){
+      s.println(s"""annotation_${rel.name}->push_back(utils::from_string<${rel.annotationType}>(next));""") 
+      s.println(s"""next = f_reader.tsv_get_next();""") 
+    }
+
     s.println(s"""${rel.name}->num_rows++; }""")
     if(!Environment.quiet) s.println(s"""debug::stop_clock("READING RELATION ${rel.name}",start_time);""")
     s.println("}")
@@ -83,7 +89,7 @@ object CodeGen {
 
   def emitReorderEncodedRelation(s: CodeStringBuilder,rel:Relation,name:String,order:List[Int],masterName:String): Unit = {
     s.println("""////////////////////emitReorderEncodedRelation////////////////////""")
-    s.println(s"""EncodedRelation* Encoded_${rel.name} = new EncodedRelation();""")
+    s.println(s"""EncodedRelation<${rel.annotationType}>* Encoded_${rel.name} = new EncodedRelation<${rel.annotationType}>();""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//encodeRelation")
@@ -97,7 +103,7 @@ object CodeGen {
   def emitEncodeRelation(s: CodeStringBuilder,rel:Relation): Unit = {
     val name = rel.name
     s.println("""////////////////////emitEncodeRelation////////////////////""")
-    s.println(s"""EncodedRelation* Encoded_${rel.name} = new EncodedRelation();""")
+    s.println(s"""EncodedRelation<${rel.annotationType}>* Encoded_${rel.name} = new EncodedRelation<${rel.annotationType}>();""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//encodeRelation")
@@ -120,13 +126,13 @@ object CodeGen {
 
   def emitBuildTrie(s: CodeStringBuilder,rel:Relation,relName:String): Unit = {
     s.println("""////////////////////emitBuildTrie////////////////////""")
-    s.println(s"""const size_t alloc_size_${rel.name} = 8*Encoded_${rel.name}->data.size()*Encoded_${rel.name}->data.at(0).size()*sizeof(uint64_t)*sizeof(TrieBlock<${Environment.layout},${annotationType}>);""")
+    s.println(s"""const size_t alloc_size_${rel.name} = 8*Encoded_${rel.name}->data.size()*Encoded_${rel.name}->data.at(0).size()*sizeof(uint64_t)*sizeof(TrieBlock<${Environment.layout},${rel.annotationType}>);""")
     s.println(s"""allocator::memory<uint8_t>* data_allocator_${rel.name} = new allocator::memory<uint8_t>(alloc_size_${rel.name});""")
     s.println(s"""Trie<${Environment.layout},${rel.annotationType}>* Trie_${rel.name} = NULL;""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
     s.println("//buildTrie")
-    s.println(s"""Trie_${rel.name} = Trie<${Environment.layout},${rel.annotationType}>::build(data_allocator_${rel.name},&Encoded_${rel.name}->max_set_size,&Encoded_${rel.name}->data,[&](size_t index){ (void) index; return true;});""")
+    s.println(s"""Trie_${rel.name} = Trie<${Environment.layout},${rel.annotationType}>::build(data_allocator_${rel.name},&Encoded_${rel.name}->max_set_size,&Encoded_${rel.name}->data,&Encoded_${rel.name}->annotation,[&](size_t index){ (void) index; return true;});""")
     if(!Environment.quiet) s.println(s"""debug::stop_clock("BUILDING TRIE ${rel.name}",start_time);""")
     s.println("} \n")
     emitWriteBinaryTrie(s,relName,rel.name)
@@ -137,10 +143,10 @@ object CodeGen {
 
   def emitLoadEncodedRelation(s: CodeStringBuilder,rel:Relation): Unit = {
     s.println("""////////////////////emitLoadEncodedRelation////////////////////""")
-    s.println(s"""EncodedRelation* Encoded_${rel.name} = NULL;""")
+    s.println(s"""EncodedRelation<${rel.annotationType}>* Encoded_${rel.name} = NULL;""")
     s.println("{")
     if(!Environment.quiet) s.println("""auto start_time = debug::start_clock();""")
-    s.println(s"""Encoded_${rel.name} = EncodedRelation::from_binary("${Environment.dbPath}/relations/${rel.name}/");""")
+    s.println(s"""Encoded_${rel.name} = EncodedRelation<${rel.annotationType}>::from_binary("${Environment.dbPath}/relations/${rel.name}/");""")
     if(!Environment.quiet) s.println(s"""debug::stop_clock("LOADING ENCODED RELATION ${rel.name}",start_time);""")
     s.println("} \n")
   }
