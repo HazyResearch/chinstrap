@@ -139,9 +139,6 @@ struct TrieBlock{
   }
 
   R get_data(uint32_t data) const {
-    if(value != 0) 
-      return value;
-    
     if(!is_sparse){
       return values[data];
     } else{
@@ -150,14 +147,11 @@ struct TrieBlock{
       if(index != -1)
         return values[data];
     }
-    //FIXME
+    assert(1 == 0);
     return (R)0;
   }
 
   R get_data(uint32_t index, uint32_t data) const {
-    if(value != 0) 
-      return value;
-    
     if(!is_sparse){
       (void) index;
       return values[data];

@@ -46,7 +46,7 @@ object DCParser extends RegexParsers {
   def emptyStatement = "".r ^^ {case r => List()}
   def emptyQueryRelation = "".r ^^ {case r => new QueryRelation("",List())}
   def emptyString = "".r ^^ {case r => ""}
-  def emptyAggType = "".r ^^ {case r => "int"}
+  def emptyAggType = "".r ^^ {case r => ""}
   def emptyStatementMap:Parser[Map[String,String]] = "".r ^^ {case r => Map[String,String]()}
 
   //for the lhs expression
@@ -54,8 +54,9 @@ object DCParser extends RegexParsers {
   def relationIdentifier: Parser[QueryRelation] = identifierName ~ ("(" ~> attrList) ~ (aggStatement <~ ")")  ^^ {case id~attrs~(agg~t) => 
     if((agg,t) != ("",""))
       new QueryRelation(id, attrs, t)
-    else 
+    else{
       new QueryRelation(id, attrs)
+    } 
   }
   def aggStatement = ((";" ~> identifierName) ~ (":" ~> typename)) | (emptyString~emptyAggType)
   def attrList : Parser[List[String]] = notLastAttr | lastAttr | emptyStatement

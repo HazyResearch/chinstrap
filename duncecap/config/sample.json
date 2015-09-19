@@ -7,7 +7,7 @@
   "relations": [
     {
       "name": "R",
-      "source": "/dfs/scratch0/caberger/systems/chinstrap/simple.tsv",
+      "source": "/dfs/scratch0/caberger/systems/chinstrap/duncecap/config/simple.tsv",
       "attributes":[
         {
           "type":"std::string",
@@ -20,6 +20,26 @@
       ],
       "annotation":"void*",
       "orderings":["all"]
+    },
+   {
+      	"name":"Vector",
+       	"source": "/dfs/scratch0/caberger/systems/chinstrap/duncecap/config/simple_vector.tsv",
+      	"attributes":[{
+      		"type":"std::string",
+      		"encoding":"node"
+      	}],
+      	"annotation":"float",
+      	"orderings":["all"]
+    },
+    {
+      	"name":"InverseDegree",
+       	"source": "/dfs/scratch0/caberger/systems/chinstrap/duncecap/config/simple_inv_deg.tsv",
+      	"attributes":[{
+      		"type":"std::string",
+      		"encoding":"node"
+      	}],
+      	"annotation":"float",
+      	"orderings":["all"]
     }
   ]
-}
+} 

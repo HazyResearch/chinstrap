@@ -102,9 +102,9 @@ void Trie<T,R>::recursive_foreach(
       if(current->get_block(a_i,a_d) != NULL){
         recursive_foreach(current->get_block(a_i,a_d),level+1,num_levels,tuple,body);
       }
+      tuple->pop_back(); //delete the last element
     });
   }
-  tuple->pop_back(); //delete the last element
 }
 
 template<class T, class R>
@@ -172,9 +172,10 @@ void Trie<T,R>::foreach(const F body){
     tuple->push_back(a_d);
     if(num_levels > 1 && head->get_block(a_i,a_d) != NULL){
       recursive_foreach(head->get_block(a_i,a_d),1,num_levels,tuple,body);
-    } else {
-      body(tuple,annotation);
+    } else if(annotated) {
+      body(tuple,head->get_data(a_i,a_d));
     }
+    tuple->pop_back(); //delete the last element
   });
 }
 
@@ -397,7 +398,7 @@ void recursive_build(
         annotation);
     }
   } else if(annotation->size() != 0){
-    tail->init_data(tid,data_allocator,(R)0);
+    tail->alloc_data(tid,data_allocator);
     for(size_t i = start; i < end; i++){
       uint32_t data_value = attr_in->at(level).at(indicies[i]);
       R annotationValue = annotation->at(indicies[i]);
@@ -451,15 +452,15 @@ inline Trie<T,R>* Trie<T,R>::build(
 
   //Build the head set.
   TrieBlock<T,R>* new_head = build_block<TrieBlock<T,R>,T,R>(0,data_allocator,head_size,set_data_buffer->at(0));
-  new_head->init_pointers(0,data_allocator);
-
-  par::for_range(0,head_range,100,[&](size_t tid, size_t i){
-    (void) tid;
-    new_head->next_level[i] = NULL;
-  });
 
   size_t cur_level = 1;
   if(num_levels_in > 1){
+    new_head->init_pointers(0,data_allocator);
+    par::for_range(0,head_range,100,[&](size_t tid, size_t i){
+      (void) tid;
+      new_head->next_level[i] = NULL;
+    });
+
     par::for_range(0,head_size,100,[&](size_t tid, size_t i){
       //some sort of recursion here
       const size_t start = ranges_buffer->at(0)[i];
@@ -482,6 +483,13 @@ inline Trie<T,R>* Trie<T,R>::build(
         indicies,
         annotation);
     });
+  } else if(annotation->size() > 0){
+    new_head->alloc_data(0,data_allocator);
+    for(size_t i = 0; i < head_size; i++){
+      const uint32_t data = set_data_buffer->at(0)[i]; 
+      R annotationValue = annotation->at(indicies[i]);
+      new_head->set_data(i,data,annotationValue);
+    }
   }
   
   //encode the set, create a block with NULL pointers to next level

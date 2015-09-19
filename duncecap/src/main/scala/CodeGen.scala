@@ -5,7 +5,7 @@ import scala.collection.mutable
  * All code generation methods start from this object:
  */
 object CodeGen {
-  var annotationType = "int"
+  var annotationType = "void*"
   var joinType = "*"
   def emitCode(s: CodeStringBuilder, root: List[ASTNode]) = {
     emitHeader(s,root)
@@ -208,6 +208,8 @@ object CodeGen {
     })
     if(annotatedRel == "true")
       s.println(s"""std::cout << "a: " << annotation;""")
+    else 
+      s.println("(void) annotation;")
     s.println(s"""std::cout << std::endl;""")
     s.println("});")
     s.println("} \n")

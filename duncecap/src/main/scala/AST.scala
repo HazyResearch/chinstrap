@@ -432,13 +432,13 @@ case class ASTQueryStatement(
       //below here should probably be refactored. this saves the environment and writes the trie to disk
       Environment.addBrandNewRelation(lhs.name,new Relation(lhsName,lhsTypes,lhsEncodings,lhs.annotationType))
       Environment.loadedRelations += lhsName
-      /*
+      
       Utils.writeEnvironmentToJSON()
 
       s"""mkdir -p ${Environment.dbPath}/relations/${lhs.name} ${Environment.dbPath}/relations/${lhs.name}/${lhsName}""" !
       
       CodeGen.emitWriteBinaryTrie(s,lhs.name,lhsName)
-      */
+      
     } else{
       s.println(s"""std::cout << "Query Result: " << Trie_${lhsName}->annotation << std::endl;""") 
     }
