@@ -151,7 +151,7 @@ void recursive_build_binary(
   const uint32_t index = std::get<1>(tup);
   const uint32_t data = std::get<2>(tup);
   prev->set_block(index,data,current);
-
+  
   if(level+1 == num_levels)
     return;
 
@@ -263,9 +263,16 @@ Trie<T,R>* Trie<T,R>::from_binary(const std::string path, bool annotated_in){
   const Set<T> A = head->set;
   //use the same parallel call so we read in properly
   if(num_levels_in > 1){
-    A.static_par_foreach_index([&](size_t tid, uint32_t a_d, uint32_t a_i){
+    A.static_par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d){
       (void) a_d; (void) a_i;
-      recursive_build_binary<T,R>(tid,head,1,num_levels_in,&infiles,allocator_in,annotated_in);
+      recursive_build_binary<T,R>(
+        tid,
+        head,
+        1,
+        num_levels_in,
+        &infiles,
+        allocator_in,
+        annotated_in);
     });
   }
 
@@ -281,9 +288,13 @@ Trie<T,R>* Trie<T,R>::from_binary(const std::string path, bool annotated_in){
 /*
 * Given a range of values figure out the distinct values to go in the set.
 */
-std::tuple<size_t,size_t> produce_ranges(size_t start, size_t end, 
-  size_t *next_ranges, uint32_t *data,
-  uint32_t *indicies, std::vector<uint32_t> * current){
+std::tuple<size_t,size_t> produce_ranges(
+  size_t start, 
+  size_t end, 
+  size_t *next_ranges, 
+  uint32_t *data,
+  uint32_t *indicies, 
+  std::vector<uint32_t> * current){
 
   size_t range = 0;
 
@@ -371,8 +382,8 @@ void recursive_build(
   encode_tail(start,end,sb,&attr_in->at(level),indicies);
 
   B *tail = build_block<B,T,R>(tid,data_allocator,(end-start),sb);
-
   prev_block->set_block(index,data,tail);
+
   if(level < (num_levels-1)){
     tail->init_pointers(tid,data_allocator);
     auto tup = produce_ranges(start,end,ranges_buffer->at(level*NUM_THREADS+tid),set_data_buffer->at(level*NUM_THREADS+tid),indicies,&attr_in->at(level));
@@ -465,7 +476,7 @@ inline Trie<T,R>* Trie<T,R>::build(
       //some sort of recursion here
       const size_t start = ranges_buffer->at(0)[i];
       const size_t end = ranges_buffer->at(0)[i+1];
-      const uint32_t data = set_data_buffer->at(0)[i];    
+      const uint32_t data = set_data_buffer->at(0)[i];
 
       recursive_build<TrieBlock<T,R>,T,R>(
         i,

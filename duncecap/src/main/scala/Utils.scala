@@ -31,6 +31,7 @@ object Utils{
     Environment.numNUMA = config("numNUMA").asInstanceOf[Double].toInt
     Environment.numThreads = config("numThreads").asInstanceOf[Double].toInt
     Environment.dbPath = db_folder
+    Environment.yanna = if(config("algorithm").asInstanceOf[String] == "NPRR") false else true
 
     if(create_db){
       //setup folders for the database on disk

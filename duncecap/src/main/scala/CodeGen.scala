@@ -674,16 +674,17 @@ object CodeGen {
   }
 
   def emitUnweightedSingleSourceTransitiveClosure(s:CodeStringBuilder,inputTrieName:String,init:String,encodingName:String,joinType:String,resultName:String,lhsAttrs:Int): Unit  = {
-    s.println(s"""TrieBlock<${Environment.layout},${annotationType}>* tc_tail = tc::unweighted_single_source<${Environment.layout},${annotationType}>(tc_selection,Trie_${inputTrieName},${init},Encoding_${encodingName}->num_distinct,output_buffer,[&](uint32_t a, uint32_t b){return a ${joinType} b;});""")
+    s.println(s"""TrieBlock<${Environment.layout},${annotationType}>* tc_tail = tc::unweighted_single_source<${Environment.layout},${annotationType}>(tc_selection,(Trie<${Environment.layout},${annotationType}>*)Trie_${inputTrieName},${init},Encoding_${encodingName}->num_distinct,output_buffer,[&](uint32_t a, uint32_t b){return a ${joinType} b;});""")
     s.println(s"""Set<${Environment.layout}> head = Set<${Environment.layout}>::from_array(output_buffer->get_next(0,sizeof(uint32_t)),(uint32_t*)&tc_selection,(size_t)1);""")
     s.println(s"""TrieBlock<${Environment.layout},${annotationType}>* tc_head = 
       new (output_buffer->get_next(0, sizeof(TrieBlock<${Environment.layout}, ${annotationType}>))) 
       TrieBlock<${Environment.layout}, ${annotationType}>(head);""")
     s.println(s"""tc_head->init_pointers(0,output_buffer);""")
     s.println(s"""tc_head->set_block(0,tc_selection,tc_tail);""")
+    val annotated = if(annotationType == "void*") "false" else "true"
     s.println(s"""Trie_${resultName} = 
       new (output_buffer->get_next(0, sizeof(Trie<${Environment.layout}, ${annotationType}>))) 
-      Trie<${Environment.layout}, ${annotationType}>(${lhsAttrs});""")
+      Trie<${Environment.layout}, ${annotationType}>(${lhsAttrs},${annotated});""")
     s.println(s"""Trie_${resultName}->head = tc_head;""")
   }
 

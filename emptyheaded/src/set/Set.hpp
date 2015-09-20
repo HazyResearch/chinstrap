@@ -250,7 +250,7 @@ inline Set<uinteger> Set<T>::decode(uint32_t *buffer){
 ///////////////////////////////////////////////////////////////////////////////
 template <class T>
 inline Set<T> Set<T>::from_array(uint8_t *set_data, uint32_t *array_data, size_t data_size){
-  const uint32_t range = (data_size > 0) ? (array_data[data_size-1]-array_data[0]) : 0;
+  const uint32_t range = (data_size > 0) ? array_data[data_size-1] : 0;
   const std::tuple<size_t,type::layout> bl = T::build(set_data,array_data,data_size);
   return Set<T>(set_data,data_size,range,std::get<0>(bl),std::get<1>(bl));
 }

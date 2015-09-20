@@ -44,7 +44,6 @@ namespace tc {
     uint32_t frontier_size = 1;
     ops::atomic_union(visited->set,start);
     visited->set_data(0,start,0);
-    std::cout << "SPARSE: " <<  visited->is_sparse << std::endl;
     frontier[0] = start;
 
     size_t iteration = 0;
