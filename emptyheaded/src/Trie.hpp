@@ -151,7 +151,7 @@ void recursive_build_binary(
   const uint32_t index = std::get<1>(tup);
   const uint32_t data = std::get<2>(tup);
   prev->set_block(index,data,current);
-  
+
   if(level+1 == num_levels)
     return;
 
@@ -174,6 +174,8 @@ void Trie<T,R>::foreach(const F body){
       recursive_foreach(head->get_block(a_i,a_d),1,num_levels,tuple,body);
     } else if(annotated) {
       body(tuple,head->get_data(a_i,a_d));
+    } else{
+      body(tuple,(R)0); 
     }
     tuple->pop_back(); //delete the last element
   });
