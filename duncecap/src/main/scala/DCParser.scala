@@ -4,6 +4,37 @@ import scala.collection.immutable.List
 import scala.collection.immutable.ListMap
 import scala.util.parsing.combinator.RegexParsers
 
+class SelectionRelation(val name:String,val attrs:List[(String,String,String)]) {
+  def printData() = {
+    println("name: " + name + " attrs: " + attrs)
+  }
+  override def equals(that: Any): Boolean =
+    that match {
+      case that: SelectionRelation => that.name.equals(name) && that.attrs.equals(attrs)
+      case _ => false
+    }
+}
+
+class QueryRelation(val name:String,val attrs:List[String],val annotationType:String="void*") {
+  override def equals(that: Any): Boolean =
+    that match {
+      case that: QueryRelation => that.attrs.equals(attrs) && that.name.equals(name) && that.annotationType.equals(annotationType)
+      case _ => false
+    }
+  def printData() = {
+    println("name: " + name + " attrs: " + attrs + " annotationType: " + annotationType)
+  }
+}
+
+class RecursionStatement(val functionName:String, val inputArgument:QueryRelation, val convergance:ConverganceCriteria)
+
+class TransitiveClosureStatement(val join:List[SelectionRelation])
+
+class ParsedAggregate(val op:String, val expression:String, val init:String)
+
+class ConverganceCriteria(val converganceType:String, val converganceOp:String, val converganceCondition:String)
+
+
 class AggregateExpression(val op:String,
   val attrs:List[String],
   val init:String){
