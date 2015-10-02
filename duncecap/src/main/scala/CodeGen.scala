@@ -1,5 +1,7 @@
 package DunceCap
 
+import main.scala.CodeStringBuilder
+
 import scala.collection.mutable
 /**
  * All code generation methods start from this object:

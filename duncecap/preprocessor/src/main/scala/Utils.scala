@@ -1,12 +1,9 @@
 package DunceCap
 
-import scala.collection.mutable
-import sys.process._
-import scala.io._
-import java.nio.file.{Paths, Files}
-import java.io.{FileWriter, File, BufferedWriter}
-import argonaut.Argonaut._
-import argonaut.Json
+import java.io.{BufferedWriter, File, FileWriter}
+import java.nio.file.{Files, Paths}
+
+import scala.sys.process._
 
 class CodeStringBuilder {
   val buffer = new StringBuilder
@@ -94,7 +91,8 @@ object Utils{
     val bw = new BufferedWriter(new FileWriter(file))
     
     //PREPARE THE RELATIONS TO SPILL TO JSON
-    val rJson = Environment.relations.map(tup =>{
+    // TODO (sctu): fix all this
+  /*  val rJson = Environment.relations.map(tup =>{
       val (name,r) = tup
       val orderings = r.map( tup2 => {
         val (oname,or) = tup2
@@ -115,10 +113,10 @@ object Utils{
             }).toList
           )
       )
-    }).toList
+    }).toList */
 
     //top level json struct
-    val json = 
+   /* val json =
         Json("numThreads" -> jNumber(Environment.numThreads),
           "numNUMA" -> jNumber(Environment.numNUMA),
           "algorithm" -> jString(Environment.algorithm),
@@ -127,7 +125,7 @@ object Utils{
         )
 
     bw.append(json.spaces2)
-    bw.close()
+    bw.close() */
   }
 
   def compileAndRun(codeStringBuilder:CodeStringBuilder,filename:String):Unit = {

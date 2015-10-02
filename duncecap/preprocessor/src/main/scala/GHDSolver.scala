@@ -6,7 +6,7 @@ import java.io.{FileWriter, BufferedWriter, File}
 object GHDSolver {
   def getAttrSet(rels: List[QueryRelation]): Set[String] = {
     return rels.foldLeft(Set[String]())(
-      (accum: Set[String], rel : QueryRelation) => accum | rel.attrs.toSet[String])
+      (accum: Set[String], rel : QueryRelation) => accum | rel.attrNames.toSet[String])
   }
 
   private def bottom_up(seen: mutable.Set[GHDNode], curr: GHDNode, parent:GHDNode, fn:((GHDNode,Boolean,GHDNode) => Unit) ): Unit = {
@@ -36,7 +36,7 @@ object GHDSolver {
       next_frontier.clear
       val level_attr = scala.collection.mutable.ListBuffer.empty[String]
       frontier.foreach{ cur:GHDNode =>
-        val cur_attrs = cur.rels.flatMap{r => r.attrs}.sorted.distinct
+        val cur_attrs = cur.rels.flatMap{r => r.attrNames}.sorted.distinct
 
         //collect others
         cur_attrs.foreach{ a =>
@@ -95,10 +95,10 @@ object GHDSolver {
   }
   def getGHD(distinctRelations:List[QueryRelation],recursiveRelations:List[QueryRelation],tcRelations:List[QueryRelation],lhs:QueryRelation) : GHDNode = {
     //compute fractional scores
-    val myghd = 
+    val myghd =
       if(distinctRelations.length != 0){
         val rootNode = 
-          if(Environment.yanna){
+          if(Environment.yanna) {
             val decompositions = getMinFHWDecompositions(distinctRelations) 
             val decompositionsSortedByNumbags = decompositions.sortBy(root => {
               println("NUM BAGSZ: " + root.getNumBags())
@@ -161,7 +161,7 @@ object GHDSolver {
   private def DFS(seen: mutable.Set[QueryRelation], curr: QueryRelation, rels: mutable.Set[QueryRelation], ignoreAttrs: Set[String]): List[QueryRelation] = {
     for (rel <- rels) {
       // if these two hyperedges are connected
-      if (!((curr.attrs.toSet[String] & rel.attrs.toSet[String]) &~ ignoreAttrs).isEmpty) {
+      if (!((curr.attrNames.toSet[String] & rel.attrNames.toSet[String]) &~ ignoreAttrs).isEmpty) {
         seen += curr
         rels -= curr
         DFS(seen, rel, rels, ignoreAttrs)
@@ -178,7 +178,7 @@ object GHDSolver {
     // first we need to check that we will still be able to satisfy
     // the concordance condition in the rest of the subtree
     for (bag <- leftoverBags.toList) {
-      if (!(bag.attrs.toSet[String] & parentAttrs).subsetOf(tryBagAttrSet)) {
+      if (!(bag.attrNames.toSet[String] & parentAttrs).subsetOf(tryBagAttrSet)) {
         return None
       }
     }

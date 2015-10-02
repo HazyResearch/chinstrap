@@ -1,6 +1,8 @@
 package DunceCap
 
 import java.util
+import main.scala.CodeStringBuilder
+
 import scala.collection.immutable.TreeSet
 import scala.collection.mutable.ListBuffer
 

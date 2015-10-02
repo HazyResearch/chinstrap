@@ -1,5 +1,7 @@
 package DunceCap
 
+import main.scala.{Utils, CodeStringBuilder}
+
 import scala.util.parsing.json._
 import scala.io._
 
