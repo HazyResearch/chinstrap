@@ -14,15 +14,17 @@ import org.apache.commons.math3.optim.nonlinear.scalar.GoalType
 import scala.collection.immutable.TreeSet
 ;
 
-class GHD(val root:GHDNode, queryRelations: List[QueryRelation], outputRelation: QueryRelation) {
+class GHD(val root:GHDNode, val queryRelations: List[QueryRelation], val outputRelation: QueryRelation) {
   val attributeOrdering: List[Attr] = GHDSolver.getAttributeOrdering(root, outputRelation.attrNames)
   var depth: Int = -1
+  var numBags: Int = -1
   def toJson(): Json = {
     return null
   }
   def doPostProcessingPass() = {
     root.computeDepth
     depth = root.depth
+    numBags = root.getNumBags()
     root.setAttributeOrdering(attributeOrdering)
     root.computeProjectedOutAttrsAndOutputRelation(outputRelation.attrNames.toSet, Set())
   }
@@ -36,7 +38,6 @@ class GHDNode(var rels: List[QueryRelation]) {
   var children: List[GHDNode] = List()
   var bagFractionalWidth: Double = 0
   var bagWidth: Int = 0
-  var num_bags: Int = 0
   var depth: Int = 0
   var projectedOutAttrs: Set[Attr] = null
   var outputRelation: QueryRelation = null

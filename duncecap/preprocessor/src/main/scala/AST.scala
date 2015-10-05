@@ -84,15 +84,15 @@ case class ASTQueryStatement(
   joinAggregates:Map[String,ParsedAggregate] ) extends ASTStatement {
   // TODO (sctu) : ignoring everything except for join, joinAggregates for now
 
-  var minFHWPlans: List[GHD] = createGHD(join);
+  var queryPlans: List[GHD] = getGHD();
 
-  def createGHD(rels:List[QueryRelation]): List[GHD] = {
+  def getGHD(): List[GHD] = {
     // We get the candidate GHDs, i.e., the ones of min width
-    val candidates = GHDSolver.getMinFHWDecompositions(rels);
-    // prefer the GHDs with fewer nodes
-    // TODO (sctu) : finish this part
-
-    return null;
+    val rootNodes = GHDSolver.getMinFHWDecompositions(join);
+    val candidates = rootNodes.map(r => new GHD(r, join, lhs));
+    candidates.map(c => c.doPostProcessingPass())
+    HeuristicGHDPicker.getGHDsWithMaxCoveringRoot(
+      HeuristicGHDPicker.getGHDsWithMinBags(candidates))
   }
 
   override def code(s: CodeStringBuilder): Unit = {
