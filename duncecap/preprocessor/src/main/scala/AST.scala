@@ -90,8 +90,7 @@ case class ASTQueryStatement(
     // We get the candidate GHDs, i.e., the ones of min width
     val candidates = GHDSolver.getMinFHWDecompositions(rels);
     // prefer the GHDs with fewer nodes
-
-    //
+    // TODO (sctu) : finish this part
 
     return null;
   }

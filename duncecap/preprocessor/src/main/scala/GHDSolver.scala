@@ -93,55 +93,7 @@ object GHDSolver {
     }
     return (depth,seen.size)
   }
-  def getGHD(distinctRelations:List[QueryRelation],recursiveRelations:List[QueryRelation],tcRelations:List[QueryRelation],lhs:QueryRelation) : GHDNode = {
-    //compute fractional scores
-    val myghd =
-      if(distinctRelations.length != 0){
-        val rootNode = 
-          if(Environment.yanna) {
-            val decompositions = getMinFHWDecompositions(distinctRelations) 
-            val decompositionsSortedByNumbags = decompositions.sortBy(root => {
-              println("NUM BAGSZ: " + root.getNumBags())
-              root.getNumBags()})
-            decompositionsSortedByNumbags.filter(_.getNumBags() == decompositionsSortedByNumbags.head.getNumBags()).sortBy{ root:GHDNode =>
-              val tup = breadth_first(mutable.LinkedHashSet[GHDNode](root),mutable.LinkedHashSet[GHDNode](root))
-              root.depth = tup._1
-              val childAttrs = root.children.flatMap(child => child.attrSet.toList).toList.distinct
-              val numShared = childAttrs.intersect(root.attrSet.toList).distinct.length
-              val numInOutput = root.attrSet.toList.intersect(lhs.attrs).distinct.length
-              val additionalHeuristic = numInOutput + numShared*10
-              val depthHeursitc = additionalHeuristic 
-              depthHeursitc
-            }.last
-          } else getDecompositions(distinctRelations).last //take the single bag
 
-        println("NUM BAGS: " + rootNode.getNumBags())
-
-        Some(rootNode)
-      } else None
-
-    println("RECURSION: " + recursiveRelations.length + " " + tcRelations.length)
-    val myghdplus = if(recursiveRelations.length > 0){
-        val newroot = new GHDNode(recursiveRelations)
-        if(myghd.isDefined)
-          newroot.children = List(myghd.get)
-        newroot
-      } else if(tcRelations.length > 0){
-        val newroot = new GHDNode(tcRelations)
-        if(myghd.isDefined)
-          newroot.children = List(myghd.get)
-        newroot
-      } else{
-        val newroot = myghd.get
-        newroot
-      } 
-
-    myghdplus.num_bags = breadth_first(mutable.LinkedHashSet[GHDNode](myghdplus),mutable.LinkedHashSet[GHDNode](myghdplus))._2
-    assert(myghdplus.num_bags != 0)
-    val fhws = myghdplus.fractionalScoreTree()
-    print(myghdplus, "query_plan_" + fhws + ".json")
-    return myghdplus
-  }
   def getAttributeOrdering(myghd:GHDNode, resultAttrs:List[String]) : List[String] ={
     return get_attribute_ordering(mutable.LinkedHashSet[GHDNode](myghd),mutable.LinkedHashSet[GHDNode](myghd),resultAttrs)
   }

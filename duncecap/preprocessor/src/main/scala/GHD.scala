@@ -23,12 +23,15 @@ class GHD(val root:GHDNode, queryRelations: List[QueryRelation], outputRelation:
   def doPostProcessingPass() = {
     root.computeDepth
     depth = root.depth
+    root.setAttributeOrdering(attributeOrdering)
+    root.computeProjectedOutAttrsAndOutputRelation(outputRelation.attrNames.toSet, Set())
   }
 }
 
 class GHDNode(var rels: List[QueryRelation]) {
   val attrSet = rels.foldLeft(TreeSet[String]())(
     (accum: TreeSet[String], rel: QueryRelation) => accum | TreeSet[String](rel.attrNames: _*))
+  var attrToRels:Map[Attr,List[QueryRelation]] = null
   var attributeOrdering: List[Attr] = null
   var children: List[GHDNode] = List()
   var bagFractionalWidth: Double = 0
@@ -45,13 +48,22 @@ class GHDNode(var rels: List[QueryRelation]) {
 
   override def hashCode = 41 * rels.hashCode() + children.hashCode()
 
-  def setAttributeOrdering(ordering: List[Attr] ) = {
+  def setAttributeOrdering(ordering: List[Attr] ): Unit = {
     attributeOrdering = ordering
     rels = rels.map(rel => {
       new QueryRelation(rel.name, rel.attrs.sortWith((attrInfo1, attrInfo2) => {
         ordering.indexOf(attrInfo1._1) < ordering.indexOf(attrInfo2._1)
       }), rel.annotationType)
     })
+
+    children.map(child => child.setAttributeOrdering(ordering))
+
+    attrToRels = attrSet.map(attr =>{
+      val relevantRels = rels.filter(rel => {
+        rel.attrNames.contains(attr)
+      })
+      (attr, relevantRels)
+    }).toMap
   }
 
   /**
@@ -63,6 +75,9 @@ class GHDNode(var rels: List[QueryRelation]) {
     // Right now we only allow a query to have one type of annotation, so
     // we take the annotation type from an arbitrary relation that was joined in this bag
     outputRelation = new QueryRelation("", keptAttrs.map(attr =>(attr, "", "")).toList, rels.head.annotationType)
+    children.map(child => {
+      child.computeProjectedOutAttrsAndOutputRelation(outputAttrs, attrsFromAbove ++ attrSet)
+    })
   }
 
   def computeDepth : Unit = {
@@ -92,7 +107,7 @@ class GHDNode(var rels: List[QueryRelation]) {
   }
 
   private def getMatrixRow(attr : String, rels : List[QueryRelation]): Array[Double] = {
-    val presence = rels.map((rel : QueryRelation) => if (rel.attrs.toSet.contains(attr)) 1.0 else 0)
+    val presence = rels.map((rel : QueryRelation) => if (rel.attrNames.toSet.contains(attr)) 1.0 else 0)
     return presence.toArray
   }
 
