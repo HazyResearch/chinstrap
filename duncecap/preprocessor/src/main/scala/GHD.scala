@@ -1,6 +1,3 @@
-/**
- * Created by sctu on 9/28/15.
- */
 package DunceCap
 
 import java.util
@@ -14,13 +11,59 @@ import org.apache.commons.math3.optim.nonlinear.scalar.GoalType
 import scala.collection.immutable.TreeSet
 ;
 
+
+object GHD {
+  def getNumericalOrdering(attributeOrdering:List[Attr], rel:QueryRelation): List[Int] = {
+    attributeOrdering.map(a => rel.attrNames.indexOf(a)).filter(pos => {
+      pos != -1
+    })
+  }
+}
+
 class GHD(val root:GHDNode, val queryRelations: List[QueryRelation], val outputRelation: QueryRelation) {
   val attributeOrdering: List[Attr] = GHDSolver.getAttributeOrdering(root, outputRelation.attrNames)
   var depth: Int = -1
   var numBags: Int = -1
+
   def toJson(): Json = {
-    return null
+    /**
+     *
+    "query_type":"join",
+    "relations": [
+		{
+			"name":"R",
+			"ordering":[0,1],
+			"annotation":"void*"
+		}
+	  ],
+     **/
+    // do a preorder traversal of the GHD and get the info for all the bags
+    Json("ghd" -> jArray(getJsonFromPreOrderTraversal(root)))
   }
+
+  private def getRelationsSummary(): Json = ???
+
+  private def getRelationSummaryFromPreOrderTraversal() = ???
+
+  /**
+   *"output":{
+		"name":"TriangleCount",
+		"ordering":[],
+		"annotation":"long"
+	  },
+   */
+  private def getOutputInfo(): Json = {
+    Json(
+      "name" -> jString(outputRelation.name),
+      "ordering" -> jString(GHD.getNumericalOrdering(attributeOrdering, outputRelation).toString),
+      "annotation" -> jString(outputRelation.annotationType)
+    )
+  }
+
+  private def getJsonFromPreOrderTraversal(node:GHDNode): List[Json] = {
+    node.getJsonBagInfo::node.children.flatMap(c => getJsonFromPreOrderTraversal(c))
+  }
+
   def doPostProcessingPass() = {
     root.computeDepth
     depth = root.depth
@@ -29,6 +72,7 @@ class GHD(val root:GHDNode, val queryRelations: List[QueryRelation], val outputR
     root.computeProjectedOutAttrsAndOutputRelation(outputRelation.attrNames.toSet, Set())
   }
 }
+
 
 class GHDNode(var rels: List[QueryRelation]) {
   val attrSet = rels.foldLeft(TreeSet[String]())(
@@ -47,7 +91,61 @@ class GHDNode(var rels: List[QueryRelation]) {
     case _ => false
   }
 
+  def getNumericalOrdering(rel:QueryRelation): List[Int] = {
+    attributeOrdering.map(a => rel.attrNames.indexOf(a)).filter(pos => {
+      pos != -1
+    })
+  }
+
   override def hashCode = 41 * rels.hashCode() + children.hashCode()
+
+  def getJsonBagInfo(): Json = {
+    val jsonRelInfo = getJsonRelationInfo()
+    Json(
+      "name" -> jString("bag" + hashCode),
+      "attributes" -> jString(outputRelation.attrNames.toString),
+      "annotation" -> jString(outputRelation.annotationType),
+      "relations" -> jArray(jsonRelInfo),
+      "nprr" -> jString("TODO!!!!")
+    )
+  }
+
+  private def getJsonNPRRInfo() = ???
+
+  /**
+   * Generates the following:
+   *
+  "relations": [
+        {
+          "name":"R",
+          "ordering":[0,1],
+          "attributes":[["a","b"],["b","c"],["a","c"]],
+          "annotation":"void*"
+        }
+      ],
+   */
+  private def getJsonRelationInfo(): List[Json] = {
+    val distinctRelationNames = rels.map(r => r.name).distinct
+    distinctRelationNames.flatMap(n => {
+      val relationsWithName = rels.filter(r => {r.name == n})
+      val orderingsAndRels: List[(List[Int], List[QueryRelation])] = relationsWithName.map(rn => {
+        (getNumericalOrdering(rn), rn)
+      }).groupBy(p => p._1).toList.map(elem => {
+        (elem._1, elem._2.unzip._2)
+      })
+
+      orderingsAndRels.map(orderingAndRels => {
+        val ordering = orderingAndRels._1
+        val rels = orderingAndRels._2
+        Json(
+          "name" -> jString(rels.head.name),
+          "ordering" -> jString(ordering.toString),
+          "attributes" -> jArray(rels.map(rel => jString(rel.attrNames.toString))),
+          "annotation" -> jString(rels.head.annotationType)
+        )
+      })
+    })
+  }
 
   def setAttributeOrdering(ordering: List[Attr] ): Unit = {
     attributeOrdering = ordering
@@ -129,8 +227,6 @@ class GHDNode(var rels: List[QueryRelation]) {
       .foldLeft(bagFractionalWidth)((accum: Double, x: Double) => if (x > accum) x else accum)
   }
 
-  def toJson(): Json = {
-    ???
-  }
+  def toJson(): Json = ???
 
 }

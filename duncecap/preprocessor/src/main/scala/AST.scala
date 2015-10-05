@@ -91,11 +91,13 @@ case class ASTQueryStatement(
     val rootNodes = GHDSolver.getMinFHWDecompositions(join);
     val candidates = rootNodes.map(r => new GHD(r, join, lhs));
     candidates.map(c => c.doPostProcessingPass())
-    HeuristicGHDPicker.getGHDsWithMaxCoveringRoot(
-      HeuristicGHDPicker.getGHDsWithMinBags(candidates))
+    HeuristicUtils.getGHDsWithMaxCoveringRoot(
+      HeuristicUtils.getGHDsWithMinBags(candidates))
+    println(candidates.head.toJson)
+    return null
   }
 
   override def code(s: CodeStringBuilder): Unit = {
-
+    getGHD
   }
 }

@@ -1,6 +1,6 @@
 package DunceCap
 
-object HeuristicGHDPicker {
+object HeuristicUtils {
   def getGHDsWithMinBags(candidates:List[GHD]): List[GHD] = {
     val minNumBags = candidates.foldLeft(Int.MaxValue)((acc, c) => {
       if (c.numBags < acc)
@@ -26,5 +26,4 @@ object HeuristicGHDPicker {
     })
     candidateAndCovering.filter(c => {c._2 == maxNumCovered}).unzip._1
   }
-
 }
