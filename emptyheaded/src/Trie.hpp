@@ -115,10 +115,10 @@ void recursive_visit(
   const size_t num_levels,
   const uint32_t prev_index,
   const uint32_t prev_data, 
-  std::vector<std::vector<std::ofstream*>>* writefiles,
+  std::ofstream* writefile,
   bool annotated){
 
-  current->to_binary(writefiles->at(level).at(tid),prev_index,prev_data,annotated && level+1 == num_levels);
+  current->to_binary(writefile,prev_index,prev_data,annotated && level+1 == num_levels);
   current->set.foreach_index([&](uint32_t a_i, uint32_t a_d){
     //if not done recursing and we have data
     if(level+1 != num_levels && current->get_block(a_i,a_d) != NULL){
@@ -129,7 +129,7 @@ void recursive_visit(
         num_levels,
         a_i,
         a_d,
-        writefiles,
+        writefile,
         annotated);
     }
   });
@@ -141,11 +141,11 @@ void recursive_build_binary(
   TrieBlock<T,R> *prev, 
   const size_t level, 
   const size_t num_levels,
-  std::vector<std::vector<std::ifstream*>>* infiles,
+  std::ifstream* infile,
   allocator::memory<uint8_t> *allocator_in,
   bool annotated_in){
 
-  auto tup = TrieBlock<T,R>::from_binary(infiles->at(level).at(tid),allocator_in,tid,annotated_in && level+1 == num_levels);
+  auto tup = TrieBlock<T,R>::from_binary(infile,allocator_in,tid,annotated_in && level+1 == num_levels);
 
   TrieBlock<T,R>* current = std::get<0>(tup);
   const uint32_t index = std::get<1>(tup);
@@ -157,7 +157,7 @@ void recursive_build_binary(
 
   current->init_pointers(tid,allocator_in);
   for(size_t i = 0; i < current->set.cardinality; i++){
-    recursive_build_binary<T,R>(tid,current,level+1,num_levels,infiles,allocator_in,annotated_in);
+    recursive_build_binary<T,R>(tid,current,level+1,num_levels,infile,allocator_in,annotated_in);
   }
 }
 
@@ -194,25 +194,17 @@ void Trie<T,R>::to_binary(const std::string path){
   writefile->close();
 
   //open files for writing
-  std::vector<std::vector<std::ofstream*>> writefiles;
-  for(size_t l = 0; l < num_levels; l++){
-    std::vector<std::ofstream*> myv;
-    for(size_t i = 0; i < NUM_THREADS; i++){
-      //prepare the data files (one per level per thread)
-      writefile = new std::ofstream();
-      file = path+std::string("data_l")+std::to_string(l)+std::string("_t")+std::to_string(i)+std::string(".bin");
-      writefile->open(file, std::ios::binary | std::ios::out);
-      myv.push_back(writefile);
-    }
-    writefiles.push_back(myv);
-  }
+  writefile = new std::ofstream();
+  file = path+std::string("data")+std::string(".bin");
+  writefile->open(file, std::ios::binary | std::ios::out);
 
   //write the data
-  head->to_binary(writefiles.at(0).at(0),0,0,annotated && num_levels ==1);
+  head->to_binary(writefile,0,0,annotated && num_levels ==1);
   //dump the set contents
   const Set<T> A = head->set;
   if(num_levels > 1){
-    A.static_par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d){
+    A.foreach_index([&](uint32_t a_i, uint32_t a_d){
+      size_t tid = 0;
       if(head->get_block(a_i,a_d) != NULL){
         recursive_visit<T,R>(
           tid,
@@ -221,18 +213,14 @@ void Trie<T,R>::to_binary(const std::string path){
           num_levels,
           a_i,
           a_d,
-          &writefiles,
+          writefile,
           annotated);
       }
     });
   }
 
   //close the files
-  for(size_t l = 0; l < num_levels; l++){
-    for(size_t i = 0; i < NUM_THREADS; i++){
-      writefiles.at(l).at(i)->close();
-    }
-  }
+  writefile->close();
 }
 
 template<class T, class R>
@@ -246,44 +234,33 @@ Trie<T,R>* Trie<T,R>::from_binary(const std::string path, bool annotated_in){
   infile->close();
 
   //open files for reading
-  std::vector<std::vector<std::ifstream*>> infiles;
-  for(size_t l = 0; l < num_levels_in; l++){
-    std::vector<std::ifstream*> myv;
-    for(size_t i = 0; i < NUM_THREADS; i++){
-      infile = new std::ifstream();
-      file = path+std::string("data_l")+std::to_string(l)+std::string("_t")+std::to_string(i)+std::string(".bin");
-      infile->open(file, std::ios::binary | std::ios::in);
-      myv.push_back(infile);
-    }
-    infiles.push_back(myv);
-  }
+  infile = new std::ifstream();
+  file = path+std::string("data")+std::string(".bin");
+  infile->open(file, std::ios::binary | std::ios::in);
 
   allocator::memory<uint8_t> *allocator_in = new allocator::memory<uint8_t>(10000); //TODO Fix this.
-  auto tup = TrieBlock<T,R>::from_binary(infiles.at(0).at(0),allocator_in,0,annotated_in && num_levels_in == 1);
+  auto tup = TrieBlock<T,R>::from_binary(infile,allocator_in,0,annotated_in && num_levels_in == 1);
   TrieBlock<T,R>* head = std::get<0>(tup);  
   head->init_pointers(0,allocator_in);
   const Set<T> A = head->set;
   //use the same parallel call so we read in properly
   if(num_levels_in > 1){
-    A.static_par_foreach_index([&](size_t tid, uint32_t a_i, uint32_t a_d){
+    A.foreach_index([&](uint32_t a_i, uint32_t a_d){
+      size_t tid = 0;
       (void) a_d; (void) a_i;
       recursive_build_binary<T,R>(
         tid,
         head,
         1,
         num_levels_in,
-        &infiles,
+        infile,
         allocator_in,
         annotated_in);
     });
   }
 
   //close the files
-  for(size_t l = 0; l < num_levels_in; l++){
-    for(size_t i = 0; i < NUM_THREADS; i++){
-      infiles.at(l).at(i)->close();
-    }
-  }
+  infile->close();
 
   return new Trie<T,R>(head,num_levels_in,annotated_in);
 }

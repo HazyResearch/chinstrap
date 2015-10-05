@@ -46,7 +46,6 @@ extern "C" void *run(std::string path) {
             (TrieBlock<hybrid, float> *)TrieBlock_R_0_1_0->get_block(a_d);
         Set<hybrid> b = TrieBlock_R_0_1_1_a_b->set;
 
-        
         long nodeID = Encoding_node->key_to_value.at(a_d);
         myfile << nodeID << "\t" << (float)(1.0/a.cardinality) << "\n";
         myfile2 << nodeID << "\t" << (float)(1.0/b.cardinality) << "\n";
