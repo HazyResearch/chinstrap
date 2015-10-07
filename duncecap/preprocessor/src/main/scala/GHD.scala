@@ -20,30 +20,30 @@ object GHD {
   }
 }
 
-class GHD(val root:GHDNode, val queryRelations: List[QueryRelation], val outputRelation: QueryRelation) {
+class GHD(val root:GHDNode,
+          val queryRelations: List[QueryRelation],
+          val joinAggregates:Map[String,ParsedAggregate],
+          val outputRelation: QueryRelation) {
   val attributeOrdering: List[Attr] = GHDSolver.getAttributeOrdering(root, outputRelation.attrNames)
   var depth: Int = -1
   var numBags: Int = -1
 
   def toJson(): Json = {
-    /**
-     *
-    "query_type":"join",
-    "relations": [
-		{
-			"name":"R",
-			"ordering":[0,1],
-			"annotation":"void*"
-		}
-	  ],
-     **/
-    // do a preorder traversal of the GHD and get the info for all the bags
-    Json("ghd" -> jArray(getJsonFromPreOrderTraversal(root)))
+    Json(
+      "query_type" -> jString("join"),
+      "relations" -> getRelationsSummary(),
+      "output" -> getOutputInfo(),
+      "ghd" -> jArray(getJsonFromPreOrderTraversal(root))
+    )
   }
 
-  private def getRelationsSummary(): Json = ???
+  private def getRelationsSummary(): Json = {
+    jArray(getRelationSummaryFromPreOrderTraversal(root).distinct)
+  }
 
-  private def getRelationSummaryFromPreOrderTraversal() = ???
+  private def getRelationSummaryFromPreOrderTraversal(node:GHDNode): List[Json] = {
+    node.getJsonRelationInfo(true):::node.children.flatMap(c => {getRelationSummaryFromPreOrderTraversal(c)})
+  }
 
   /**
    *"output":{
@@ -55,13 +55,13 @@ class GHD(val root:GHDNode, val queryRelations: List[QueryRelation], val outputR
   private def getOutputInfo(): Json = {
     Json(
       "name" -> jString(outputRelation.name),
-      "ordering" -> jString(GHD.getNumericalOrdering(attributeOrdering, outputRelation).toString),
+      "ordering" -> jArray(GHD.getNumericalOrdering(attributeOrdering, outputRelation).map(o => jNumber(o))),
       "annotation" -> jString(outputRelation.annotationType)
     )
   }
 
   private def getJsonFromPreOrderTraversal(node:GHDNode): List[Json] = {
-    node.getJsonBagInfo::node.children.flatMap(c => getJsonFromPreOrderTraversal(c))
+    node.getJsonBagInfo(joinAggregates)::node.children.flatMap(c => getJsonFromPreOrderTraversal(c))
   }
 
   def doPostProcessingPass() = {
@@ -99,18 +99,81 @@ class GHDNode(var rels: List[QueryRelation]) {
 
   override def hashCode = 41 * rels.hashCode() + children.hashCode()
 
-  def getJsonBagInfo(): Json = {
+  def getJsonBagInfo(joinAggregates:Map[String,ParsedAggregate]): Json = {
     val jsonRelInfo = getJsonRelationInfo()
     Json(
       "name" -> jString("bag" + hashCode),
-      "attributes" -> jString(outputRelation.attrNames.toString),
+      "attributes" -> jArray(outputRelation.attrNames.map(attrName => {jString(attrName)})),
       "annotation" -> jString(outputRelation.annotationType),
       "relations" -> jArray(jsonRelInfo),
-      "nprr" -> jString("TODO!!!!")
+      "nprr" -> jArray(getJsonNPRRInfo(joinAggregates))
     )
   }
 
-  private def getJsonNPRRInfo() = ???
+  private def getJsonNPRRInfo(joinAggregates:Map[String,ParsedAggregate]) : List[Json] = {
+    val jsonNPRRInfo = attributeOrdering.flatMap(attr => {
+      /**
+        {
+          "name":"a",
+          "accessors":[
+            {
+              "name":"R",
+              "attrs":["a","b"],
+              "annotated":false
+            }
+          ],
+          "selection":"None",
+          "selectionBelow":false,
+          "materialize":true,
+          "annotated":"b",
+          "aggregation":"None",
+          "nextMaterialized":"None",
+          "prevMaterialized":"None"
+        },
+       */
+      val accessorJson = getAccessorJson(attr)
+      if (accessorJson.isEmpty) {
+        None
+      } else {
+        Some(Json(
+          "name" -> jString(attr),
+          "accessors" -> jArray(accessorJson),
+          "materialize" -> jBool(outputRelation.attrNames.contains(attr)),
+          "selection" -> jBool(hasSelection(attr)),
+          "materialize" -> jBool(outputRelation.attrNames.contains(attr)),
+          "aggregation" -> jBool(joinAggregates.contains(attr)) // TODO (sctu): changed to desription aggregation when there is one
+         ))
+      }
+    })
+    addPrevAndNextInfo(jsonNPRRInfo)
+  }
+
+  private def addPrevAndNextInfo(jsonNPRRInfo:List[Json]) = {
+    /**
+     * This fills out the following fields:
+     * --annotated
+     * --selectionBelow
+     * --nextMaterialized
+     * --prevMaterialized
+     */
+    // TODO (sctu): make another pass to fill in the rest of the fields
+    jsonNPRRInfo
+  }
+
+  private def hasSelection(attr:Attr): Boolean = {
+    !attrToRels.get(attr).getOrElse(List())
+      .filter(rel => !rel.attrs.filter(attrInfo => attrInfo._1 == attr).head._2.isEmpty).isEmpty
+  }
+
+  private def getAccessorJson(attr:Attr): List[Json] = {
+    attrToRels.get(attr).getOrElse(List()).map(rel => {
+      Json(
+        "name" -> jString(rel.name),
+        "attrs" -> jArray(rel.attrNames.map(attrName => {jString(attrName)})),
+        "annotated" -> jBool(rel.attrNames.tail == attr && rel.annotationType != "void*")
+      )
+    })
+  }
 
   /**
    * Generates the following:
@@ -119,12 +182,12 @@ class GHDNode(var rels: List[QueryRelation]) {
         {
           "name":"R",
           "ordering":[0,1],
-          "attributes":[["a","b"],["b","c"],["a","c"]],
+          "attributes":[["a","b"],["b","c"],["a","c"]], # this row is optional
           "annotation":"void*"
         }
       ],
    */
-  private def getJsonRelationInfo(): List[Json] = {
+  def getJsonRelationInfo(omitAttrNames:Boolean = false): List[Json] = {
     val distinctRelationNames = rels.map(r => r.name).distinct
     distinctRelationNames.flatMap(n => {
       val relationsWithName = rels.filter(r => {r.name == n})
@@ -137,12 +200,20 @@ class GHDNode(var rels: List[QueryRelation]) {
       orderingsAndRels.map(orderingAndRels => {
         val ordering = orderingAndRels._1
         val rels = orderingAndRels._2
-        Json(
-          "name" -> jString(rels.head.name),
-          "ordering" -> jString(ordering.toString),
-          "attributes" -> jArray(rels.map(rel => jString(rel.attrNames.toString))),
-          "annotation" -> jString(rels.head.annotationType)
-        )
+        if (omitAttrNames) {
+          Json(
+            "name" -> jString(rels.head.name),
+            "ordering" -> jArray(ordering.map(o => jNumber(o))),
+            "annotation" -> jString(rels.head.annotationType)
+          )
+        } else {
+          Json(
+            "name" -> jString(rels.head.name),
+            "ordering" -> jArray(ordering.map(o => jNumber(o))),
+            "attributes" -> jArray(rels.map(rel => jArray(rel.attrNames.map(attrName => jString(attrName))))),
+            "annotation" -> jString(rels.head.annotationType)
+          )
+        }
       })
     })
   }

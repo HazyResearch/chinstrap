@@ -89,7 +89,7 @@ case class ASTQueryStatement(
   def getGHD(): List[GHD] = {
     // We get the candidate GHDs, i.e., the ones of min width
     val rootNodes = GHDSolver.getMinFHWDecompositions(join);
-    val candidates = rootNodes.map(r => new GHD(r, join, lhs));
+    val candidates = rootNodes.map(r => new GHD(r, join, joinAggregates, lhs));
     candidates.map(c => c.doPostProcessingPass())
     HeuristicUtils.getGHDsWithMaxCoveringRoot(
       HeuristicUtils.getGHDsWithMinBags(candidates))
