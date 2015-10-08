@@ -52,13 +52,11 @@ struct FrequencyEncodingMap{
   std::map<T,uint32_t> values;
 
   FrequencyEncodingMap(){}
-  ~FrequencyEncodingMap(){
-    delete values;
-  }
+  ~FrequencyEncodingMap(){}
 
   //Have a way to add values
   inline void update(const T value){
-    const auto it = std::find(value);
+    const auto it = values.find(value);
     uint32_t freq = 1;
     if(it != values.end()){
       freq = it->second + 1;
@@ -68,8 +66,8 @@ struct FrequencyEncodingMap{
   }
 
   //sort functor (sort by value not key)
-  bool myFunction(std::pair<T,uint32_t> first, std::pair<T,uint32_t> second){
-    return first.second < second.second;
+  static bool myFunction(std::pair<T,uint32_t> first, std::pair<T,uint32_t> second){
+    return first.second > second.second;
   }
 
   //Have a way to iterate over values (in the way you want)
@@ -82,9 +80,8 @@ struct FrequencyEncodingMap{
     tbb::parallel_sort(myVec.begin(),myVec.end(),&myFunction);
 
     for(auto it = myVec.begin(); it != myVec.end(); it++) {
-      f(*it);
+      f(std::get<0>(*it));
     }
-    delete myVec;
   }
 };
 ///////////////////////////////////////////////////////////////////////////////

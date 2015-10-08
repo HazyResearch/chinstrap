@@ -45,7 +45,7 @@
 
 #define NUM_NUMA 4
 #define SOCKET_THREADS 12
-#define MAX_MEMORY 768 //GB
+#define MAX_MEMORY 500 //GB
 
 #define BITS_PER_WORD 64
 #define ADDRESS_BITS_PER_WORD 6

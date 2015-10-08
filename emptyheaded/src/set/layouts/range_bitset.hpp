@@ -21,7 +21,7 @@ class range_bitset{
     static std::tuple<size_t,type::layout> build(uint8_t *r_in, const uint32_t *data, const size_t length);
     static size_t get_number_of_words(size_t num_bytes);
     static size_t get_num_set(const uint32_t key, const uint64_t data, const uint32_t offset);
-    static void set_indices(const uint8_t *data_in,
+    static void set_indices(uint8_t * const data_in,
         const size_t cardinality,
         const size_t number_of_bytes,
         const type::layout t);
@@ -224,9 +224,9 @@ inline void range_bitset::foreach(
   }
 }
 
-//Iterates over set applying a lambda.
+//Shift padded memory for a union and construct indicies.
 inline void range_bitset::set_indices(
-    const uint8_t * const A,
+    uint8_t * const A,
     const size_t cardinality,
     const size_t number_of_bytes,
     const type::layout type) {
@@ -234,10 +234,20 @@ inline void range_bitset::set_indices(
 
   if(number_of_bytes > 0){
     const size_t num_data_words = get_number_of_words(number_of_bytes);
-    const uint64_t* A64_data = (uint64_t*)(A+sizeof(uint64_t));
+    uint64_t* A64_data = (uint64_t*)(A+sizeof(uint64_t));
+    uint64_t * const A64_start_data = (uint64_t*)(A+sizeof(uint64_t));
+
     uint32_t* A32_index = (uint32_t*)(A64_data+num_data_words);
 
     size_t count = 0;
+    //shift padded memory forward
+    for(size_t i = 0; i < num_data_words; i++){
+      const uint64_t cur_word = *(A64_start_data+i*PADDING);
+      *A64_data = cur_word;
+      A64_data++;
+    }
+    //set indices the other way
+    A64_data = A64_start_data;
     for(size_t i = 0; i < num_data_words; i++){
       const uint64_t cur_word = *A64_data;
       *A32_index = count;

@@ -8,11 +8,6 @@ extern "C" void *run(std::string path) {
   std::ofstream myfile2;
   myfile2.open (path + "/edgelist/vector_inverse_degree.txt");
   ////////////////////emitAllocators////////////////////
-  allocator::memory<uint8_t> *output_buffer =
-      new allocator::memory<uint8_t>(10000);
-  allocator::memory<uint8_t> *tmp_buffer =
-      new allocator::memory<uint8_t>(10000);
-  (void)tmp_buffer;
   ////////////////////emitLoadBinaryEncoding////////////////////
   auto belt_node = debug::start_clock();
   Encoding<long> *Encoding_node = Encoding<long>::from_binary(
@@ -29,9 +24,7 @@ extern "C" void *run(std::string path) {
   {
     auto query_time = debug::start_clock();
     ////////////////////NPRR BAG bag_R_ab////////////////////
-    Trie<hybrid, float> *Trie_bag_R_ab =
-        new (output_buffer->get_next(0, sizeof(Trie<hybrid, float>)))
-            Trie<hybrid, float>(1, true);
+    Trie<hybrid, float> *Trie_bag_R_ab = NULL;
     {
       auto start_time = debug::start_clock();
       const TrieBlock<hybrid, float> *TrieBlock_R_0_1_0 =
