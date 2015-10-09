@@ -81,7 +81,7 @@ case class ASTQueryStatement(
   join:List[QueryRelation],
   recursion:Option[RecursionStatement],
   tc:Option[TransitiveClosureStatement],
-  joinAggregates:Map[String,ParsedAggregate] ) extends ASTStatement {
+  joinAggregates:Map[String,ParsedAggregate]) extends ASTStatement {
   // TODO (sctu) : ignoring everything except for join, joinAggregates for now
 
   var queryPlans: List[GHD] = getGHD();

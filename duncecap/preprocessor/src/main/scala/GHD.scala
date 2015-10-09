@@ -111,26 +111,7 @@ class GHDNode(var rels: List[QueryRelation]) {
   }
 
   private def getJsonNPRRInfo(joinAggregates:Map[String,ParsedAggregate]) : List[Json] = {
-    val jsonNPRRInfo = attributeOrdering.flatMap(attr => {
-      /**
-        {
-          "name":"a",
-          "accessors":[
-            {
-              "name":"R",
-              "attrs":["a","b"],
-              "annotated":false
-            }
-          ],
-          "selection":"None",
-          "selectionBelow":false,
-          "materialize":true,
-          "annotated":"b",
-          "aggregation":"None",
-          "nextMaterialized":"None",
-          "prevMaterialized":"None"
-        },
-       */
+    val jsonNPRRInfo:List[Json] = attributeOrdering.flatMap(attr => {
       val accessorJson = getAccessorJson(attr)
       if (accessorJson.isEmpty) {
         None
@@ -141,23 +122,53 @@ class GHDNode(var rels: List[QueryRelation]) {
           "materialize" -> jBool(outputRelation.attrNames.contains(attr)),
           "selection" -> jBool(hasSelection(attr)),
           "materialize" -> jBool(outputRelation.attrNames.contains(attr)),
-          "aggregation" -> jBool(joinAggregates.contains(attr)) // TODO (sctu): changed to desription aggregation when there is one
+          "annotation" -> getNextAnnotatedForLastMaterialized(attr, joinAggregates),
+          "aggregation" -> getAggregationJson(joinAggregates, attr)
          ))
       }
     })
     addPrevAndNextInfo(jsonNPRRInfo)
   }
 
-  private def addPrevAndNextInfo(jsonNPRRInfo:List[Json]) = {
-    /**
-     * This fills out the following fields:
-     * --annotated
-     * --selectionBelow
-     * --nextMaterialized
-     * --prevMaterialized
-     */
-    // TODO (sctu): make another pass to fill in the rest of the fields
-    jsonNPRRInfo
+  private def getNextAnnotatedForLastMaterialized(attr:Attr, joinAggregates:Map[String,ParsedAggregate]): Json = {
+    if (outputRelation.attrNames.last == attr) {
+      val annotatedAttr = attributeOrdering.dropWhile(a => a != attr).tail.find(a => joinAggregates.contains(a) && attrSet.contains(a))
+      jString(annotatedAttr.getOrElse("None"))
+    } else {
+      jString("None")
+    }
+  }
+
+  private def getAggregationJson(joinAggregates:Map[String,ParsedAggregate], attr:Attr): Json = {
+    val maybeJson = joinAggregates.get(attr).map(parsedAggregate => {
+      Json(
+        "operation" -> jString(parsedAggregate.op),
+        "init" -> jString(parsedAggregate.init),
+        "expression" -> jString(parsedAggregate.expression)
+      )
+    })
+    maybeJson match {
+      case Some(json) => json
+      case None => jString("None")
+    }
+  }
+
+  def addPrevAndNextInfo(jsonNPRRInfo:List[Json]): List[Json] = {
+    val selectionBelowBools = jsonNPRRInfo.foldRight(List[Boolean](false))((json:Json, acc:List[Boolean]) => {
+      val selection = json.field("selection")
+      if (selection.isEmpty) {
+        (false || acc.head)::acc
+      } else {
+        (selection.get.bool.get || acc.head)::acc
+      }
+    }).dropRight(1);
+
+    // val prevAttrs = ;
+    // val nextAttrs = ;
+
+    jsonNPRRInfo.zip(selectionBelowBools).map(jsonAndBool => {
+      jsonAndBool._1.deepmerge(Json( "selectionBelow" -> jBool(jsonAndBool._2)))
+    })
   }
 
   private def hasSelection(attr:Attr): Boolean = {
