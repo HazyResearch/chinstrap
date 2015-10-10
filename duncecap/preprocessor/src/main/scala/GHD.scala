@@ -37,6 +37,10 @@ class GHD(val root:GHDNode,
     )
   }
 
+  /**
+   * Summary of all the relations in the GHD
+   * @return Json for the relation summary
+   */
   private def getRelationsSummary(): Json = {
     jArray(getRelationSummaryFromPreOrderTraversal(root).distinct)
   }
@@ -64,6 +68,10 @@ class GHD(val root:GHDNode,
     node.getJsonBagInfo(joinAggregates)::node.children.flatMap(c => getJsonFromPreOrderTraversal(c))
   }
 
+  /**
+   * Do a post-processiing pass to fill out some of the other vars in this class
+   * You should call this before calling toJson
+   */
   def doPostProcessingPass() = {
     root.computeDepth
     depth = root.depth
@@ -86,15 +94,13 @@ class GHDNode(var rels: List[QueryRelation]) {
   var projectedOutAttrs: Set[Attr] = null
   var outputRelation: QueryRelation = null
 
+  /**
+   * This is intended for use by GHDSolver, so we don't distinguish between trees with different vars set
+   * in GHD's post-processing pass
+   */
   override def equals(o: Any) = o match {
     case that: GHDNode => that.rels.equals(rels) && that.children.equals(children)
     case _ => false
-  }
-
-  def getNumericalOrdering(rel:QueryRelation): List[Int] = {
-    attributeOrdering.map(a => rel.attrNames.indexOf(a)).filter(pos => {
-      pos != -1
-    })
   }
 
   override def hashCode = 41 * rels.hashCode() + children.hashCode()
@@ -111,10 +117,20 @@ class GHDNode(var rels: List[QueryRelation]) {
   }
 
   private def getJsonNPRRInfo(joinAggregates:Map[String,ParsedAggregate]) : List[Json] = {
-    val jsonNPRRInfo:List[Json] = attributeOrdering.flatMap(attr => {
+    val attrsWithAccessorJson = getOrderedAttrsWithAccessorJson()
+    val prevAndNextAttrMaterialized = getPrevAndNextAttrMaterialized(
+      attrsWithAccessorJson,
+      ((attr:Attr) => outputRelation.attrNames.contains(attr)))
+    val prevAndNextAttrAggregated = getPrevAndNextAttrMaterialized(
+      attrsWithAccessorJson,
+      ((attr:Attr) => joinAggregates.get(attr).isDefined))
+
+    attrsWithAccessorJson.zip(prevAndNextAttrMaterialized.zip(prevAndNextAttrAggregated)).flatMap(attrAndPrevNextInfo => {
+      val (attr, prevNextInfo) = attrAndPrevNextInfo
+      val (materializedInfo, aggregatedInfo) = prevNextInfo
       val accessorJson = getAccessorJson(attr)
       if (accessorJson.isEmpty) {
-        None
+        None // this should not happen
       } else {
         Some(Json(
           "name" -> jString(attr),
@@ -123,11 +139,34 @@ class GHDNode(var rels: List[QueryRelation]) {
           "selection" -> jBool(hasSelection(attr)),
           "materialize" -> jBool(outputRelation.attrNames.contains(attr)),
           "annotation" -> getNextAnnotatedForLastMaterialized(attr, joinAggregates),
-          "aggregation" -> getAggregationJson(joinAggregates, attr)
+          "aggregation" -> getAggregationJson(joinAggregates, attr, aggregatedInfo),
+          "prevMaterialized" -> jString(materializedInfo._1),
+          "nextMaterialized" -> jString(materializedInfo._2)
          ))
       }
     })
-    addPrevAndNextInfo(jsonNPRRInfo)
+  }
+
+  private def getPrevAndNextAttrMaterialized(attrsWithAccessorJson: List[Attr], filterFn:(Attr => Boolean)): List[(Attr, Attr)] = {
+    val prevAttrsMaterialized = attrsWithAccessorJson.foldLeft((List[String](), "None"))((acc, attr) => {
+      val prevAttrMaterialized = (
+        if (filterFn(attr)) {
+          attr
+        } else {
+          acc._2
+        })
+      (acc._2::acc._1, prevAttrMaterialized)
+    })._1.reverse
+    val nextAttrsMaterialized = attrsWithAccessorJson.foldRight((List[String](), "None"))((attr, acc) => {
+      val nextAttrMaterialized = (
+        if (filterFn(attr)) {
+          attr
+        } else {
+          acc._2
+        })
+      (acc._2::acc._1, nextAttrMaterialized)
+    })._1
+    prevAttrsMaterialized.zip(nextAttrsMaterialized)
   }
 
   private def getNextAnnotatedForLastMaterialized(attr:Attr, joinAggregates:Map[String,ParsedAggregate]): Json = {
@@ -139,12 +178,14 @@ class GHDNode(var rels: List[QueryRelation]) {
     }
   }
 
-  private def getAggregationJson(joinAggregates:Map[String,ParsedAggregate], attr:Attr): Json = {
+  private def getAggregationJson(joinAggregates:Map[String,ParsedAggregate], attr:Attr, prevNextInfo:(Attr, Attr)): Json = {
     val maybeJson = joinAggregates.get(attr).map(parsedAggregate => {
       Json(
         "operation" -> jString(parsedAggregate.op),
         "init" -> jString(parsedAggregate.init),
-        "expression" -> jString(parsedAggregate.expression)
+        "expression" -> jString(parsedAggregate.expression),
+        "prev" -> jString(prevNextInfo._1),
+        "next" -> jString(prevNextInfo._2)
       )
     })
     maybeJson match {
@@ -153,27 +194,24 @@ class GHDNode(var rels: List[QueryRelation]) {
     }
   }
 
-  def addPrevAndNextInfo(jsonNPRRInfo:List[Json]): List[Json] = {
-    val selectionBelowBools = jsonNPRRInfo.foldRight(List[Boolean](false))((json:Json, acc:List[Boolean]) => {
-      val selection = json.field("selection")
-      if (selection.isEmpty) {
-        (false || acc.head)::acc
-      } else {
-        (selection.get.bool.get || acc.head)::acc
-      }
-    }).dropRight(1);
-
-    // val prevAttrs = ;
-    // val nextAttrs = ;
-
-    jsonNPRRInfo.zip(selectionBelowBools).map(jsonAndBool => {
-      jsonAndBool._1.deepmerge(Json( "selectionBelow" -> jBool(jsonAndBool._2)))
-    })
-  }
-
+  /**
+   * @param attr, an attribute that definitely exists in this bag
+   * @return Boolean for whether this attribute has a selection on it or not
+   */
   private def hasSelection(attr:Attr): Boolean = {
     !attrToRels.get(attr).getOrElse(List())
       .filter(rel => !rel.attrs.filter(attrInfo => attrInfo._1 == attr).head._2.isEmpty).isEmpty
+  }
+
+  private def getOrderedAttrsWithAccessorJson(): List[Attr] = {
+    attributeOrdering.flatMap(attr => {
+      val accessorJson = getAccessorJson(attr)
+      if (accessorJson.isEmpty) {
+        None
+      } else {
+        Some(attr)
+      }
+    })
   }
 
   private def getAccessorJson(attr:Attr): List[Json] = {
@@ -203,7 +241,7 @@ class GHDNode(var rels: List[QueryRelation]) {
     distinctRelationNames.flatMap(n => {
       val relationsWithName = rels.filter(r => {r.name == n})
       val orderingsAndRels: List[(List[Int], List[QueryRelation])] = relationsWithName.map(rn => {
-        (getNumericalOrdering(rn), rn)
+        (GHD.getNumericalOrdering(attributeOrdering, rn), rn)
       }).groupBy(p => p._1).toList.map(elem => {
         (elem._1, elem._2.unzip._2)
       })
