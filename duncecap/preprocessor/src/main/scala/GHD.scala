@@ -185,7 +185,7 @@ class GHDNode(var rels: List[QueryRelation]) {
   }
 
   private def getNextAnnotatedForLastMaterialized(attr:Attr, joinAggregates:Map[String,ParsedAggregate]): Json = {
-    if (outputRelation.attrNames.last == attr) {
+    if (!outputRelation.attrNames.isEmpty && outputRelation.attrNames.last == attr) {
       val annotatedAttr = attributeOrdering.dropWhile(a => a != attr).tail.find(a => joinAggregates.contains(a) && attrSet.contains(a))
       jString(annotatedAttr.getOrElse("None"))
     } else {

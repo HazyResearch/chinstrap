@@ -80,11 +80,12 @@ object DCParser extends RegexParsers {
 
   //for the lhs expression
   def lhsStatement = relationIdentifier 
-  def relationIdentifier: Parser[QueryRelation] = identifierName ~ ("(" ~> joinAttrList) ~ (aggStatement <~ ")")  ^^ {case id~attrs~(agg~t) =>
+  def relationIdentifier: Parser[QueryRelation] = identifierName ~ ("(" ~> attrList) ~ (aggStatement <~ ")")  ^^ {case id~attrNames~(agg~t) =>
+    val attrInfo = attrNames.map(attrName => {(attrName,"","")})
     if((agg,t) != ("",""))
-      new QueryRelation(id, attrs, t)
+      new QueryRelation(id, attrInfo, t)
     else{
-      new QueryRelation(id, attrs)
+      new QueryRelation(id, attrInfo)
     } 
   }
   def aggStatement = ((";" ~> identifierName) ~ (":" ~> typename)) | (emptyString~emptyAggType)
