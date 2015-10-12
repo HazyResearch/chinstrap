@@ -167,15 +167,14 @@ object DCParser extends RegexParsers {
     val operation = if(aggregate.op == "COUNT") "SUM" else aggregate.op
     val init = if(aggregate.op == "COUNT") "1" else aggregate.init
     val attrs = if(aggregate.attrs == List[String]("*")) c.flatMap(r => r.attrs.map(attr => attr._1)).distinct else aggregate.attrs
-    val aggregatesIn = attrs.map(attr => ((attr -> new ParsedAggregate(operation,expr,init)))).toMap 
-    Environment.addLambdaFunction(a,new ASTLambdaFunction(b,c,aggregatesIn))
+    val aggregatesIn = attrs.map(attr => ((attr -> new ParsedAggregate(operation,expr,init)))).toMap
   }
 
 
   def queryStatement = (lhsStatement ~ (":-" ~> joinTypeStatement) ~  joinAndAnnotationStatement <~ ".") ^^ {case a~b~c =>
     new ASTQueryStatement(a,b,c._1,c._2,c._3,c._4)
   }
-  def printStatement = (lhsStatement <~ ".") ^^ {case l => Environment.addASTNode(new ASTPrintStatement(l))}
+  def printStatement = (lhsStatement <~ ".") ^^ {case l => new ASTPrintStatement(l)}
   def statement = queryStatement | lambdaExpression | printStatement
   def statements = rep(statement)
 }

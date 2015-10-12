@@ -76,7 +76,6 @@ case class ASTQueryStatement(
     HeuristicUtils.getGHDsWithMaxCoveringRoot(
       HeuristicUtils.getGHDsWithMinBags(candidates))
     val queryPlan = candidates.head.toJson
-    println(queryPlan)
     return queryPlan
   }
 
