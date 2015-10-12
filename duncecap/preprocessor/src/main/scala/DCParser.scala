@@ -56,10 +56,10 @@ class AnnotationExpression( val boundVariable:String,
 }
 
 object DCParser extends RegexParsers {
-  def run(line:String,s:CodeStringBuilder) : Unit = {
+  def run(line:String) : Unit = {
     this.parseAll(this.statements, line) match {
-      case DCParser.Success(ast, _) => {
-        Environment.emitASTNodes(s)
+      case DCParser.Success(parsedStatements, _) => {
+        parsedStatements.map(println)
       }
     }
   }
@@ -173,7 +173,7 @@ object DCParser extends RegexParsers {
 
 
   def queryStatement = (lhsStatement ~ (":-" ~> joinTypeStatement) ~  joinAndAnnotationStatement <~ ".") ^^ {case a~b~c =>
-    Environment.addASTNode(new ASTQueryStatement(a,b,c._1,c._2,c._3,c._4))
+    new ASTQueryStatement(a,b,c._1,c._2,c._3,c._4)
   }
   def printStatement = (lhsStatement <~ ".") ^^ {case l => Environment.addASTNode(new ASTPrintStatement(l))}
   def statement = queryStatement | lambdaExpression | printStatement

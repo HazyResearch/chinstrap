@@ -208,12 +208,4 @@ object GHDSolver {
     val minFhws = fhwsAndDecomps.filter((scoreAndNode : (Double, GHDNode)) => scoreAndNode._1 ~= minScore)
     return minFhws.unzip._2
   }
-
-  def print(root: GHDNode, filename: String) = {
-    val json = root.toJson()
-    val file = new File(filename)
-    val bw = new BufferedWriter(new FileWriter(file))
-    bw.append(json.spaces2)
-    bw.close()
-  }
 }

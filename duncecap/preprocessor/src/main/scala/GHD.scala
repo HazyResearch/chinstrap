@@ -369,7 +369,4 @@ class GHDNode(var rels: List[QueryRelation]) {
     return children.map((child: GHDNode) => child.fractionalScoreTree())
       .foldLeft(bagFractionalWidth)((accum: Double, x: Double) => if (x > accum) x else accum)
   }
-
-  def toJson(): Json = ???
-
 }

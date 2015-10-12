@@ -1,66 +1,48 @@
 package DunceCap
 
-import scala.collection.mutable
-import sys.process._
+import argonaut.Json
 
 abstract trait ASTNode {
-  def code(s: CodeStringBuilder)
   val order = 0
 }
 
 case class ASTCreateDB() extends ASTNode {
   override val order = 1
-  override def code(s: CodeStringBuilder): Unit = {
-  }
 }
 
 case class ASTLoadRelation(sourcePath:String,rel:Relation) extends ASTNode {
   override val order = 2
-  override def code(s: CodeStringBuilder): Unit = {
-  }
 }
 
 case class ASTBuildEncodings() extends ASTNode {
   override val order = 3
-  override def code(s: CodeStringBuilder): Unit = {
-  }
 }
 
 case class ASTWriteBinaryEncodings() extends ASTNode {
   override val order = 4
-  override def code(s: CodeStringBuilder): Unit = {
-  }
 }
 
 case class ASTEncodeRelation(rel:Relation) extends ASTNode {
   override val order = 5
-  override def code(s: CodeStringBuilder): Unit = {
-  }
 }
 
 case class ASTLoadEncodedRelation(rel:Relation,buildOrder:Int) extends ASTNode {
   override val order = buildOrder
-  override def code(s: CodeStringBuilder): Unit = {
-  }
 }
 
 case class ASTBuildTrie(rel:Relation,name:String,attrs:List[Int],masterName:String,buildOrder:Int) extends ASTNode {
   override val order = buildOrder
-  override def code(s: CodeStringBuilder): Unit = {
-  }
 }
 
 case class ASTWriteBinaryTries() extends ASTNode {
   override val order = 202
-  override def code(s: CodeStringBuilder): Unit = {
-  }
 }
 
-abstract trait ASTStatement extends ASTNode {}
+abstract trait ASTStatement extends ASTNode {
+
+}
 
 case class ASTPrintStatement(rel:QueryRelation) extends ASTStatement {
-  override def code(s: CodeStringBuilder): Unit = {
-  }
 }
 
 //input to this should be 
@@ -84,20 +66,21 @@ case class ASTQueryStatement(
   joinAggregates:Map[String,ParsedAggregate]) extends ASTStatement {
   // TODO (sctu) : ignoring everything except for join, joinAggregates for now
 
-  var queryPlans: List[GHD] = getGHD();
+  var queryPlan: Json = getGHD()
 
-  def getGHD(): List[GHD] = {
+  private def getGHD(): Json = {
     // We get the candidate GHDs, i.e., the ones of min width
     val rootNodes = GHDSolver.getMinFHWDecompositions(join);
     val candidates = rootNodes.map(r => new GHD(r, join, joinAggregates, lhs));
     candidates.map(c => c.doPostProcessingPass())
     HeuristicUtils.getGHDsWithMaxCoveringRoot(
       HeuristicUtils.getGHDsWithMinBags(candidates))
-    println(candidates.head.toJson)
-    return null
+    val queryPlan = candidates.head.toJson
+    println(queryPlan)
+    return queryPlan
   }
 
-  override def code(s: CodeStringBuilder): Unit = {
-    getGHD
+  override def toString(): String = {
+    queryPlan.toString
   }
 }
