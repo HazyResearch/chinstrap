@@ -9,7 +9,6 @@ import org.apache.commons.math3.optim.linear._
 import org.apache.commons.math3.optim.nonlinear.scalar.GoalType
 
 import scala.collection.immutable.TreeSet
-;
 
 
 object GHD {
@@ -76,8 +75,11 @@ class GHD(val root:GHDNode,
     root.computeDepth
     depth = root.depth
     numBags = root.getNumBags()
+    root.setBagName(outputRelation.name)
+    root.setDescendantNames(1)
     root.setAttributeOrdering(attributeOrdering)
     root.computeProjectedOutAttrsAndOutputRelation(outputRelation.attrNames.toSet, Set())
+    root.createAttrToRelsMapping
   }
 }
 
@@ -85,6 +87,8 @@ class GHD(val root:GHDNode,
 class GHDNode(var rels: List[QueryRelation]) {
   val attrSet = rels.foldLeft(TreeSet[String]())(
     (accum: TreeSet[String], rel: QueryRelation) => accum | TreeSet[String](rel.attrNames: _*))
+  var subtreeRels = rels
+  var bagName: String = null
   var attrToRels:Map[Attr,List[QueryRelation]] = null
   var attributeOrdering: List[Attr] = null
   var children: List[GHDNode] = List()
@@ -105,15 +109,26 @@ class GHDNode(var rels: List[QueryRelation]) {
 
   override def hashCode = 41 * rels.hashCode() + children.hashCode()
 
+  def setBagName(name:String): Unit = {
+    bagName = name
+  }
+
   def getJsonBagInfo(joinAggregates:Map[String,ParsedAggregate]): Json = {
     val jsonRelInfo = getJsonRelationInfo()
     Json(
-      "name" -> jString("bag" + hashCode),
+      "name" -> jString(bagName),
       "attributes" -> jArray(outputRelation.attrNames.map(attrName => {jString(attrName)})),
       "annotation" -> jString(outputRelation.annotationType),
       "relations" -> jArray(jsonRelInfo),
       "nprr" -> jArray(getJsonNPRRInfo(joinAggregates))
     )
+  }
+
+  def setDescendantNames(depth:Int): Unit = {
+    children.zipWithIndex.map(childAndIndex => {
+      childAndIndex._1.setBagName(s"bag_${depth}_${childAndIndex._2}")
+    })
+    children.map(child => {child.setDescendantNames(depth+1)})
   }
 
   private def getJsonNPRRInfo(joinAggregates:Map[String,ParsedAggregate]) : List[Json] = {
@@ -236,10 +251,17 @@ class GHDNode(var rels: List[QueryRelation]) {
         }
       ],
    */
-  def getJsonRelationInfo(omitAttrNames:Boolean = false): List[Json] = {
-    val distinctRelationNames = rels.map(r => r.name).distinct
+  def getJsonRelationInfo(forTopLevelSummary:Boolean = false): List[Json] = {
+    val relsToUse =
+      if (forTopLevelSummary) {
+        rels }
+      else {
+        subtreeRels
+      }
+
+    val distinctRelationNames = relsToUse.map(r => r.name).distinct
     distinctRelationNames.flatMap(n => {
-      val relationsWithName = rels.filter(r => {r.name == n})
+      val relationsWithName = relsToUse.filter(r => {r.name == n})
       val orderingsAndRels: List[(List[Int], List[QueryRelation])] = relationsWithName.map(rn => {
         (GHD.getNumericalOrdering(attributeOrdering, rn), rn)
       }).groupBy(p => p._1).toList.map(elem => {
@@ -249,7 +271,7 @@ class GHDNode(var rels: List[QueryRelation]) {
       orderingsAndRels.map(orderingAndRels => {
         val ordering = orderingAndRels._1
         val rels = orderingAndRels._2
-        if (omitAttrNames) {
+        if (forTopLevelSummary) {
           Json(
             "name" -> jString(rels.head.name),
             "ordering" -> jArray(ordering.map(o => jNumber(o))),
@@ -267,6 +289,16 @@ class GHDNode(var rels: List[QueryRelation]) {
     })
   }
 
+  def createAttrToRelsMapping : Unit = {
+    attrToRels = attrSet.map(attr =>{
+      val relevantRels = subtreeRels.filter(rel => {
+        rel.attrNames.contains(attr)
+      })
+      (attr, relevantRels)
+    }).toMap
+    children.map(child => child.createAttrToRelsMapping)
+  }
+
   def setAttributeOrdering(ordering: List[Attr] ): Unit = {
     attributeOrdering = ordering
     rels = rels.map(rel => {
@@ -274,29 +306,23 @@ class GHDNode(var rels: List[QueryRelation]) {
         ordering.indexOf(attrInfo1._1) < ordering.indexOf(attrInfo2._1)
       }), rel.annotationType)
     })
-
     children.map(child => child.setAttributeOrdering(ordering))
-
-    attrToRels = attrSet.map(attr =>{
-      val relevantRels = rels.filter(rel => {
-        rel.attrNames.contains(attr)
-      })
-      (attr, relevantRels)
-    }).toMap
   }
 
   /**
    * Compute what is projected out in this bag, and what this bag's output relation is
    */
-  def computeProjectedOutAttrsAndOutputRelation(outputAttrs:Set[Attr], attrsFromAbove:Set[Attr]): Unit = {
+  def computeProjectedOutAttrsAndOutputRelation(outputAttrs:Set[Attr], attrsFromAbove:Set[Attr]): QueryRelation = {
     projectedOutAttrs = attrSet -- (outputAttrs ++ attrsFromAbove)
     val keptAttrs = attrSet intersect (outputAttrs ++ attrsFromAbove)
     // Right now we only allow a query to have one type of annotation, so
     // we take the annotation type from an arbitrary relation that was joined in this bag
-    outputRelation = new QueryRelation("", keptAttrs.map(attr =>(attr, "", "")).toList, rels.head.annotationType)
-    children.map(child => {
+    outputRelation = new QueryRelation(bagName, keptAttrs.map(attr =>(attr, "", "")).toList, rels.head.annotationType)
+    val childrensOutputRelations = children.map(child => {
       child.computeProjectedOutAttrsAndOutputRelation(outputAttrs, attrsFromAbove ++ attrSet)
     })
+    subtreeRels ++= childrensOutputRelations
+    return outputRelation
   }
 
   def computeDepth : Unit = {
@@ -313,9 +339,6 @@ class GHDNode(var rels: List[QueryRelation]) {
     }
   }
 
-  def getName(attribute_ordering: List[String]): String = {
-    this.rels.map(r => r.name).distinct.mkString("") + "_" + attribute_ordering.mkString("")
-  }
   def getNumBags(): Int = {
     1 + children.foldLeft(0)((accum : Int, child : GHDNode) => accum + child.getNumBags())
   }
